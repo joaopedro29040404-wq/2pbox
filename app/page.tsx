@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, Headphones, Laptop, Printer, Search, ShoppingBag, Star, Truck } from 'lucide-react';
 
@@ -12,7 +13,9 @@ export default function Home() {
     <main>
       <div className="topbar">Qualidade <span>•</span> Variedade <span>•</span> Confiança</div>
       <header className="header container">
-        <Link href="/" className="brand" aria-label="2P Box"><div className="brand-mark">2P</div><div><strong>2P BOX</strong><small>TUDO QUE VOCÊ PRECISA, EM UM SÓ LUGAR.</small></div></Link>
+        <Link href="/" className="brand" aria-label="2P Box">
+          <Image className="brand-logo" src="/logo.pnh.png" alt="2P Box" width={705} height={487} priority />
+        </Link>
         <nav><Link href="#categorias">Categorias</Link><Link href="/loja">Produtos</Link><Link href="#contato">Contato</Link></nav>
         <div className="header-actions"><button className="icon-btn" aria-label="Buscar"><Search size={20}/></button><Link className="cart-btn" href="/carrinho"><ShoppingBag size={19}/> Carrinho <b>0</b></Link></div>
       </header>
@@ -28,7 +31,7 @@ export default function Home() {
 
       <section className="benefits"><div className="container benefits-grid"><div><Truck size={25}/><h3>Retire na loja</h3><p>Compre online e retire com praticidade.</p></div><div><Headphones size={25}/><h3>Atendimento próximo</h3><p>Fale com a 2P Box pelo WhatsApp.</p></div><div><Star size={25}/><h3>Qualidade</h3><p>Produtos selecionados para você.</p></div></div></section>
 
-      <footer id="contato"><div className="container footer-grid"><div><div className="footer-brand">2P BOX</div><p>Tudo que você precisa,<br/>em um só lugar.</p></div><div><h4>Loja</h4><Link href="/loja">Produtos</Link><Link href="#categorias">Categorias</Link><Link href="/carrinho">Carrinho</Link></div><div><h4>Atendimento</h4><p>WhatsApp: (11) 9 9999-9999</p><p>Seg–Sex • 9h às 18h</p></div></div><div className="footer-bottom container">© 2026 2P Box. Todos os direitos reservados.</div></footer>
+      <footer id="contato"><div className="container footer-grid"><div><Image className="footer-logo" src="/logo.pnh.png" alt="2P Box" width={705} height={487}/><p>Tudo que você precisa,<br/>em um só lugar.</p></div><div><h4>Loja</h4><Link href="/loja">Produtos</Link><Link href="#categorias">Categorias</Link><Link href="/carrinho">Carrinho</Link></div><div><h4>Atendimento</h4><p>WhatsApp: (11) 9 9999-9999</p><p>Seg–Sex • 9h às 18h</p></div></div><div className="footer-bottom container">© 2026 2P Box. Todos os direitos reservados.</div></footer>
     </main>
   );
 }
