@@ -15,17 +15,21 @@ export default function AdminLoginPage() {
     event.preventDefault();
     setError('');
     if (!supabase) {
-      setError('Configure as variáveis do Supabase na Vercel antes de entrar.');
+      setError('A conexão com o Supabase não está disponível neste deployment.');
       return;
     }
     setLoading(true);
-    const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error: loginError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
     if (loginError) {
-      setError('E-mail ou senha inválidos.');
+      setError(`Não foi possível entrar: ${loginError.message}`);
       return;
     }
-    window.location.href = '/admin';
+    if (!data.session) {
+      setError('Login realizado, mas a sessão não foi criada.');
+      return;
+    }
+    window.location.assign('/admin');
   }
 
   return (
