@@ -1,6 +1,22 @@
 import Link from 'next/link';
-import { ArrowLeft, ShoppingBag } from 'lucide-react';
 
 export default function CarrinhoPage() {
-  return <main><header className="header container"><Link href="/" className="brand"><div className="brand-mark">2P</div><div><strong>2P BOX</strong><small>TUDO QUE VOCÊ PRECISA, EM UM SÓ LUGAR.</small></div></Link></header><section className="container section empty-cart"><ShoppingBag size={54}/><h1>Seu carrinho está vazio</h1><p>Adicione produtos para continuar sua compra.</p><Link className="primary" href="/#produtos"><ArrowLeft size={17}/> Voltar para a loja</Link></section></main>;
+  return (
+    <main>
+      <div className="topbar">Qualidade <span>•</span> Variedade <span>•</span> Confiança</div>
+      <header className="header container">
+        <Link href="/" className="brand"><div className="brand-mark">2P</div><div><strong>2P BOX</strong><small>TUDO QUE VOCÊ PRECISA, EM UM SÓ LUGAR.</small></div></Link>
+        <Link className="secondary" href="/">Continuar comprando</Link>
+      </header>
+      <section className="container section">
+        <p className="eyebrow">SEU PEDIDO</p>
+        <h1 style={{fontFamily:'Barlow Condensed',fontSize:52,textTransform:'uppercase',fontStyle:'italic',marginTop:0}}>Carrinho</h1>
+        <div className="category" style={{maxWidth:760}}>
+          <h3>Seu carrinho está vazio</h3>
+          <p>Os produtos adicionados ao carrinho aparecerão aqui.</p>
+          <Link className="primary" href="/#produtos">Explorar produtos</Link>
+        </div>
+      </section>
+    </main>
+  );
 }
