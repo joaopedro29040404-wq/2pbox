@@ -2,11 +2,13 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { Minus, Plus, Trash2, ShoppingBag, ArrowLeft } from 'lucide-react';
+import { Minus, Plus, Trash2, ShoppingBag, ArrowLeft, Store, MessageCircle } from 'lucide-react';
 import { useCart } from '@/components/cart-provider';
+import { useState } from 'react';
 
 export default function CarrinhoPage(){
  const {items,setQty,remove,total}=useCart();
+ const [delivery,setDelivery]=useState<'pickup'|'shipping'>('pickup');
  return <main>
   <div className="topbar">Qualidade <span>•</span> Variedade <span>•</span> Confiança</div>
   <header className="header container cart-header">
@@ -22,7 +24,15 @@ export default function CarrinhoPage(){
       <div className="cart-item-actions"><div className="quantity-control"><button className="quantity-btn" onClick={()=>setQty(i.id,i.quantity-1)} aria-label="Diminuir"><Minus size={15}/></button><strong>{i.quantity}</strong><button className="quantity-btn" onClick={()=>setQty(i.id,i.quantity+1)} aria-label="Aumentar"><Plus size={15}/></button></div><button className="remove-btn" onClick={()=>remove(i.id)}><Trash2 size={15}/> Remover</button></div>
       <div className="cart-subtotal">R$ {(i.price*i.quantity).toFixed(2).replace('.',',')}</div>
     </article>)}</div>
-    <aside className="cart-summary"><p className="eyebrow">RESUMO DO PEDIDO</p><div className="summary-line"><span>Produtos</span><strong>R$ {total.toFixed(2).replace('.',',')}</strong></div><div className="summary-line"><span>Frete</span><span className="summary-muted">Calculado no WhatsApp</span></div><div className="summary-total"><span>Total</span><strong>R$ {total.toFixed(2).replace('.',',')}</strong></div><Link className="primary checkout-btn" href="/checkout">Finalizar pedido</Link><Link className="back-store" href="/loja">Continuar comprando</Link></aside>
+    <aside className="cart-summary"><p className="eyebrow">RESUMO DO PEDIDO</p><div className="summary-line"><span>Produtos</span><strong>R$ {total.toFixed(2).replace('.',',')}</strong></div>
+      <div className="delivery-choice"><p className="delivery-title">Como você quer receber?</p><div className="delivery-options">
+        <button type="button" className={`delivery-option ${delivery==='pickup'?'selected':''}`} onClick={()=>setDelivery('pickup')}><Store size={19}/><span><strong>Retirar na loja</strong><small>Sem custo de entrega</small></span></button>
+        <button type="button" className={`delivery-option ${delivery==='shipping'?'selected':''}`} onClick={()=>setDelivery('shipping')}><MessageCircle size={19}/><span><strong>Calcular frete no WhatsApp</strong><small>Combine o frete conosco</small></span></button>
+      </div></div>
+      <div className="summary-line"><span>Entrega</span><span className="summary-muted">{delivery==='pickup'?'Retirada na loja':'Frete calculado no WhatsApp'}</span></div>
+      <div className="summary-total"><span>Total dos produtos</span><strong>R$ {total.toFixed(2).replace('.',',')}</strong></div>
+      <Link className="primary checkout-btn" href={`/checkout?entrega=${delivery}`}>Finalizar pedido</Link><Link className="back-store" href="/loja">Continuar comprando</Link>
+    </aside>
    </div>}
   </section>
  </main>;
