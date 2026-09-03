@@ -24,11 +24,25 @@ drop policy if exists "Admins can view orders" on public.orders;
 drop policy if exists "Admins can update orders" on public.orders;
 drop policy if exists "Admins can view order items" on public.order_items;
 drop policy if exists "Admins can update products" on public.products;
+drop policy if exists "Admins can insert products" on public.products;
+drop policy if exists "Admins can delete products" on public.products;
+drop policy if exists "Admins can view categories" on public.categories;
+drop policy if exists "Admins can insert categories" on public.categories;
+drop policy if exists "Admins can update categories" on public.categories;
+drop policy if exists "Admins can delete categories" on public.categories;
 
 create policy "Admins can view orders" on public.orders for select to authenticated using (public.is_admin());
 create policy "Admins can update orders" on public.orders for update to authenticated using (public.is_admin()) with check (public.is_admin());
 create policy "Admins can view order items" on public.order_items for select to authenticated using (public.is_admin());
+
+create policy "Admins can insert products" on public.products for insert to authenticated with check (public.is_admin());
 create policy "Admins can update products" on public.products for update to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy "Admins can delete products" on public.products for delete to authenticated using (public.is_admin());
+
+create policy "Admins can view categories" on public.categories for select to authenticated using (public.is_admin());
+create policy "Admins can insert categories" on public.categories for insert to authenticated with check (public.is_admin());
+create policy "Admins can update categories" on public.categories for update to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy "Admins can delete categories" on public.categories for delete to authenticated using (public.is_admin());
 
 drop policy if exists "Authenticated can upload product images" on storage.objects;
 drop policy if exists "Authenticated can update product images" on storage.objects;
