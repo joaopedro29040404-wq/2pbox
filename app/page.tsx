@@ -22,7 +22,9 @@ export default function Home() {
 
       <section className="hero container">
         <div className="hero-copy"><p className="eyebrow">PAPELARIA • ELETRÔNICOS • IMPRESSÃO</p><h1>Tudo que você precisa,<br/><em>em um só lugar!</em></h1><p className="lead">Variedade, qualidade e o melhor atendimento para facilitar o seu dia a dia.</p><div className="hero-actions"><Link className="primary" href="/loja">Comprar agora <ArrowRight size={18}/></Link><Link className="secondary" href="#categorias">Ver categorias</Link></div></div>
-        <div className="hero-card"><div className="speed">2P</div><div className="hero-box">Tudo para você</div><div className="hero-wheel one"/><div className="hero-wheel two"/></div>
+        <div className="hero-logo-wrap" aria-label="Logo 2P Box">
+          <Image className="hero-logo" src="/logo.pnh.png" alt="2P Box" width={705} height={487} priority />
+        </div>
       </section>
 
       <section id="categorias" className="container section"><div className="section-head"><div><p className="eyebrow">ENCONTRE O QUE PRECISA</p><h2>Compre por categoria</h2></div><Link href="/loja">Ver tudo <ArrowRight size={16}/></Link></div><div className="category-grid">{categories.map(({title,description,icon:Icon}) => <Link className="category" href="/loja" key={title}><div className="category-icon"><Icon size={28}/></div><h3>{title}</h3><p>{description}</p><span>Explorar <ArrowRight size={15}/></span></Link>)}</div></section>
