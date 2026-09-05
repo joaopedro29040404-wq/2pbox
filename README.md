@@ -1,35 +1,79 @@
-# 2P Box
+<div align="center">
 
-Plataforma de e-commerce da 2P Box — papelaria, eletrônicos e impressão.
+<img src="./logo.pnh.png" alt="2P Box" width="220" />
 
-## V1
-- Loja online responsiva
-- Catálogo por categorias
-- Busca e detalhes de produto
-- Carrinho
-- Checkout com retirada na loja
-- Opção de frete direcionada ao WhatsApp
-- Área administrativa para produtos, categorias, estoque e pedidos
-- Preparação para integração de pagamentos via Pagar.me
+# **2P BOX**
 
-## Stack proposta
-- Next.js + TypeScript
-- Supabase (Postgres, Auth e Storage)
-- Pagar.me para pagamentos
-- Vercel para deploy
+### Tudo que você precisa, em um só lugar.
 
-## Desenvolvimento local
+**Papelaria · Eletrônicos · Acessórios para celular · Xerox**
+
+[![Status](https://img.shields.io/badge/status-em%20desenvolvimento-ffc400?style=for-the-badge&labelColor=111111&color=ffc400)](https://github.com/joaopedro29040404-wq/2pbox)
+[![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-111111?style=for-the-badge&logo=supabase&logoColor=3ECF8E)](https://supabase.com/)
+[![Vercel](https://img.shields.io/badge/Vercel-111111?style=for-the-badge&logo=vercel&logoColor=white)](https://vercel.com/)
+
+</div>
+
+---
+
+## ✦ Sobre a 2P Box
+
+A **2P Box** é uma plataforma de e-commerce criada para transformar a experiência de compra da loja em algo mais **simples, rápido e direto**.
+
+O projeto reúne catálogo, categorias, busca de produtos, carrinho e checkout em uma experiência pensada para o cliente final — mantendo uma base pronta para a evolução da operação da loja.
+
+> **2P Box — qualidade, variedade e confiança.**
+
+---
+
+## 🛍️ O que já existe
+
+| Experiência | Recursos |
+|---|---|
+| **Loja** | Catálogo responsivo e navegação por categorias |
+| **Produtos** | Busca, detalhes, preços e imagens |
+| **Carrinho** | Inclusão, remoção e controle de quantidade |
+| **Checkout** | Retirada na loja e fluxo preparado para entrega |
+| **Atendimento** | Opção de contato e frete direcionado ao WhatsApp |
+| **Administração** | Produtos, categorias, estoque e pedidos |
+| **Pagamentos** | Estrutura preparada para integração com Pagar.me |
+
+---
+
+## ⚡ Stack
+
+**Frontend**  
+Next.js · TypeScript · React
+
+**Dados & autenticação**  
+Supabase · PostgreSQL · Auth · Storage
+
+**Pagamentos**  
+Pagar.me
+
+**Deploy**  
+Vercel
+
+---
+
+## 🚀 Rodando localmente
 
 ```bash
 npm install
 npm run dev
 ```
 
-Abra http://localhost:3000.
+Depois, abra:
 
-## Variáveis de ambiente
+```text
+http://localhost:3000
+```
 
-Crie `.env.local` com:
+### Variáveis de ambiente
+
+Crie um arquivo `.env.local`:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
@@ -39,4 +83,16 @@ PAGARME_WEBHOOK_SECRET=
 NEXT_PUBLIC_STORE_WHATSAPP=
 ```
 
-> Nunca publique chaves secretas no GitHub. As chaves do Pagar.me devem ficar somente no ambiente do servidor/deploy.
+> **Segurança:** nunca publique chaves privadas no GitHub. Credenciais do Pagar.me devem permanecer somente no ambiente de servidor/deploy.
+
+---
+
+<div align="center">
+
+### **2P BOX**
+
+**Tudo que você precisa, em um só lugar.**
+
+_Projeto em evolução._
+
+</div>
