@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import './twop-home.css';
+import './led-services.css';
 import { CartProvider } from '@/components/cart-provider';
 
 export const metadata: Metadata = {
