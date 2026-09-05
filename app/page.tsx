@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowRight, Headphones, Laptop, Menu, PencilLine, Printer, ShoppingBag, Smartphone, Star, Truck, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { getStoreSettings, StoreSettings } from '@/lib/store-settings';
 import { useCart } from '@/components/cart-provider';
 
 type Category = { id?: string; name: string; description?: string | null };
@@ -30,6 +31,7 @@ export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
   const { items } = useCart();
 
   useEffect(() => {
@@ -37,15 +39,17 @@ export default function Home() {
     if (!client) return;
     let mounted = true;
     async function load() {
-      const [{ data: cats }, { data: prods }, { data: auth }] = await Promise.all([
+      const [{ data: cats }, { data: prods }, { data: auth }, settings] = await Promise.all([
         client.from('categories').select('id,name,description').eq('active', true).order('name'),
         client.from('products').select('id,name,slug,price,image_url').eq('active', true).order('created_at', { ascending: false }).limit(8),
         client.auth.getUser(),
+        getStoreSettings(),
       ]);
       if (!mounted) return;
       if (cats) setCategories(cats as Category[]);
       if (prods) setProducts(prods as Product[]);
       setUser((auth.user ?? null) as AuthUser | null);
+      setStoreSettings(settings);
     }
     load();
     return () => { mounted = false; };
@@ -54,6 +58,8 @@ export default function Home() {
   const visibleCategories = categories.length ? categories : fallbackCategories;
   const accountLabel = user?.user_metadata?.full_name?.trim()?.split(/\s+/)[0] || 'Entrar';
   const cartCount = items.reduce((sum, item) => sum + item.quantity, 0);
+  const whatsapp = storeSettings?.whatsapp?.trim() || '(11) 9 9999-9999';
+  const hours = storeSettings?.hours?.trim() || 'Seg–Sex • 9h às 18h';
 
   return (
     <main className="home-page">
@@ -111,7 +117,7 @@ export default function Home() {
 
       <section className="home-benefits"><div className="home-container home-benefits-grid"><div className="home-benefit-intro"><p className="home-eyebrow">A 2P BOX</p><h2>TUDO QUE VOCÊ PRECISA.</h2><p>Escolha seus produtos, finalize o pedido e retire na loja ou fale conosco para calcular o frete pelo WhatsApp.</p></div><div className="home-benefit"><Truck size={25} /><h3>Retire na loja</h3><p>Prático e sem custo de entrega.</p></div><div className="home-benefit"><Headphones size={25} /><h3>Atendimento próximo</h3><p>Fale diretamente com a nossa equipe.</p></div><div className="home-benefit"><Star size={25} /><h3>Qualidade</h3><p>Produtos selecionados para você.</p></div></div></section>
 
-      <footer id="contato" className="home-footer"><div className="home-container home-footer-grid"><div><Image src="/logo.pnh.png" alt="2P Box" width={705} height={487} /><p>Tudo que você precisa,<br />em um só lugar.</p></div><div><p className="home-eyebrow">LOJA</p><Link href="/loja">Produtos</Link><Link href="#categorias">Categorias</Link><Link href="/carrinho">Carrinho</Link></div><div><p className="home-eyebrow">ATENDIMENTO</p><span>WhatsApp: (11) 9 9999-9999</span><span>Seg–Sex • 9h às 18h</span></div></div><div className="home-container home-footer-bottom">© 2026 2P Box. Todos os direitos reservados.</div></footer>
+      <footer id="contato" className="home-footer"><div className="home-container home-footer-grid"><div><Image src="/logo.pnh.png" alt="2P Box" width={705} height={487} /><p>Tudo que você precisa,<br />em um só lugar.</p></div><div><p className="home-eyebrow">LOJA</p><Link href="/loja">Produtos</Link><Link href="#categorias">Categorias</Link><Link href="/carrinho">Carrinho</Link></div><div><p className="home-eyebrow">ATENDIMENTO</p><span>WhatsApp: {whatsapp}</span><span>{hours}</span></div></div><div className="home-container home-footer-bottom">© 2026 2P Box. Todos os direitos reservados.</div></footer>
 
       <style jsx global>{`
         .home-page{--gold:#e7ad00;--yellow:#ffc400;--ink:#111;--muted:#707070;--line:#e7e7e7;min-height:100vh;background:#fff;color:var(--ink);font-family:Inter,Arial,sans-serif}
