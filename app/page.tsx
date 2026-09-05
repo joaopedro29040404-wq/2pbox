@@ -1,13 +1,208 @@
 'use client';
+
 import Image from 'next/image';
 import Link from 'next/link';
-import {ArrowRight,Headphones,Laptop,Menu,Printer,ShoppingBag,Star,Truck,X} from 'lucide-react';
-import {useEffect,useState} from 'react';
-import {supabase} from '@/lib/supabase';
+import { ArrowRight, Headphones, Laptop, Menu, Printer, ShoppingBag, Star, Truck, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useCart } from '@/components/cart-provider';
 
-type Category={id?:string;name:string;description?:string|null};
-type Product={id:string;name:string;slug:string;price:number;image_url?:string|null;active?:boolean};
-type AuthUser={id:string;user_metadata?:{full_name?:string}};
-const fallbackCategories:Category[]=[{name:'Papelaria',description:'Tudo para estudos e escritório.'},{name:'Eletrônicos',description:'Acessórios e tecnologia para o dia a dia.'},{name:'Acessórios para celular',description:'Acessórios para seu celular no dia a dia.'},{name:'Xerox',description:'Cópias e serviços de impressão.'}];
-export default function Home(){const[categories,setCategories]=useState<Category[]>([]),[products,setProducts]=useState<Product[]>([]),[menuOpen,setMenuOpen]=useState(false),[user,setUser]=useState<AuthUser|null>(null);useEffect(()=>{const client=supabase;if(!client)return;let mounted=true;async function load(){const[{data:cats},{data:prods},{data:auth}]=await Promise.all([client.from('categories').select('id,name,description').eq('active',true).order('name'),client.from('products').select('id,name,slug,price,image_url,active').eq('active',true).order('created_at',{ascending:false}).limit(8),client.auth.getUser()]);if(!mounted)return;if(cats)setCategories(cats as Category[]);if(prods)setProducts(prods as Product[]);setUser((auth.user??null)as AuthUser|null)}load();const{data:listener}=client.auth.onAuthStateChange((_event:string,session:{user:AuthUser}|null)=>setUser(session?.user??null));return()=>{mounted=false;listener.subscription.unsubscribe()}},[]);const visibleCategories=categories.length?categories:fallbackCategories;const accountLabel=user?.user_metadata?.full_name?.trim()?.split(/\s+/)[0]||'Minha conta';return <main className="tp-site"><div className="tp-topbar"><div className="tp-wrap">QUALIDADE <b>•</b> VARIEDADE <b>•</b> CONFIANÇA</div></div><header className="tp-header"><div className="tp-wrap tp-header-inner"><Link href="/" className="tp-brand"><Image src="/logo.pnh.png" alt="2P Box" width={705} height={487} priority/><span><strong>2P BOX</strong><small>TUDO QUE VOCÊ PRECISA.</small></span></Link><button className="tp-mobile-menu" onClick={()=>setMenuOpen(v=>!v)} aria-label="Abrir menu">{menuOpen?<X size={20}/>:<Menu size={20}/>}</button><nav className={menuOpen?'tp-nav tp-nav-open':'tp-nav'}><Link href="#categorias" onClick={()=>setMenuOpen(false)}>Categorias</Link><Link href="#catalogo" onClick={()=>setMenuOpen(false)}>Catálogo</Link><Link href="#contato" onClick={()=>setMenuOpen(false)}>Contato</Link></nav><div className="tp-actions"><Link href="/conta" className="tp-account">{user?accountLabel:'Entrar'}</Link><Link href="/carrinho" className="tp-cart"><ShoppingBag size={18}/><span>Carrinho</span><b>0</b></Link></div></div></header><section className="tp-hero"><div className="tp-hero-decor"/><div className="tp-wrap tp-hero-grid"><div className="tp-hero-copy"><p className="tp-kicker">2P BOX</p><h1>Tudo que você precisa,<br/><em>em um só lugar.</em></h1><p className="tp-lead">Papelaria, eletrônicos, acessórios para celular e Xerox para facilitar o seu dia a dia.</p><div className="tp-hero-services"><span>PAPELARIA</span><i>•</i><span>ELETRÔNICOS</span><i>•</i><span>ACESSÓRIOS PARA CELULAR</span><i>•</i><span>XEROX</span></div><div className="tp-hero-buttons"><Link href="/loja" className="tp-button">COMPRAR AGORA <ArrowRight size={17}/></Link><Link href="#categorias" className="tp-outline">VER CATEGORIAS</Link></div></div><div className="tp-hero-logo"><div className="tp-glow"/><Image src="/logo.pnh.png" alt="2P Box" width={705} height={487} priority/></div></div></section><section id="categorias" className="tp-section"><div className="tp-wrap"><div className="tp-section-head"><div><p className="tp-kicker">ENCONTRE O QUE PRECISA</p><h2>COMPRE POR CATEGORIA</h2></div><span className="tp-scroll-note">Deslize para explorar →</span></div><div className="tp-category-row">{visibleCategories.map((category,index)=><Link key={category.id||category.name} href={category.id?`/loja?categoria=${encodeURIComponent(category.id)}`:'/loja'} className="tp-category"><div className="tp-cat-icon">{index===1?<Laptop size={25}/>:index===2?<Printer size={25}/>:<ShoppingBag size={25}/>}</div><div><h3>{category.name}</h3><p>{category.description||'Confira os produtos desta categoria.'}</p><strong>EXPLORAR <ArrowRight size={14}/></strong></div></Link>)}</div></div></section><section id="catalogo" className="tp-section tp-catalog"><div className="tp-wrap"><div className="tp-section-head"><div><p className="tp-kicker">CATÁLOGO 2P BOX</p><h2>PRODUTOS</h2></div><Link href="/loja" className="tp-result">{products.length||0} produto(s)</Link></div>{products.length?<div className="tp-product-grid">{products.map(p=><Link href={`/produto/${p.slug}`} key={p.id} className="tp-product"><div className="tp-product-img">{p.image_url?<img src={p.image_url} alt={p.name}/>:<span>2P</span>}</div><div className="tp-product-info"><small>2P BOX</small><h3>{p.name}</h3><strong>R$ {Number(p.price).toFixed(2).replace('.',',')}</strong></div></Link>)}</div>:<div className="tp-empty"><ShoppingBag size={30}/><h3>Catálogo em atualização</h3><p>Os produtos cadastrados aparecerão aqui automaticamente.</p><Link href="/loja" className="tp-button">ACESSAR A LOJA <ArrowRight size={16}/></Link></div>}</div></section><section className="tp-info"><div className="tp-wrap tp-info-grid"><div><p className="tp-kicker">A 2P BOX</p><h2>TUDO QUE VOCÊ PRECISA.</h2><p>Escolha seus produtos, finalize o pedido e retire na loja ou fale conosco para calcular o frete pelo WhatsApp.</p></div><div><p className="tp-kicker">ATENDIMENTO</p><h3>Fale diretamente com a nossa equipe.</h3><p>WhatsApp: (11) 9 9999-9999</p><p>Seg–Sex • 9h às 18h</p></div><div><p className="tp-kicker">POR QUE 2P BOX?</p><div className="tp-benefits"><span><Truck size={20}/><b>Retire na loja</b><small>Prático e sem custo de entrega.</small></span><span><Headphones size={20}/><b>Atendimento próximo</b><small>Fale diretamente com a nossa equipe.</small></span><span><Star size={20}/><b>Qualidade</b><small>Produtos selecionados para você.</small></span></div></div></div></section><footer id="contato" className="tp-footer"><div className="tp-wrap tp-footer-grid"><div><Image src="/logo.pnh.png" alt="2P Box" width={705} height={487}/><p>Tudo que você precisa,<br/>em um só lugar.</p></div><div><p className="tp-kicker">LOJA</p><Link href="/loja">Produtos</Link><Link href="#categorias">Categorias</Link><Link href="/carrinho">Carrinho</Link></div><div><p className="tp-kicker">ATENDIMENTO</p><span>WhatsApp: (11) 9 9999-9999</span><span>Seg–Sex • 9h às 18h</span></div></div><div className="tp-wrap tp-footer-bottom">© 2026 2P Box. Todos os direitos reservados.</div></footer><style jsx global>{`.tp-site{--yellow:#ffc400;--yellow-dark:#e3a900;--ink:#111;--muted:#6d6d6d;background:#fff;color:var(--ink);min-height:100vh;font-family:Arial,Helvetica,sans-serif}.tp-wrap{width:min(1180px,calc(100% - 40px));margin:0 auto}.tp-topbar{height:32px;background:#111;color:#fff}.tp-topbar .tp-wrap{height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;letter-spacing:.2em}.tp-topbar b{color:var(--yellow);margin:0 10px}.tp-header{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.97);backdrop-filter:blur(10px);border-bottom:1px solid #e7e7e7}.tp-header-inner{min-height:82px;display:flex;align-items:center;gap:28px}.tp-brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);flex:none}.tp-brand img{width:82px;height:58px;object-fit:contain}.tp-brand span{display:flex;flex-direction:column}.tp-brand strong{font-size:17px;letter-spacing:.12em}.tp-brand small{font-size:7px;letter-spacing:.22em;color:#888;margin-top:3px}.tp-nav{display:flex;align-items:center;gap:32px;margin-left:auto}.tp-nav a,.tp-account{font-size:11px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);text-decoration:none}.tp-nav a:hover,.tp-account:hover{color:var(--yellow-dark)}.tp-actions{display:flex;align-items:center;gap:16px}.tp-cart{height:40px;padding:0 14px;display:flex;align-items:center;gap:8px;background:#111;color:#fff!important;text-decoration:none;border-radius:7px;font-size:11px;font-weight:900}.tp-cart b{min-width:19px;height:19px;border-radius:50%;display:grid;place-items:center;background:var(--yellow);color:#111;font-size:9px}.tp-mobile-menu{display:none;background:#fff;border:1px solid #ddd;border-radius:6px;width:40px;height:40px}.tp-hero{position:relative;overflow:hidden;border-bottom:1px solid #eee;background:#fff;min-height:535px}.tp-hero-decor{position:absolute;inset:0;background:radial-gradient(circle at 78% 50%,rgba(255,196,0,.18),transparent 25%),linear-gradient(120deg,#fff 0%,#fff 58%,#fffbea 100%)}.tp-hero-decor:after{content:"";position:absolute;inset:0;background:linear-gradient(125deg,transparent 42%,rgba(255,196,0,.08) 43%,transparent 45%,transparent 67%,rgba(255,196,0,.06) 68%,transparent 70%)}.tp-hero-grid{position:relative;z-index:1;min-height:535px;display:grid;grid-template-columns:1.05fr .95fr;gap:35px;align-items:center}.tp-hero-copy{padding:58px 0}.tp-kicker{margin:0 0 9px;color:#a27a00;font-size:10px;font-weight:900;letter-spacing:.3em}.tp-hero h1{margin:0;max-width:650px;font-size:68px;line-height:.91;letter-spacing:-2px;font-weight:950;text-transform:uppercase;font-style:italic}.tp-hero h1 em{color:var(--yellow-dark);font-style:italic}.tp-lead{max-width:560px;margin:24px 0 0;color:#686868;font-size:16px;line-height:1.6}.tp-hero-services{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:28px;font-size:9px;font-weight:900;letter-spacing:.06em}.tp-hero-services i{font-style:normal;color:var(--yellow-dark)}.tp-hero-buttons{display:flex;gap:10px;margin-top:28px}.tp-button,.tp-outline{display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;font-size:10px;font-weight:950;letter-spacing:.08em;border-radius:6px;padding:14px 20px}.tp-button{background:var(--yellow);color:#111;border:1px solid var(--yellow)}.tp-outline{background:#fff;color:#111;border:1px solid #111}.tp-hero-logo{min-height:440px;display:flex;align-items:center;justify-content:center;position:relative}.tp-hero-logo img{position:relative;z-index:1;width:min(100%,560px);height:auto;object-fit:contain;filter:drop-shadow(0 20px 25px rgba(0,0,0,.08))}.tp-glow{position:absolute;width:390px;height:280px;border-radius:50%;background:rgba(255,196,0,.18);filter:blur(45px)}.tp-section{padding:68px 0}.tp-section-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:28px}.tp-section-head h2{margin:0;font-size:38px;line-height:1;font-weight:950;font-style:italic;letter-spacing:-1px}.tp-scroll-note,.tp-result{font-size:10px;color:#888;font-weight:800;letter-spacing:.08em}.tp-category-row{display:flex;gap:15px;overflow-x:auto;padding:3px 2px 14px;scrollbar-width:thin}.tp-category{position:relative;min-width:300px;flex:1;display:flex;align-items:center;gap:17px;padding:20px;border:1px solid #e1e1e1;border-radius:10px;background:#fff;color:#111;text-decoration:none;transition:.2s}.tp-category:hover{transform:translateY(-3px);border-color:#111;box-shadow:0 12px 30px rgba(0,0,0,.07)}.tp-cat-icon{width:66px;height:66px;flex:none;display:grid;place-items:center;border-radius:8px;background:#fff4c5}.tp-category h3{margin:0;font-size:15px;text-transform:uppercase;line-height:1.15}.tp-category p{margin:6px 0 10px;color:#777;font-size:10px;line-height:1.35}.tp-category strong{display:flex;align-items:center;gap:5px;font-size:9px;letter-spacing:.05em}.tp-catalog{border-top:1px solid #eee}.tp-product-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.tp-product{overflow:hidden;border:1px solid #e3e3e3;border-radius:12px;background:#fff;color:#111;text-decoration:none;transition:.2s}.tp-product:hover{transform:translateY(-3px);box-shadow:0 12px 30px rgba(0,0,0,.07);border-color:#c9c9c9}.tp-product-img{aspect-ratio:4/5;background:#f7f7f5;display:grid;place-items:center;overflow:hidden}.tp-product-img img{width:100%;height:100%;object-fit:contain;padding:14px;transition:.25s}.tp-product:hover .tp-product-img img{transform:scale(1.04)}.tp-product-img span{font-size:70px;font-weight:950;font-style:italic}.tp-product-info{padding:15px}.tp-product-info small{font-size:8px;letter-spacing:.18em;color:#999;font-weight:900}.tp-product-info h3{margin:7px 0 12px;font-size:14px;line-height:1.25}.tp-product-info strong{font-size:17px}.tp-empty{text-align:center;border:1px solid #e4e4e4;border-radius:12px;padding:55px 20px}.tp-empty h3{margin:12px 0 5px}.tp-empty p{margin:0 0 20px;color:#777;font-size:12px}.tp-info{border-top:1px solid #eee;border-bottom:1px solid #eee;background:#fafafa;padding:48px 0}.tp-info-grid{display:grid;grid-template-columns:1.1fr 1fr 1.3fr;gap:40px}.tp-info h2{font-size:28px;margin:0;font-style:italic}.tp-info h3{margin:0 0 10px;font-size:17px}.tp-info p:not(.tp-kicker){color:#777;font-size:12px;line-height:1.55}.tp-benefits{display:flex;flex-direction:column;gap:13px}.tp-benefits span{display:grid;grid-template-columns:28px 1fr;column-gap:8px;align-items:center}.tp-benefits svg{grid-row:1/3;color:#b08300}.tp-benefits b{font-size:12px}.tp-benefits small{color:#777;font-size:10px}.tp-footer{background:#111;color:#fff;padding:45px 0 0}.tp-footer-grid{display:grid;grid-template-columns:1.5fr .7fr 1fr;gap:50px;padding-bottom:38px}.tp-footer-grid img{width:100px;height:60px;object-fit:contain}.tp-footer-grid p:not(.tp-kicker),.tp-footer-grid span,.tp-footer-grid a{display:block;color:#aaa;font-size:11px;line-height:1.8;text-decoration:none}.tp-footer .tp-kicker{color:var(--yellow)}.tp-footer-bottom{border-top:1px solid #292929;padding:17px 0;color:#777;font-size:9px}.tp-nav-open{display:flex}.tp-nav-open a{display:block}@media(max-width:900px){.tp-nav{gap:18px}.tp-product-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.tp-hero h1{font-size:54px}.tp-hero-grid{gap:15px}.tp-info-grid{grid-template-columns:1fr 1fr}.tp-info-grid>div:first-child{grid-column:1/-1}}@media(max-width:680px){.tp-wrap{width:min(100% - 28px,1180px)}.tp-header-inner{min-height:70px}.tp-brand img{width:68px;height:50px}.tp-brand span{display:none}.tp-mobile-menu{display:grid;place-items:center;margin-left:auto}.tp-nav{display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border-bottom:1px solid #ddd;padding:18px;flex-direction:column;align-items:flex-start;gap:17px;margin:0}.tp-actions{gap:8px}.tp-account{font-size:9px}.tp-cart{height:38px;padding:0 10px}.tp-cart span{display:none}.tp-hero{min-height:auto}.tp-hero-grid{min-height:auto;grid-template-columns:1fr}.tp-hero-copy{padding:42px 0 10px}.tp-hero h1{font-size:45px;letter-spacing:-1px}.tp-lead{font-size:14px}.tp-hero-services{gap:7px;font-size:8px}.tp-hero-logo{min-height:280px}.tp-hero-logo img{width:min(100%,390px)}.tp-section{padding:48px 0}.tp-section-head{align-items:start}.tp-section-head h2{font-size:30px}.tp-category{min-width:285px}.tp-product-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.tp-product-info{padding:11px}.tp-product-info h3{font-size:13px}.tp-product-info strong{font-size:15px}.tp-info-grid{grid-template-columns:1fr;gap:28px}.tp-info-grid>div:first-child{grid-column:auto}.tp-footer-grid{grid-template-columns:1fr 1fr;gap:28px}.tp-footer-grid>div:first-child{grid-column:1/-1}}@media(max-width:380px){.tp-hero h1{font-size:41px}.tp-hero-buttons{display:grid;grid-template-columns:1fr}.tp-hero-services{font-size:7px}}
-  `}</style></main>}
+type Category = { id?: string; name: string; description?: string | null };
+type Product = { id: string; name: string; slug: string; price: number; image_url?: string | null };
+type AuthUser = { id: string; user_metadata?: { full_name?: string } };
+
+const fallbackCategories: Category[] = [
+  { name: 'Papelaria', description: 'Tudo para estudos e escritório.' },
+  { name: 'Eletrônicos', description: 'Tecnologia para o dia a dia.' },
+  { name: 'Acessórios para celular', description: 'Acessórios para seu celular.' },
+  { name: 'Xerox', description: 'Cópias e serviços de impressão.' },
+];
+
+function CategoryIcon({ index }: { index: number }) {
+  if (index === 1) return <Laptop size={25} strokeWidth={1.8} />;
+  if (index === 2) return <Printer size={25} strokeWidth={1.8} />;
+  if (index === 3) return <Truck size={25} strokeWidth={1.8} />;
+  return <ShoppingBag size={25} strokeWidth={1.8} />;
+}
+
+export default function Home() {
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const { items } = useCart();
+
+  useEffect(() => {
+    const client = supabase;
+    if (!client) return;
+    let mounted = true;
+
+    async function load() {
+      const [{ data: cats }, { data: prods }, { data: auth }] = await Promise.all([
+        client.from('categories').select('id,name,description').eq('active', true).order('name'),
+        client.from('products').select('id,name,slug,price,image_url').eq('active', true).order('created_at', { ascending: false }).limit(8),
+        client.auth.getUser(),
+      ]);
+      if (!mounted) return;
+      if (cats) setCategories(cats as Category[]);
+      if (prods) setProducts(prods as Product[]);
+      setUser((auth.user ?? null) as AuthUser | null);
+    }
+
+    load();
+    return () => { mounted = false; };
+  }, []);
+
+  const visibleCategories = categories.length ? categories : fallbackCategories;
+  const accountLabel = user?.user_metadata?.full_name?.trim()?.split(/\s+/)[0] || 'Entrar';
+  const cartCount = items.reduce((sum, item) => sum + item.quantity, 0);
+
+  return (
+    <main className="home-page">
+      <div className="home-topbar"><span>QUALIDADE</span><b>•</b><span>VARIEDADE</span><b>•</b><span>CONFIANÇA</span></div>
+
+      <header className="home-header">
+        <div className="home-container home-header-inner">
+          <Link href="/" className="home-brand" aria-label="2P Box - início">
+            <Image src="/logo.pnh.png" alt="2P Box" width={705} height={487} priority />
+          </Link>
+
+          <nav className={menuOpen ? 'home-nav home-nav-open' : 'home-nav'}>
+            <Link href="#categorias" onClick={() => setMenuOpen(false)}>Categorias</Link>
+            <Link href="#catalogo" onClick={() => setMenuOpen(false)}>Catálogo</Link>
+            <Link href="#contato" onClick={() => setMenuOpen(false)}>Contato</Link>
+          </nav>
+
+          <div className="home-actions">
+            <Link href="/conta" className="home-account">{accountLabel}</Link>
+            <Link href="/carrinho" className="home-cart" aria-label={`Carrinho com ${cartCount} itens`}>
+              <ShoppingBag size={18} strokeWidth={1.9} />
+              <span>Carrinho</span>
+              <b>{cartCount}</b>
+            </Link>
+            <button className="home-menu" onClick={() => setMenuOpen(v => !v)} aria-label="Abrir menu">
+              {menuOpen ? <X size={21} /> : <Menu size={21} />}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <section className="home-hero">
+        <div className="home-hero-glow" />
+        <div className="home-hero-beam" />
+        <div className="home-container home-hero-grid">
+          <div className="home-hero-copy">
+            <p className="home-eyebrow">2P BOX</p>
+            <h1>TUDO QUE VOCÊ PRECISA,<br /><em>EM UM SÓ LUGAR.</em></h1>
+            <p className="home-lead">Papelaria, eletrônicos, acessórios para celular e Xerox para facilitar o seu dia a dia.</p>
+            <div className="home-hero-actions">
+              <Link href="/loja" className="home-primary">COMPRAR AGORA <ArrowRight size={18} /></Link>
+              <Link href="#categorias" className="home-secondary">VER CATEGORIAS</Link>
+            </div>
+          </div>
+          <div className="home-hero-art" aria-hidden="true">
+            <div className="home-art-shadow" />
+            <Image src="/logo.pnh.png" alt="" width={705} height={487} priority />
+          </div>
+        </div>
+      </section>
+
+      <section id="categorias" className="home-section home-category-section">
+        <div className="home-container">
+          <div className="home-section-head">
+            <div>
+              <p className="home-eyebrow">ENCONTRE O QUE PRECISA</p>
+              <h2>COMPRE POR CATEGORIA</h2>
+            </div>
+            <Link href="/loja" className="home-section-link">VER TODAS <ArrowRight size={15} /></Link>
+          </div>
+          <div className="home-category-grid">
+            {visibleCategories.map((category, index) => (
+              <Link key={category.id || category.name} href={category.id ? `/loja?categoria=${encodeURIComponent(category.id)}` : '/loja'} className="home-category-card">
+                <div className="home-category-icon"><CategoryIcon index={index} /></div>
+                <div className="home-category-copy">
+                  <p>0{index + 1}</p>
+                  <h3>{category.name}</h3>
+                  <span>{category.description || 'Confira os produtos desta categoria.'}</span>
+                </div>
+                <ArrowRight className="home-category-arrow" size={18} />
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="catalogo" className="home-section home-catalog">
+        <div className="home-container">
+          <div className="home-section-head">
+            <div>
+              <p className="home-eyebrow">CATÁLOGO 2P BOX</p>
+              <h2>PRODUTOS</h2>
+            </div>
+            <Link href="/loja" className="home-section-link">VER CATÁLOGO <ArrowRight size={15} /></Link>
+          </div>
+          {products.length ? (
+            <div className="home-product-grid">
+              {products.map(product => (
+                <Link href={`/produto/${product.slug}`} key={product.id} className="home-product-card">
+                  <div className="home-product-image">
+                    {product.image_url ? <img src={product.image_url} alt={product.name} /> : <span>2P</span>}
+                  </div>
+                  <div className="home-product-info">
+                    <small>2P BOX</small>
+                    <h3>{product.name}</h3>
+                    <strong>R$ {Number(product.price).toFixed(2).replace('.', ',')}</strong>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="home-empty"><ShoppingBag size={28} /><h3>Catálogo em atualização</h3><p>Os produtos cadastrados aparecerão aqui.</p><Link href="/loja" className="home-primary">ACESSAR A LOJA <ArrowRight size={16} /></Link></div>
+          )}
+        </div>
+      </section>
+
+      <section className="home-benefits">
+        <div className="home-container home-benefits-grid">
+          <div className="home-benefit-intro"><p className="home-eyebrow">A 2P BOX</p><h2>TUDO QUE VOCÊ PRECISA.</h2><p>Escolha seus produtos, finalize o pedido e retire na loja ou fale conosco para calcular o frete pelo WhatsApp.</p></div>
+          <div className="home-benefit"><Truck size={25} /><h3>Retire na loja</h3><p>Prático e sem custo de entrega.</p></div>
+          <div className="home-benefit"><Headphones size={25} /><h3>Atendimento próximo</h3><p>Fale diretamente com a nossa equipe.</p></div>
+          <div className="home-benefit"><Star size={25} /><h3>Qualidade</h3><p>Produtos selecionados para você.</p></div>
+        </div>
+      </section>
+
+      <footer id="contato" className="home-footer">
+        <div className="home-container home-footer-grid">
+          <div><Image src="/logo.pnh.png" alt="2P Box" width={705} height={487} /><p>Tudo que você precisa,<br />em um só lugar.</p></div>
+          <div><p className="home-eyebrow">LOJA</p><Link href="/loja">Produtos</Link><Link href="#categorias">Categorias</Link><Link href="/carrinho">Carrinho</Link></div>
+          <div><p className="home-eyebrow">ATENDIMENTO</p><span>WhatsApp: (11) 9 9999-9999</span><span>Seg–Sex • 9h às 18h</span></div>
+        </div>
+        <div className="home-container home-footer-bottom">© 2026 2P Box. Todos os direitos reservados.</div>
+      </footer>
+
+      <style jsx global>{`
+        .home-page{--gold:#e7ad00;--yellow:#ffc400;--ink:#111;--muted:#707070;--line:#e7e7e7;min-height:100vh;background:#fff;color:var(--ink);font-family:Inter,Arial,sans-serif}
+        .home-container{width:min(1180px,calc(100% - 56px));margin:0 auto}
+        .home-topbar{height:34px;background:#111;color:#fff;display:flex;align-items:center;justify-content:center;gap:14px;font-size:10px;font-weight:800;letter-spacing:.25em}
+        .home-topbar b{color:var(--yellow);font-size:9px}
+        .home-header{height:86px;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:50}
+        .home-header-inner{height:100%;display:flex;align-items:center;gap:38px}
+        .home-brand{display:block;width:112px;height:70px;flex:none}.home-brand img{width:100%;height:100%;object-fit:contain}
+        .home-nav{display:flex;align-items:center;gap:34px;margin-left:auto}.home-nav a,.home-account{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;text-decoration:none}.home-nav a:hover,.home-account:hover,.home-section-link:hover{color:var(--gold)}
+        .home-actions{display:flex;align-items:center;gap:20px}.home-account{white-space:nowrap}.home-cart{height:42px;display:flex;align-items:center;gap:9px;padding:0 14px;background:#111;color:#fff;text-decoration:none;border-radius:8px;font-size:11px;font-weight:800}.home-cart b{width:20px;height:20px;display:grid;place-items:center;background:var(--yellow);color:#111;border-radius:50%;font-size:10px}.home-menu{display:none;width:42px;height:42px;background:#fff;border:1px solid #ddd;border-radius:8px}
+        .home-hero{position:relative;overflow:hidden;min-height:560px;border-bottom:1px solid var(--line);background:linear-gradient(105deg,#fff 0%,#fff 54%,#fffdf2 100%)}
+        .home-hero-glow{position:absolute;width:560px;height:420px;right:5%;top:50%;transform:translateY(-50%);background:radial-gradient(ellipse,rgba(255,196,0,.26) 0%,rgba(255,196,0,.11) 38%,transparent 70%);filter:blur(8px)}
+        .home-hero-beam{position:absolute;inset:-20%;background:linear-gradient(118deg,transparent 43%,rgba(255,196,0,.07) 45%,transparent 48%,transparent 64%,rgba(255,196,0,.06) 66%,transparent 69%);pointer-events:none}
+        .home-hero-grid{position:relative;z-index:1;min-height:560px;display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:30px}.home-hero-copy{padding:58px 0}.home-eyebrow{margin:0 0 13px;color:#9a7200;font-size:10px;font-weight:900;letter-spacing:.34em}.home-hero h1{margin:0;font-family:'Barlow Condensed',sans-serif;font-size:76px;line-height:.87;letter-spacing:-.025em;font-weight:800;font-style:italic;text-transform:uppercase}.home-hero h1 em{color:var(--gold);font-style:italic}.home-lead{max-width:560px;margin:25px 0 0;color:#686868;font-size:16px;line-height:1.65}.home-hero-actions{display:flex;gap:12px;margin-top:30px}.home-primary,.home-secondary{min-height:48px;padding:0 23px;display:inline-flex;align-items:center;justify-content:center;gap:9px;border-radius:8px;text-decoration:none;font-size:10px;font-weight:900;letter-spacing:.1em}.home-primary{background:var(--yellow);border:1px solid var(--yellow);color:#111}.home-secondary{background:#fff;border:1px solid #111;color:#111}.home-hero-art{height:100%;min-height:460px;display:flex;align-items:center;justify-content:center;position:relative}.home-hero-art img{position:relative;z-index:2;width:min(100%,590px);height:auto;object-fit:contain;filter:drop-shadow(0 22px 24px rgba(0,0,0,.08))}.home-art-shadow{position:absolute;z-index:1;width:430px;height:110px;bottom:20%;border-radius:50%;background:rgba(0,0,0,.09);filter:blur(30px)}
+        .home-section{padding:82px 0}.home-category-section{background:#fff}.home-section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:30px;margin-bottom:30px}.home-section-head h2{margin:0;font-family:'Barlow Condensed',sans-serif;font-size:48px;line-height:.92;font-weight:800;font-style:italic;text-transform:uppercase;letter-spacing:-.02em}.home-section-link{display:flex;align-items:center;gap:7px;text-decoration:none;color:#111;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}.home-category-grid{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+        .home-category-card{min-height:205px;padding:27px 23px;display:flex;flex-direction:column;justify-content:space-between;position:relative;text-decoration:none;color:#111;border-right:1px solid var(--line);transition:.25s}.home-category-card:last-child{border-right:0}.home-category-card:hover{background:#fffdf2}.home-category-icon{width:50px;height:50px;display:grid;place-items:center;background:var(--yellow);border-radius:50%;color:#111}.home-category-copy p{margin:0 0 5px;color:#a37b00;font-size:9px;font-weight:900;letter-spacing:.15em}.home-category-copy h3{margin:0 0 7px;font-family:'Barlow Condensed',sans-serif;font-size:28px;line-height:.95;text-transform:uppercase;font-weight:700}.home-category-copy span{display:block;color:#777;font-size:11px;line-height:1.45;max-width:190px}.home-category-arrow{position:absolute;right:22px;bottom:27px;transition:.2s}.home-category-card:hover .home-category-arrow{transform:translateX(4px)}
+        .home-catalog{background:#fafafa;border-top:1px solid var(--line)}.home-product-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}.home-product-card{overflow:hidden;background:#fff;border:1px solid #e2e2e2;border-radius:14px;color:#111;text-decoration:none;transition:.25s}.home-product-card:hover{transform:translateY(-4px);box-shadow:0 15px 35px rgba(0,0,0,.08)}.home-product-image{aspect-ratio:1/1;background:#f5f5f3;display:grid;place-items:center;overflow:hidden}.home-product-image img{width:100%;height:100%;padding:18px;object-fit:contain}.home-product-image span{font-family:'Barlow Condensed';font-size:80px;font-weight:800;font-style:italic}.home-product-info{padding:17px}.home-product-info small{font-size:8px;letter-spacing:.2em;color:#999;font-weight:900}.home-product-info h3{margin:8px 0 13px;font-family:'Barlow Condensed';font-size:22px;line-height:1;text-transform:uppercase}.home-product-info strong{font-size:18px}.home-empty{text-align:center;border:1px solid var(--line);background:#fff;padding:55px;border-radius:14px}.home-empty h3{font-family:'Barlow Condensed';font-size:28px;text-transform:uppercase;margin:10px 0 4px}.home-empty p{color:#777;margin:0 0 20px;font-size:12px}
+        .home-benefits{background:#111;color:#fff;padding:62px 0}.home-benefits-grid{display:grid;grid-template-columns:1.45fr repeat(3,1fr);gap:0}.home-benefit-intro,.home-benefit{padding:0 30px;border-left:1px solid #333}.home-benefit-intro{padding-left:0;border-left:0}.home-benefit-intro h2{margin:0;font-family:'Barlow Condensed';font-size:34px;line-height:.95;text-transform:uppercase;font-style:italic}.home-benefit-intro>p:last-child{max-width:350px;color:#aaa;font-size:12px;line-height:1.6}.home-benefit svg{color:var(--yellow)}.home-benefit h3{margin:15px 0 5px;font-family:'Barlow Condensed';font-size:25px;text-transform:uppercase}.home-benefit p{margin:0;color:#aaa;font-size:11px}
+        .home-footer{background:#0b0b0b;color:#fff;padding:54px 0 0}.home-footer-grid{display:grid;grid-template-columns:1.5fr .7fr 1fr;gap:55px;padding-bottom:42px}.home-footer-grid img{width:105px;height:65px;object-fit:contain}.home-footer-grid p:not(.home-eyebrow),.home-footer-grid a,.home-footer-grid span{display:block;color:#aaa;font-size:11px;line-height:1.9;text-decoration:none}.home-footer .home-eyebrow{color:var(--yellow)}.home-footer-bottom{border-top:1px solid #242424;padding:17px 0;color:#666;font-size:9px}
+        @media(max-width:900px){.home-container{width:min(100% - 40px,1180px)}.home-nav{gap:20px}.home-hero h1{font-size:61px}.home-category-grid{grid-template-columns:repeat(2,1fr)}.home-category-card:nth-child(2){border-right:0}.home-category-card:nth-child(-n+2){border-bottom:1px solid var(--line)}.home-product-grid{grid-template-columns:repeat(2,1fr)}.home-benefits-grid{grid-template-columns:1fr 1fr;gap:28px}.home-benefit-intro{grid-column:1/-1;padding:0;border:0}.home-benefit{padding:0 20px}.home-footer-grid{grid-template-columns:1fr 1fr}}
+        @media(max-width:680px){.home-topbar{height:31px;font-size:9px;letter-spacing:.2em;gap:10px}.home-header{height:78px}.home-header-inner{width:calc(100% - 28px);gap:10px}.home-brand{width:86px;height:62px}.home-nav{display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border-bottom:1px solid var(--line);padding:20px 22px;flex-direction:column;align-items:flex-start;gap:18px}.home-nav-open{display:flex}.home-actions{margin-left:auto;gap:9px}.home-account{font-size:10px}.home-cart{height:43px;padding:0 10px}.home-cart span{display:none}.home-menu{display:grid;place-items:center}.home-hero{min-height:auto}.home-hero-grid{min-height:auto;display:flex;flex-direction:column;gap:0}.home-hero-copy{width:100%;padding:46px 0 10px}.home-hero h1{font-size:48px;line-height:.9;letter-spacing:-.02em}.home-lead{font-size:14px;line-height:1.6;margin-top:20px}.home-hero-actions{margin-top:25px;display:grid;grid-template-columns:1fr 1fr}.home-primary,.home-secondary{padding:0 12px;min-height:49px;font-size:9px}.home-hero-art{width:100%;min-height:335px;height:335px;margin-top:-4px}.home-hero-art img{width:min(100%,470px)}.home-hero-glow{width:460px;height:330px;right:50%;transform:translate(50%,-40%)}.home-art-shadow{width:290px;bottom:13%}.home-section{padding:58px 0}.home-section-head{align-items:flex-end;margin-bottom:25px}.home-section-head h2{font-size:39px}.home-section-link{font-size:9px;white-space:nowrap}.home-category-grid{grid-template-columns:1fr 1fr}.home-category-card{min-height:180px;padding:20px 16px}.home-category-icon{width:44px;height:44px}.home-category-copy h3{font-size:23px}.home-category-copy span{font-size:10px}.home-category-arrow{right:15px;bottom:19px}.home-product-grid{gap:10px}.home-product-info{padding:13px}.home-product-info h3{font-size:19px}.home-product-info strong{font-size:16px}.home-benefits{padding:48px 0}.home-benefits-grid{grid-template-columns:1fr 1fr;gap:26px 0}.home-benefit-intro{grid-column:1/-1;padding-bottom:5px}.home-benefit{padding:0 15px}.home-benefit:nth-child(odd){border-left:0;padding-left:0}.home-benefit h3{font-size:21px}.home-footer-grid{grid-template-columns:1fr 1fr;gap:28px}.home-footer-grid>div:first-child{grid-column:1/-1}}
+        @media(max-width:390px){.home-container{width:calc(100% - 28px)}.home-hero h1{font-size:43px}.home-hero-actions{grid-template-columns:1fr}.home-hero-art{min-height:295px;height:295px}.home-category-copy h3{font-size:20px}.home-category-card{min-height:170px}.home-section-head{display:block}.home-section-link{margin-top:12px}.home-product-info h3{font-size:17px}}
+      `}</style>
+    </main>
+  );
+}
