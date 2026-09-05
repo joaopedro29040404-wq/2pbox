@@ -1,0 +1,54 @@
+.two-p-home{background:#fff!important;color:#111!important}
+.two-p-home .two-p-topbar{background:#111!important;color:#fff!important;border-bottom:3px solid #ffc400!important}
+.two-p-home .two-p-header{background:rgba(255,255,255,.96)!important;border-bottom:1px solid #dedede!important;box-shadow:0 4px 18px rgba(17,17,17,.06)!important}
+.two-p-home .two-p-nav a{color:#171717!important}
+.two-p-home .two-p-nav a:hover,.two-p-home .two-p-nav-admin{color:#c89500!important}
+.two-p-home .two-p-cart{background:#111!important;color:#fff!important}
+.two-p-home .two-p-menu-button{color:#111!important;border-color:#d5a900!important;background:#fff!important}
+.two-p-home .two-p-hero{background:linear-gradient(135deg,#fff 0%,#fffdf2 62%,#fff7cf 100%)!important;border-bottom:1px solid #e2e2e2!important}
+.two-p-home .two-p-hero-glow{background:rgba(255,196,0,.20)!important;filter:blur(90px)!important}
+.two-p-home .two-p-hero-lines{opacity:.45!important;background:linear-gradient(125deg,transparent 38%,rgba(255,196,0,.13) 39%,transparent 40%,transparent 62%,rgba(17,17,17,.04) 63%,transparent 64%)!important}
+.two-p-home .two-p-hero h1{color:#111!important}
+.two-p-home .two-p-hero h1 em{color:#e1a900!important}
+.two-p-home .two-p-eyebrow{color:#b18100!important}
+.two-p-home .two-p-hero-lead{color:#5e5e5e!important}
+.two-p-home .two-p-primary{background:#ffc400!important;color:#111!important;box-shadow:0 8px 20px rgba(255,196,0,.22)!important}
+.two-p-home .two-p-secondary{border-color:#111!important;color:#111!important;background:#fff!important}
+.two-p-home .two-p-secondary:hover{border-color:#ffc400!important;color:#9a7200!important}
+.two-p-home .two-p-logo-glow{background:rgba(255,196,0,.16)!important}
+.two-p-home .two-p-hero-logo{filter:drop-shadow(0 14px 24px rgba(0,0,0,.16))!important}
+.two-p-home .two-p-section{border-bottom:1px solid #dedede!important}
+.two-p-home .two-p-categories{background:#f7f7f5!important}
+.two-p-home .two-p-catalog{background:#fff!important}
+.two-p-home .two-p-section-head h2{color:#111!important}
+.two-p-home .two-p-text-link{color:#a47700!important}
+.two-p-home .two-p-category-card{background:#fff!important;border:1px solid #dedede!important;color:#111!important;box-shadow:0 8px 24px rgba(17,17,17,.045)!important}
+.two-p-home .two-p-category-card:hover{border-color:#e2b000!important;box-shadow:0 12px 28px rgba(17,17,17,.08)!important}
+.two-p-home .two-p-category-icon{background:#111!important;border-color:#111!important;color:#ffc400!important}
+.two-p-home .two-p-category-content h3{color:#111!important}
+.two-p-home .two-p-category-content p{color:#6a6a6a!important}
+.two-p-home .two-p-category-content span{color:#9a7200!important}
+.two-p-home .two-p-product-card{background:#fff!important;border:1px solid #dedede!important;color:#111!important;box-shadow:0 8px 22px rgba(17,17,17,.045)!important}
+.two-p-home .two-p-product-card:hover{border-color:#e2b000!important;box-shadow:0 12px 28px rgba(17,17,17,.08)!important}
+.two-p-home .two-p-product-image{background:#f6f6f4!important}
+.two-p-home .two-p-product-image span{color:#111!important}
+.two-p-home .two-p-product-info small{color:#a47700!important}
+.two-p-home .two-p-product-info h3{color:#111!important}
+.two-p-home .two-p-product-info strong{color:#111!important}
+.two-p-home .two-p-empty{color:#111!important;border-color:#d9b200!important;background:#fff!important}
+.two-p-home .two-p-empty svg{color:#d19e00!important}
+.two-p-home .two-p-empty p{color:#666!important}
+.two-p-home .two-p-benefits{background:#111!important;color:#fff!important;border-bottom:0!important;position:relative;overflow:hidden}
+.two-p-home .two-p-benefits:before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(255,196,0,.08),transparent 42%,rgba(255,196,0,.04));pointer-events:none}
+.two-p-home .two-p-benefits-grid{position:relative}
+.two-p-home .two-p-benefits-intro h2{color:#fff!important}
+.two-p-home .two-p-benefits-intro>p:last-child{color:rgba(255,255,255,.68)!important}
+.two-p-home .two-p-benefit{background:#181818!important;border-color:rgba(255,255,255,.12)!important}
+.two-p-home .two-p-benefit>div{background:#ffc400!important;color:#111!important}
+.two-p-home .two-p-benefit strong{color:#fff!important}
+.two-p-home .two-p-benefit small{color:rgba(255,255,255,.55)!important}
+.two-p-home .two-p-footer{background:#f1f1ef!important;color:#111!important;border-top:1px solid #ddd!important}
+.two-p-home .two-p-footer p,.two-p-home .two-p-footer a{color:#666!important}
+.two-p-home .two-p-footer h4{color:#a47700!important}
+.two-p-home .two-p-footer-bottom{border-color:#d6d6d6!important;color:#888!important}
+@media(max-width:640px){.two-p-home .two-p-hero{background:linear-gradient(180deg,#fff 0%,#fffdf2 78%,#fff8d9 100%)!important}.two-p-home .two-p-header{box-shadow:0 3px 12px rgba(17,17,17,.07)!important}.two-p-home .two-p-category-card,.two-p-home .two-p-product-card{box-shadow:0 5px 16px rgba(17,17,17,.05)!important}.two-p-home .two-p-benefits{background:#111!important}}
