@@ -21,18 +21,8 @@ export async function POST(request: Request) {
     const payerEmail = String(formData.payer?.email || formData.email || formData.cardholderEmail || '').trim().toLowerCase();
     if (!payerEmail) return NextResponse.json({ error: 'Informe um e-mail válido para o pagamento.' }, { status: 400 });
 
-    const identificationType = String(
-      formData.cardholderIdentificationType ||
-      formData.identificationType ||
-      formData.payer?.identification?.type ||
-      ''
-    ).trim();
-    const identificationNumber = String(
-      formData.cardholderIdentificationNumber ||
-      formData.identificationNumber ||
-      formData.payer?.identification?.number ||
-      ''
-    ).replace(/\D/g, '');
+    const identificationType = String(formData.cardholderIdentificationType || formData.identificationType || formData.payer?.identification?.type || '').trim();
+    const identificationNumber = String(formData.cardholderIdentificationNumber || formData.identificationNumber || formData.payer?.identification?.number || '').replace(/\D/g, '');
     const identification = identificationType && identificationNumber ? { type: identificationType, number: identificationNumber } : undefined;
 
     const cardholderName = String(formData.cardholderName || formData.card_holder_name || '').trim();
@@ -82,18 +72,19 @@ export async function POST(request: Request) {
     const result = await response.json().catch(() => null);
     if (!response.ok) {
       console.error('Mercado Pago Orders API error:', { status: response.status, result, orderId });
+      const cause = Array.isArray(result?.cause) ? result.cause[0] : null;
       return NextResponse.json({
         id: null,
         status: 'rejected',
-        statusDetail: result?.message || result?.cause?.[0]?.description || null,
+        statusDetail: result?.status_detail || cause?.code || cause?.description || result?.message || null,
         paymentMethodId,
-        error: result?.message || 'O Mercado Pago recusou a order.',
+        error: result?.status_detail || cause?.description || result?.message || 'O Mercado Pago recusou a order.',
         details: result,
       }, { status: response.status >= 400 && response.status < 500 ? response.status : 502 });
     }
 
     const payment = result?.transactions?.payments?.[0];
-    const paymentId = payment?.id ? String(payment.id) : null;
+    const paymentId = payment?.id ? String(payment.id) : payment?.reference_id ? String(payment.reference_id) : null;
     const status = payment?.status || result?.status || 'pending';
     const statusDetail = payment?.status_detail || result?.status_detail || null;
     const normalizedResult = {
@@ -115,6 +106,8 @@ export async function POST(request: Request) {
       orderId: result?.id || null,
       status,
       statusDetail,
+      orderStatus: result?.status || null,
+      orderStatusDetail: result?.status_detail || null,
       paymentMethodId: payment?.payment_method?.id || paymentMethodId,
       pix: isPix ? {
         qrCode: transactionData.qr_code || null,
