@@ -18,7 +18,14 @@ function OrderPageContent(){
   setLoading(true);setError('');
   const{data:userData}=await supabase.auth.getUser();
   if(userData.user){
-   const{o,error:oErr}=await supabase.from('orders').select('id,customer_name,customer_phone,customer_email,delivery_type,delivery_address,notes,status,payment_status,total,created_at').eq('id',id).eq('customer_id',userData.user.id).maybeSingle();
+   const fields='id,customer_name,customer_phone,customer_email,delivery_type,delivery_address,notes,status,payment_status,total,created_at';
+   let{o,error:oErr}=await supabase.from('orders').select(fields).eq('id',id).eq('customer_id',userData.user.id).maybeSingle();
+   // Compatibilidade com pedidos de convidado que ainda não foram vinculados
+   // ao customer_id: a policy do Supabase também permite acesso pelo e-mail.
+   if((oErr||!o) && userData.user.email){
+    const fallback=await supabase.from('orders').select(fields).eq('id',id).eq('customer_email',userData.user.email).maybeSingle();
+    o=fallback.data;oErr=fallback.error;
+   }
    if(oErr||!o){setError('Pedido não encontrado.');setLoading(false);return}
    setOrder(o as Order);
    const{i,error:iErr}=await supabase.rpc('get_order_items_for_customer',{p_order_id:id});
