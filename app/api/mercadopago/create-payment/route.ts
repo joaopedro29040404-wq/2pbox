@@ -122,3 +122,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Não foi possível processar o pagamento.' }, { status: 502 });
   }
 }
+
+// Keep this production path on main so GitHub -> Vercel can retrigger the deployment.
