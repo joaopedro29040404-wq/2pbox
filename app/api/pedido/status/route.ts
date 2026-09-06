@@ -28,8 +28,8 @@ export async function GET(request: Request) {
     }
     if (!currentOrder) return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
 
-    // Reconciliação imediata: o webhook é a fonte oficial, mas a própria tela
-    // também consegue buscar o estado atual durante os testes ou se houver atraso.
+    // Webhook é a fonte oficial. Esta reconciliação curta é o fallback para
+    // testes e para o caso de a notificação ainda estar a caminho.
     const accessToken = getMercadoPagoAccessToken();
     if (accessToken && currentOrder.payment_id) {
       try {
@@ -48,7 +48,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await admin
       .from('orders')
-      .select('id,customer_name,customer_phone,customer_email,delivery_type,delivery_address,notes,status,payment_status,payment_status_detail,payment_updated_at,total,created_at,updated_at,payment_id')
+      .select('id,customer_name,customer_phone,customer_email,delivery_type,delivery_address,notes,status,payment_status,total,created_at,payment_id')
       .eq('id', orderId)
       .ilike('customer_email', email)
       .maybeSingle();
