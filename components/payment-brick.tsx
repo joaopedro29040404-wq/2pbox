@@ -28,13 +28,16 @@ export default function PaymentBrick({ amount, orderId, email, preferenceId, onR
         const response = await fetch(`/api/mercadopago/payment-status?orderId=${encodeURIComponent(orderId)}&paymentId=${encodeURIComponent(String(paymentId))}`, { cache: 'no-store' });
         const data = await response.json();
         if (!active) return;
-        if (['approved', 'rejected', 'cancelled'].includes(data.paymentStatus)) { onResult({ id: paymentId, status: data.paymentStatus, statusDetail: data.statusDetail }); return; }
+        if (['approved', 'rejected', 'cancelled'].includes(data.paymentStatus)) {
+          window.location.href = `/pagamento/${encodeURIComponent(orderId)}?paymentId=${encodeURIComponent(String(paymentId))}&payment=${encodeURIComponent(data.paymentStatus)}`;
+          return;
+        }
       } catch { /* continua aguardando */ }
       timer = window.setTimeout(check, 4000);
     };
     timer = window.setTimeout(check, 3500);
     return () => { active = false; if (timer) window.clearTimeout(timer); };
-  }, [paymentId, orderId, onResult]);
+  }, [paymentId, orderId]);
 
   async function copyPixCode() {
     if (!pix?.qrCode) return;
@@ -59,7 +62,7 @@ export default function PaymentBrick({ amount, orderId, email, preferenceId, onR
       const result: PaymentResult = await response.json();
       if (!response.ok) { onError(result?.statusDetail || result?.status || 'Não foi possível processar o pagamento.'); throw new Error(result?.statusDetail || 'Pagamento recusado'); }
       if (result.paymentMethodId === 'pix' && result.pix) { setPaymentId(result.id ?? null); setPix(result.pix); return; }
-      onResult(result);
+      window.location.href = `/pagamento/${encodeURIComponent(orderId)}?paymentId=${encodeURIComponent(String(result.id || ''))}&payment=${encodeURIComponent(result.status || 'pending')}`;
     }}
     onReady={() => undefined}
     onError={() => onError('O Mercado Pago encontrou um problema ao carregar o pagamento. Tente novamente.')}
