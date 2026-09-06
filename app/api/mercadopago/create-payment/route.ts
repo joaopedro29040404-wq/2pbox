@@ -10,7 +10,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { formData, orderId, total } = body;
+    const { formData, orderId, total, deviceId } = body;
     const amount = Number(total);
     if (!formData || !orderId || !Number.isFinite(amount) || amount <= 0) return NextResponse.json({ error: 'Dados inválidos para criar o pagamento.' }, { status: 400 });
 
@@ -65,13 +65,17 @@ export async function POST(request: Request) {
       notification_url: `${origin}/api/mercadopago/webhook`,
     };
 
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': crypto.randomUUID(),
+    };
+    const normalizedDeviceId = String(deviceId || '').trim();
+    if (normalizedDeviceId) headers['X-meli-session-id'] = normalizedDeviceId;
+
     const response = await fetch('https://api.mercadopago.com/v1/payments', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'X-Idempotency-Key': crypto.randomUUID(),
-      },
+      headers,
       body: JSON.stringify(paymentBody),
       cache: 'no-store',
     });
