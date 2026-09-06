@@ -4,8 +4,6 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 function getAccessToken() {
-  // Mantém o nome oficial usado pela aplicação e aceita os nomes alternativos
-  // mais comuns para evitar falha quando a variável foi cadastrada com underscore.
   return (
     process.env.MERCADOPAGO_ACCESS_TOKEN ||
     process.env.MERCADO_PAGO_ACCESS_TOKEN ||
@@ -28,13 +26,16 @@ export async function POST(request: Request) {
     const items = Array.isArray(body.items) ? body.items : [];
     const total = Number(body.total);
     const orderId = String(body.orderId || '');
-    const email = String(body.email || '');
+    const email = String(body.email || '').trim();
 
     if (!items.length || !orderId || !Number.isFinite(total) || total <= 0) {
       return NextResponse.json({ error: 'Dados inválidos para iniciar o pagamento.' }, { status: 400 });
     }
 
     const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || 'https://2pbox.vercel.app';
+    // O e-mail acompanha o retorno do Mercado Pago para que uma compra sem login
+    // também consiga abrir a página de detalhes do pedido depois do pagamento.
+    const guestParam = email ? `&email=${encodeURIComponent(email)}` : '';
     const preference = {
       items: items.map((item: { id?: string; name: string; price: number; quantity: number }) => ({
         id: item.id,
@@ -46,9 +47,9 @@ export async function POST(request: Request) {
       external_reference: orderId,
       ...(email ? { payer: { email } } : {}),
       back_urls: {
-        success: `${origin}/pedido/${encodeURIComponent(orderId)}?payment=approved`,
-        pending: `${origin}/pedido/${encodeURIComponent(orderId)}?payment=pending`,
-        failure: `${origin}/pedido/${encodeURIComponent(orderId)}?payment=failure`,
+        success: `${origin}/pedido/${encodeURIComponent(orderId)}?payment=approved${guestParam}`,
+        pending: `${origin}/pedido/${encodeURIComponent(orderId)}?payment=pending${guestParam}`,
+        failure: `${origin}/pedido/${encodeURIComponent(orderId)}?payment=failure${guestParam}`,
       },
       auto_return: 'approved',
     };
