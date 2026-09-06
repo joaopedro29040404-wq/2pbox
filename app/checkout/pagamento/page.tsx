@@ -14,7 +14,7 @@ function PaymentPage() {
   const [error, setError] = useState('');
   const [paid, setPaid] = useState(false);
 
-  if (!orderId || !amount || !email) {
+  if (!orderId || !amount) {
     return <main className="payment-page"><div className="payment-card"><h1>Pagamento indisponível</h1><p>Não foi possível carregar os dados do pagamento.</p><Link href="/carrinho">Voltar ao carrinho</Link></div></main>;
   }
 
@@ -26,7 +26,7 @@ function PaymentPage() {
         <div className="payment-heading"><p>PEDIDO {orderId}</p><h1>Finalize seu pagamento</h1><span>Você está em um ambiente seguro. Escolha a forma de pagamento abaixo.</span></div>
         <div className="payment-card">
           {paid ? (
-            <div className="payment-success"><div className="success-mark">✓</div><h2>Pagamento enviado!</h2><p>Recebemos o pagamento do pedido <strong>{orderId}</strong>. Você pode acompanhar o pedido pela sua conta.</p><Link href={`/conta/pedidos/${orderId}`} className="payment-button">Acompanhar pedido</Link></div>
+            <div className="payment-success"><div className="success-mark">✓</div><h2>Pagamento enviado!</h2><p>Recebemos o pagamento do pedido <strong>{orderId}</strong>. Você pode acompanhar o pedido pela sua conta.</p><Link href={`/pedido/${orderId}`} className="payment-button">Acompanhar pedido</Link></div>
           ) : (
             <>
               <div className="payment-total"><span>Total do pedido</span><strong>R$ {amount.toFixed(2).replace('.', ',')}</strong></div>
