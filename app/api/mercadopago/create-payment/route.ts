@@ -30,15 +30,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Dados inválidos para criar o pagamento.' }, { status: 400 });
     }
 
+    const paymentMethodId = String(formData.payment_method_id || '').trim();
+    const payerEmail = String(formData.payer?.email || formData.cardholderEmail || '').trim();
+
+    if (!payerEmail) {
+      return NextResponse.json({ error: 'Informe um e-mail válido para o pagamento.' }, { status: 400 });
+    }
+
     const paymentBody = {
       transaction_amount: amount,
-      token: formData.token,
+      token: formData.token || undefined,
       description: `Pedido 2P Box ${orderId}`,
       installments: Number(formData.installments || 1),
-      payment_method_id: formData.payment_method_id,
+      payment_method_id: paymentMethodId,
       issuer_id: formData.issuer_id ? Number(formData.issuer_id) : undefined,
       payer: {
-        email: formData.payer?.email || formData.cardholderEmail,
+        email: payerEmail,
         identification: formData.payer?.identification || (formData.identificationType && formData.identificationNumber ? { type: formData.identificationType, number: formData.identificationNumber } : undefined),
         first_name: formData.payer?.first_name || formData.cardholderName,
       },
@@ -62,7 +69,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: result.message || 'O Mercado Pago recusou o pagamento.' }, { status: response.status >= 400 && response.status < 500 ? response.status : 502 });
     }
 
-    return NextResponse.json({ id: result.id, status: result.status, statusDetail: result.status_detail });
+    const transactionData = result?.point_of_interaction?.transaction_data || {};
+    const isPix = paymentMethodId === 'pix' || result?.payment_method_id === 'pix';
+
+    return NextResponse.json({
+      id: result.id,
+      status: result.status,
+      statusDetail: result.status_detail,
+      paymentMethodId: result.payment_method_id,
+      pix: isPix ? {
+        qrCode: transactionData.qr_code || null,
+        qrCodeBase64: transactionData.qr_code_base64 || null,
+        ticketUrl: transactionData.ticket_url || null,
+      } : null,
+    });
   } catch (error) {
     console.error('Mercado Pago Payment Brick error:', error);
     return NextResponse.json({ error: 'Não foi possível processar o pagamento.' }, { status: 502 });
