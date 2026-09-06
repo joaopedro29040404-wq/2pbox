@@ -29,12 +29,14 @@ export async function POST(request: Request) {
     const nameParts = cardholderName ? cardholderName.split(/\s+/).filter(Boolean) : [];
     const paymentTypeId = String(additionalData?.paymentTypeId || formData.payment_type_id || '').trim();
     const paymentMethodType = paymentTypeId === 'debit_card' ? 'debit_card' : 'credit_card';
+    const siteUrl = String(process.env.NEXT_PUBLIC_SITE_URL || 'https://2pbox.vercel.app').replace(/\/$/, '');
 
     const orderBody = {
       type: 'online',
       processing_mode: 'automatic',
       total_amount: amount.toFixed(2),
       external_reference: String(orderId).slice(0, 64),
+      notification_url: `${siteUrl}/api/mercadopago/webhook`,
       payer: {
         email: payerEmail,
         ...(identification ? { identification } : {}),
