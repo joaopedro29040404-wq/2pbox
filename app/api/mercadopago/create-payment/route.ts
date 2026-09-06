@@ -1,22 +1,14 @@
 import { NextResponse } from 'next/server';
+import { getMercadoPagoAccessToken, syncOrderPayment } from '@/lib/mercadopago-server';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-function getAccessToken() {
-  return (
-    process.env.MERCADOPAGO_ACCESS_TOKEN ||
-    process.env.MERCADO_PAGO_ACCESS_TOKEN ||
-    process.env.MP_ACCESS_TOKEN ||
-    ''
-  ).trim();
-}
-
 export async function POST(request: Request) {
-  const accessToken = getAccessToken();
+  const accessToken = getMercadoPagoAccessToken();
   if (!accessToken) {
     return NextResponse.json(
-      { error: 'Mercado Pago não configurado no servidor. Verifique a variável de Access Token no ambiente Production da Vercel e faça um novo deploy.' },
+      { error: 'Mercado Pago não configurado no servidor. Verifique a variável de Access Token na Vercel e faça um novo deploy.' },
       { status: 500 }
     );
   }
@@ -32,11 +24,9 @@ export async function POST(request: Request) {
 
     const paymentMethodId = String(formData.payment_method_id || '').trim();
     const payerEmail = String(formData.payer?.email || formData.cardholderEmail || '').trim();
+    if (!payerEmail) return NextResponse.json({ error: 'Informe um e-mail válido para o pagamento.' }, { status: 400 });
 
-    if (!payerEmail) {
-      return NextResponse.json({ error: 'Informe um e-mail válido para o pagamento.' }, { status: 400 });
-    }
-
+    const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || 'https://2pbox.vercel.app';
     const paymentBody = {
       transaction_amount: amount,
       token: formData.token || undefined,
@@ -50,6 +40,7 @@ export async function POST(request: Request) {
         first_name: formData.payer?.first_name || formData.cardholderName,
       },
       external_reference: String(orderId),
+      notification_url: `${origin}/api/mercadopago/webhook`,
     };
 
     const response = await fetch('https://api.mercadopago.com/v1/payments', {
@@ -68,6 +59,10 @@ export async function POST(request: Request) {
       console.error('Mercado Pago Payment Brick error:', result);
       return NextResponse.json({ error: result.message || 'O Mercado Pago recusou o pagamento.' }, { status: response.status >= 400 && response.status < 500 ? response.status : 502 });
     }
+
+    // Registra imediatamente o ID e o status. O webhook e a consulta de status
+    // continuam atualizando o pedido quando o Mercado Pago mudar o resultado.
+    try { await syncOrderPayment(String(orderId), result); } catch (syncError) { console.error('Order payment sync error:', syncError); }
 
     const transactionData = result?.point_of_interaction?.transaction_data || {};
     const isPix = paymentMethodId === 'pix' || result?.payment_method_id === 'pix';
