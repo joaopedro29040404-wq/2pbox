@@ -18,15 +18,15 @@ export const DEFAULT_STORE_SETTINGS: StoreSettings = {
 
 export async function getStoreSettings(): Promise<StoreSettings> {
   try {
-    const { data, error } = await supabase
+    const { data: rows, error } = await supabase
       .from('store_settings')
       .select('name,whatsapp,hours,pickup,shipping,updated_at')
       .order('updated_at', { ascending: false, nullsFirst: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
 
-    if (error || !data) return DEFAULT_STORE_SETTINGS;
+    if (error || !rows?.length) return DEFAULT_STORE_SETTINGS;
 
+    const data = rows[0];
     return {
       ...DEFAULT_STORE_SETTINGS,
       name: data.name || DEFAULT_STORE_SETTINGS.name,
