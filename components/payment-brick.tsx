@@ -16,11 +16,18 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
   const [copyMessage, setCopyMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const publicKey = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY || '';
+  const isTestEnvironment = publicKey.startsWith('TEST-');
+  // Mercado Pago's card test environment uses a dedicated test buyer identity.
+  // Keep the customer's real checkout e-mail in 2P Box, but use the official
+  // test payer identity when the Brick is running with a TEST public key.
+  const mercadoPagoPayerEmail = isTestEnvironment ? 'test@testuser.com' : email.trim().toLowerCase();
+  const mercadoPagoPayerCpf = isTestEnvironment ? '' : (cpf || '').replace(/\D/g, '');
+
   useEffect(() => {
-    const publicKey = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY;
     if (!publicKey) return onError('A chave pública do Mercado Pago ainda não foi configurada na Vercel.');
     if (initializedKey !== publicKey) { initMercadoPago(publicKey, { locale: 'pt-BR' }); initializedKey = publicKey; }
-  }, [onError]);
+  }, [onError, publicKey]);
 
   useEffect(() => {
     if (!paymentId) return;
@@ -56,9 +63,10 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
     <style jsx>{`.pix-payment-result{display:grid;gap:16px;padding:22px;border:1px solid #e5e5e5;border-radius:14px;background:#fff;text-align:center;overflow:hidden;width:100%;box-sizing:border-box}.pix-payment-result h3{margin:5px 0}.pix-payment-result p{margin:0;color:#777;font-size:12px}.pix-qr{width:min(280px,100%);margin:auto;padding:12px;border:1px solid #eee;border-radius:12px}.pix-qr img{display:block;width:100%;height:auto}.pix-copy{text-align:left}.pix-copy>div{display:flex;gap:8px}.pix-copy input{min-width:0;flex:1;padding:11px;border:1px solid #ddd;border-radius:8px}.pix-copy button{border:0;border-radius:8px;background:#111;color:#fff;padding:0 15px;font-weight:700}.pix-payment-result a{color:#111;font-weight:700;text-decoration:underline}@media(max-width:600px){.pix-payment-result{padding:16px}.pix-copy>div{display:grid}.pix-copy button{min-height:40px}}`}</style>
   </div>;
 
-  const normalizedEmail = email.trim().toLowerCase();
-  const normalizedCpf = (cpf || '').replace(/\D/g, '');
-  const payer = { ...(normalizedEmail ? { email: normalizedEmail } : {}), ...(normalizedCpf.length === 11 ? { identification: { type: 'CPF', number: normalizedCpf } } : {}) };
+  const payer = {
+    ...(mercadoPagoPayerEmail ? { email: mercadoPagoPayerEmail } : {}),
+    ...(mercadoPagoPayerCpf.length === 11 ? { identification: { type: 'CPF', number: mercadoPagoPayerCpf } } : {}),
+  };
   const hasPreference = Boolean(preferenceId?.trim());
   const paymentMethods = hasPreference
     ? { creditCard: 'all', debitCard: 'all', prepaidCard: 'all', ticket: 'all', bankTransfer: 'all', mercadoPago: 'all' } as const
@@ -88,7 +96,7 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
             response = await fetch('/api/mercadopago/create-payment', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ formData: enrichedFormData, selectedPaymentMethod, orderId, total: amount }),
+              body: JSON.stringify({ formData: enrichedFormData, selectedPaymentMethod, orderId, total: amount, testPayerEmail: isTestEnvironment ? 'test@testuser.com' : undefined }),
               signal: controller.signal,
               cache: 'no-store',
             });
@@ -98,18 +106,11 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
           try { result = await response.json(); }
           catch { result = { status: 'rejected', statusDetail: 'Resposta inválida do servidor.' }; }
 
-          try { localStorage.setItem('2p_guest_order_email', normalizedEmail); localStorage.setItem('2p_last_order_id', orderId); } catch {}
+          try { localStorage.setItem('2p_guest_order_email', email.trim().toLowerCase()); localStorage.setItem('2p_last_order_id', orderId); } catch {}
 
           if (!response.ok) {
             const detail = result.statusDetail || result.error || `Falha no pagamento (HTTP ${response.status}).`;
-            // Se o Mercado Pago criou um pagamento antes de responder com erro,
-            // acompanhamos esse pagamento em vez de deixar o Brick preso/resetado.
-            if (result.id) {
-              redirectToResult({ id: result.id, status: result.status || 'rejected', statusDetail: detail });
-              return;
-            }
-            // Mesmo sem paymentId, sai do Brick e leva o cliente para uma tela
-            // controlada pela 2P Box, onde o erro pode ser exibido e o pedido retomado.
+            if (result.id) { redirectToResult({ id: result.id, status: result.status || 'rejected', statusDetail: detail }); return; }
             redirectToResult({ status: 'error', statusDetail: detail });
             return;
           }
@@ -122,7 +123,6 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
             ? 'O Mercado Pago demorou para responder. Vamos verificar o pagamento na próxima tela.'
             : error instanceof Error ? error.message : 'Não foi possível processar o pagamento.';
           console.error('Mercado Pago submit error:', error);
-          // Nunca deixar o usuário preso no Brick depois de clicar em Pagar.
           redirectToResult({ status: 'error', statusDetail: message });
         } finally { setSubmitting(false); }
       }}
