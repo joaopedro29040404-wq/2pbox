@@ -1,10 +1,25 @@
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+function getAccessToken() {
+  return (
+    process.env.MERCADOPAGO_ACCESS_TOKEN ||
+    process.env.MERCADO_PAGO_ACCESS_TOKEN ||
+    process.env.MP_ACCESS_TOKEN ||
+    ''
+  ).trim();
+}
 
 export async function POST(request: Request) {
-  const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
-  if (!accessToken) return NextResponse.json({ error: 'Mercado Pago não configurado no servidor.' }, { status: 500 });
+  const accessToken = getAccessToken();
+  if (!accessToken) {
+    return NextResponse.json(
+      { error: 'Mercado Pago não configurado no servidor. Verifique a variável de Access Token no ambiente Production da Vercel e faça um novo deploy.' },
+      { status: 500 }
+    );
+  }
 
   try {
     const body = await request.json();
