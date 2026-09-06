@@ -61,8 +61,8 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
   const payer = { ...(normalizedEmail ? { email: normalizedEmail } : {}), ...(normalizedCpf.length === 11 ? { identification: { type: 'CPF', number: normalizedCpf } } : {}) };
   const hasPreference = Boolean(preferenceId?.trim());
   const paymentMethods = hasPreference
-    ? { creditCard: 'all', debitCard: 'all', prepaidCard: 'all', ticket: 'all', bankTransfer: 'all', mercadoPago: 'all' }
-    : { creditCard: 'all', debitCard: 'all', prepaidCard: 'all', ticket: 'all', bankTransfer: 'all' };
+    ? { creditCard: 'all', debitCard: 'all', prepaidCard: 'all', ticket: 'all', bankTransfer: 'all', mercadoPago: 'all' } as const
+    : { creditCard: 'all', debitCard: 'all', prepaidCard: 'all', ticket: 'all', bankTransfer: 'all' } as const;
 
   return <div className="payment-brick-wrap">
     <Payment
