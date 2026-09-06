@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "@mercadopago/sdk-react": "latest",
-    "@mercadopago/sdk-node": "latest",
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",
     "lucide-react": "latest",
