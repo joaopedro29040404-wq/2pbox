@@ -15,12 +15,16 @@ export async function POST(request: Request) {
     if (!formData || !orderId || !Number.isFinite(amount) || amount <= 0) return NextResponse.json({ error: 'Dados inválidos para criar o pagamento.' }, { status: 400 });
 
     const paymentMethodId = String(formData.payment_method_id || '').trim();
-    const payerEmail = String(formData.payer?.email || formData.email || formData.cardholderEmail || '').trim();
+    const publicKey = String(process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY || '').trim();
+    const isTestEnvironment = publicKey.startsWith('TEST-');
+
+    // In Mercado Pago's test card environment the buyer identity is the
+    // official test user. The real customer's e-mail remains stored on the
+    // 2P Box order, but must not be mixed into the test payment user.
+    const submittedEmail = String(formData.payer?.email || formData.email || formData.cardholderEmail || '').trim().toLowerCase();
+    const payerEmail = isTestEnvironment ? 'test@testuser.com' : submittedEmail;
     if (!payerEmail) return NextResponse.json({ error: 'Informe um e-mail válido para o pagamento.' }, { status: 400 });
 
-    // O Payment Brick usa os nomes cardholderIdentificationType e
-    // cardholderIdentificationNumber no formData. A versão anterior procurava
-    // identificationType/identificationNumber, deixando o payer incompleto.
     const identificationType = String(
       formData.cardholderIdentificationType ||
       formData.identificationType ||
@@ -33,12 +37,14 @@ export async function POST(request: Request) {
       formData.payer?.identification?.number ||
       ''
     ).replace(/\D/g, '');
-    const identification = identificationType && identificationNumber
+
+    // Identification is optional for the payment request. In test mode we
+    // deliberately omit it so a real customer's CPF cannot be associated
+    // with Mercado Pago's test buyer and trigger a user mismatch.
+    const identification = !isTestEnvironment && identificationType && identificationNumber
       ? { type: identificationType, number: identificationNumber }
       : undefined;
 
-    // cardholderName é fornecido pelo Brick em additionalData e é normalizado
-    // pelo frontend para cardholderName/card_holder_name antes desta rota.
     const cardholderName = String(
       formData.cardholderName ||
       formData.card_holder_name ||
