@@ -104,7 +104,14 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
   const normalizedEmail = email.trim().toLowerCase();
 
   const paymentMethods = useMemo(
-    () => ({ creditCard: 'all', debitCard: 'all', prepaidCard: 'all', ticket: 'all', bankTransfer: 'all', mercadoPago: 'all' }),
+    () => ({
+      creditCard: 'all',
+      debitCard: 'all',
+      prepaidCard: 'all',
+      ticket: 'all',
+      bankTransfer: 'all',
+      mercadoPago: 'all',
+    } as const),
     [],
   );
 
