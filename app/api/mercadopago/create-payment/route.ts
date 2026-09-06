@@ -40,11 +40,9 @@ export async function POST(request: Request) {
     const paymentTypeId = String(additionalData?.paymentTypeId || formData.payment_type_id || '').trim();
     const paymentMethodType = paymentTypeId === 'debit_card' ? 'debit_card' : 'credit_card';
 
-    const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || 'https://2pbox.vercel.app';
     const orderBody = {
       type: 'online',
       processing_mode: 'automatic',
-      capture_mode: 'automatic_async',
       total_amount: amount.toFixed(2),
       external_reference: String(orderId).slice(0, 64),
       payer: {
