@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const orderId = String(body.orderId || '');
     const email = String(body.email || '');
 
-    if (!items.length || !orderId || !Number.isFinite(total) || total <= 0 || !email) {
+    if (!items.length || !orderId || !Number.isFinite(total) || total <= 0) {
       return NextResponse.json({ error: 'Dados inválidos para iniciar o pagamento.' }, { status: 400 });
     }
 
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
         currency_id: 'BRL',
       })),
       external_reference: orderId,
-      payer: { email },
+      ...(email ? { payer: { email } } : {}),
     };
 
     const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
@@ -42,9 +42,12 @@ export async function POST(request: Request) {
     }
 
     const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || '';
-    const brickUrl = `${origin}/checkout/pagamento?orderId=${encodeURIComponent(orderId)}&total=${encodeURIComponent(total)}&email=${encodeURIComponent(email)}&preferenceId=${encodeURIComponent(result.id)}`;
+    const params = new URLSearchParams({ orderId, total: String(total), preferenceId: String(result.id) });
+    if (email) params.set('email', email);
+    const brickUrl = `${origin}/checkout/pagamento?${params.toString()}`;
 
-    return NextResponse.json({ id: result.id, brickUrl });
+    // initPoint é mantido para compatibilidade com o checkout atual, mas agora aponta para o Payment Brick da própria 2P Box.
+    return NextResponse.json({ id: result.id, brickUrl, initPoint: brickUrl });
   } catch (error) {
     console.error('Mercado Pago API error:', error);
     return NextResponse.json({ error: 'Não foi possível iniciar o pagamento.' }, { status: 500 });
