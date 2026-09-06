@@ -42,15 +42,13 @@ function CheckoutForm(){
   if(error){setStatus(error.message.replace(/^.*?: /,''));return}
   const id=data as string;setOrderId(id);
 
-  // Compra sem login: guardamos o e-mail localmente para que a página pública
-  // de acompanhamento consiga localizar o pedido sem exigir cadastro.
-  try{window.localStorage.setItem('2p_guest_order_email',email.trim().toLowerCase());window.localStorage.setItem('2p_last_order_id',id)}catch{}
+  try{window.localStorage.setItem('2p_guest_order_email',email.trim().toLowerCase());window.localStorage.setItem('2p_last_order_id',id);window.localStorage.setItem('2p_checkout_name',name.trim());window.localStorage.setItem('2p_checkout_cpf',cpf.replace(/\D/g,''))}catch{}
   if(!user){const{error:otpError}=await client.auth.signInWithOtp({email:email.trim(),options:{emailRedirectTo:`${window.location.origin}/conta`,shouldCreateUser:true}});setAccessSent(!otpError)}
 
   if(type==='pickup'){
     setStatus('Preparando pagamento seguro...');
     try{
-      const payment=await fetch('/api/mercadopago/create-preference',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderId:id,total,email:email.trim(),items:items.map(i=>({id:i.id,name:i.name,price:i.price,quantity:i.quantity}))})});
+      const payment=await fetch('/api/mercadopago/create-preference',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderId:id,total,email:email.trim(),name:name.trim(),cpf:cpf.replace(/\D/g,''),items:items.map(i=>({id:i.id,name:i.name,price:i.price,quantity:i.quantity}))})});
       const paymentData=await payment.json();
       if(!payment.ok||!paymentData.id){setStatus(paymentData.error||'Não foi possível preparar o pagamento.');return}
       setPreferenceId(String(paymentData.id));
@@ -86,4 +84,4 @@ function CheckoutForm(){
  <style jsx global>{`.delivery-confirmed{display:flex;align-items:center;gap:14px;padding:17px;border:1px solid #d9d9d9;border-radius:12px;background:#fafafa;color:#111}.delivery-confirmed-icon{width:42px;height:42px;flex:none;border-radius:9px;background:#ffc400;display:grid;place-items:center}.delivery-confirmed>div:nth-child(2){display:grid;gap:5px;flex:1}.delivery-confirmed strong{font-size:14px}.delivery-confirmed span{font-size:11px;color:#666;line-height:1.4}.delivery-confirmed>svg{color:#888;flex:none}.change-delivery{display:inline-block;margin-top:11px;font-size:11px;color:#777;text-decoration:underline}.account-notice{display:flex;align-items:flex-start;gap:10px;padding:13px 14px;margin-top:16px;background:#fff9d9;border:1px solid #f0d65b;border-radius:9px;color:#5c5000;font-size:11px;line-height:1.5}.account-notice svg{flex:none;color:#a47700;margin-top:1px}.address-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.shipping-whatsapp-note{display:flex;align-items:flex-start;gap:9px;margin-top:15px;padding:13px 14px;border-radius:9px;background:#f4f4f4;color:#555;font-size:11px;line-height:1.5}.shipping-whatsapp-note svg{flex:none;color:#111}.whatsapp-submit{background:#ffc400!important;color:#111!important}.payment-section{overflow:visible}.payment-section :global(.payment-brick-wrap){margin-top:8px}.checkout-form{min-width:0}@media(max-width:600px){.address-grid{grid-template-columns:1fr}.checkout-section{min-width:0}.checkout-page{overflow-x:hidden}}`}</style></main>
 }
 
-export default function Checkout(){return <Suspense fallback={<main><div className="topbar">Finalizar pedido • 2P Box</div><section className="container section"><p>Carregando checkout...</p></section></main>}><CheckoutForm/></Suspense>}
+export default function Checkout(){return <Suspense fallback={<main><div className="topbar">Finalizar pedido • 2P Box</div><section className="container section"><p>Carregando checkout...</p></section></main></Suspense>}
