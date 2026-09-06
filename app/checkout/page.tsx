@@ -28,6 +28,9 @@ function CheckoutForm(){
   const{data,error}=await client.rpc('create_order_with_stock_v2',{p_customer_name:name.trim(),p_customer_phone:phone.trim(),p_customer_email:email.trim(),p_delivery_type:type,p_notes:notes.trim()||null,p_items:items.map(i=>({id:i.id,quantity:i.quantity})),p_delivery_address:address});
   if(error){setStatus(error.message.replace(/^.*?: /,''));return}
   const id=data as string;setOrderId(id);
+  // Mesmo sem login, o pedido já fica identificado pelo e-mail. Enviamos o acesso
+  // para a conta também nas compras com retirada, não apenas nas compras via WhatsApp.
+  if(!user){const{error:otpError}=await client.auth.signInWithOtp({email:email.trim(),options:{emailRedirectTo:`${window.location.origin}/conta`,shouldCreateUser:true}});setAccessSent(!otpError)}
   if(type==='pickup'){
     setStatus('Preparando pagamento seguro...');
     try{
@@ -42,7 +45,6 @@ function CheckoutForm(){
   const list=items.map(i=>`${i.quantity}x ${i.name} — R$ ${(i.price*i.quantity).toFixed(2).replace('.',',')}`).join('\n');
   const addressText=address?`\n\nENDEREÇO PARA FRETE\n${address.street}, ${address.number}${address.complement?` — ${address.complement}`:''}\n${address.neighborhood} — ${address.city}/${address.state}\nCEP: ${address.postal_code}`:'';
   clear();setDone(true);
-  if(!user){const{error:otpError}=await client.auth.signInWithOtp({email:email.trim(),options:{emailRedirectTo:`${window.location.origin}/conta`,shouldCreateUser:true}});setAccessSent(!otpError)}
   const msg=`Olá, 2P Box!\n\nQuero calcular o frete para o pedido ${id}.\n\nCliente: ${name}\nTelefone: ${phone}\nE-mail: ${email}\n\n${list}\n\nTotal dos produtos: R$ ${total.toFixed(2).replace('.',',')}\nForma de recebimento: Entrega — calcular frete pelo WhatsApp${addressText}${notes?`\n\nObservações: ${notes}`:''}`;
   window.setTimeout(()=>{window.location.href=`https://wa.me/${storeWhatsApp.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`},700);
  }
