@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     if (!formData || !orderId || !Number.isFinite(amount) || amount <= 0) return NextResponse.json({ error: 'Dados inválidos para criar o pagamento.' }, { status: 400 });
 
     const paymentMethodId = String(formData.payment_method_id || '').trim();
-    const payerEmail = String(formData.payer?.email || formData.cardholderEmail || '').trim();
+    const payerEmail = String(formData.payer?.email || formData.cardholderEmail || '').trim().toLowerCase();
     if (!payerEmail) return NextResponse.json({ error: 'Informe um e-mail válido para o pagamento.' }, { status: 400 });
 
     const identification = formData.payer?.identification || (
@@ -23,17 +23,18 @@ export async function POST(request: Request) {
         ? { type: formData.identificationType, number: String(formData.identificationNumber).replace(/\D/g, '') }
         : undefined
     );
-    // O Payment Brick entrega o nome do titular no additionalData; o frontend
-    // normaliza para cardholderName/card_holder_name antes de chegar aqui.
     const cardholderName = String(formData.cardholderName || formData.card_holder_name || '').trim();
     const nameParts = cardholderName ? cardholderName.split(/\s+/).filter(Boolean) : [];
-
     const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || 'https://2pbox.vercel.app';
+
+    // Repetir o mesmo submit do Brick para o mesmo pedido não deve gerar cobranças duplicadas.
+    // O pedido é a chave funcional; o timestamp mantém tentativas diferentes distinguíveis.
+    const idempotencyKey = `2pbox:${String(orderId)}:${String(formData.token || paymentMethodId)}:${amount}`;
     const paymentBody = {
       transaction_amount: amount,
       token: formData.token || undefined,
       description: `Pedido 2P Box ${orderId}`,
-      installments: Number(formData.installments || 1),
+      installments: Math.max(1, Number(formData.installments || 1)),
       payment_method_id: paymentMethodId,
       issuer_id: formData.issuer_id ? Number(formData.issuer_id) : undefined,
       payer: {
@@ -48,7 +49,11 @@ export async function POST(request: Request) {
 
     const response = await fetch('https://api.mercadopago.com/v1/payments', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', 'X-Idempotency-Key': crypto.randomUUID() },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'X-Idempotency-Key': idempotencyKey,
+      },
       body: JSON.stringify(paymentBody),
       cache: 'no-store',
     });
