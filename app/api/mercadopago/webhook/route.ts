@@ -7,20 +7,21 @@ export const runtime = 'nodejs';
 
 function validateWebhookSignature(request: Request, dataId: string) {
   const secret = String(process.env.MERCADOPAGO_WEBHOOK_SECRET || '').trim();
-  if (!secret) return true; // Mantém os testes atuais funcionando até a secret ser configurada.
+  if (!secret) return false;
 
   const xSignature = request.headers.get('x-signature') || '';
   const xRequestId = request.headers.get('x-request-id') || '';
-  const parts = Object.fromEntries(xSignature.split(',').map((part) => part.split('=').map((value) => value.trim())).filter(([key, value]) => key && value));
+  const parts = Object.fromEntries(
+    xSignature
+      .split(',')
+      .map((part) => part.split('=').map((value) => value.trim()))
+      .filter(([key, value]) => key && value),
+  ) as Record<string, string>;
   const ts = String(parts.ts || '');
   const v1 = String(parts.v1 || '');
   if (!v1 || !ts) return false;
 
-  const manifestParts = [];
-  if (dataId) manifestParts.push(`id:${dataId};`);
-  if (xRequestId) manifestParts.push(`request-id:${xRequestId};`);
-  if (ts) manifestParts.push(`ts:${ts};`);
-  const manifest = manifestParts.join('');
+  const manifest = `${dataId ? `id:${dataId};` : ''}${xRequestId ? `request-id:${xRequestId};` : ''}ts:${ts};`;
   const expected = createHmac('sha256', secret).update(manifest).digest('hex');
 
   try {
@@ -51,13 +52,25 @@ export async function POST(request: Request) {
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: 'no-store',
     });
-    const payment = await response.json();
-    if (!response.ok) return NextResponse.json({ error: 'Não foi possível consultar o pagamento.' }, { status: 502 });
+
+    const payment = await response.json().catch(() => null);
+
+    // A ferramenta de simulacao do Mercado Pago pode enviar um ID ficticio
+    // (ex.: 123456). Nesse caso, a notificacao foi recebida corretamente,
+    // mas nao existe pagamento para sincronizar. O endpoint deve confirmar
+    // o recebimento com 200, sem criar/alterar nenhum pedido.
+    if (response.status === 404) {
+      return NextResponse.json({ ok: true, acknowledged: true, paymentFound: false });
+    }
+
+    if (!response.ok) {
+      return NextResponse.json({ error: 'Não foi possível consultar o pagamento.' }, { status: 502 });
+    }
 
     const orderId = String(payment?.external_reference || '').trim();
     if (orderId) await syncOrderPayment(orderId, payment);
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, paymentFound: true });
   } catch (error) {
     console.error('Mercado Pago webhook error:', error);
     return NextResponse.json({ error: 'Webhook processado com erro.' }, { status: 500 });
