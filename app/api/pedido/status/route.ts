@@ -10,18 +10,11 @@ export async function GET(request: Request) {
     const orderId = String(url.searchParams.get('orderId') || '').trim();
     const email = String(url.searchParams.get('email') || '').trim().toLowerCase();
 
-    if (!orderId || !email) {
-      return NextResponse.json({ error: 'Pedido e e-mail são obrigatórios.' }, { status: 400 });
-    }
+    if (!orderId || !email) return NextResponse.json({ error: 'Pedido e e-mail são obrigatórios.' }, { status: 400 });
 
     const admin = getAdminSupabase();
-    if (!admin) {
-      return NextResponse.json({ error: 'Servidor não configurado.' }, { status: 500 });
-    }
+    if (!admin) return NextResponse.json({ error: 'Servidor não configurado.' }, { status: 500 });
 
-    // Sempre que o cliente abrir/atualizar o pedido, consulta o Mercado Pago
-    // novamente. Isso mantém o status correto mesmo se o webhook demorar ou
-    // não chegar durante os testes.
     const { data: currentOrder, error: currentOrderError } = await admin
       .from('orders')
       .select('id,customer_email,payment_id')
@@ -33,11 +26,10 @@ export async function GET(request: Request) {
       console.error('Public order lookup error:', currentOrderError);
       return NextResponse.json({ error: 'Não foi possível consultar o pedido.' }, { status: 500 });
     }
+    if (!currentOrder) return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
 
-    if (!currentOrder) {
-      return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
-    }
-
+    // Reconciliação imediata: o webhook é a fonte oficial, mas a própria tela
+    // também consegue buscar o estado atual durante os testes ou se houver atraso.
     const accessToken = getMercadoPagoAccessToken();
     if (accessToken && currentOrder.payment_id) {
       try {
@@ -51,13 +43,12 @@ export async function GET(request: Request) {
         }
       } catch (syncError) {
         console.error('Public order Mercado Pago reconciliation error:', syncError);
-        // A consulta da página continua funcionando com o último status salvo.
       }
     }
 
     const { data, error } = await admin
       .from('orders')
-      .select('id,customer_name,customer_phone,customer_email,delivery_type,delivery_address,notes,status,payment_status,total,created_at,payment_id')
+      .select('id,customer_name,customer_phone,customer_email,delivery_type,delivery_address,notes,status,payment_status,payment_status_detail,payment_updated_at,total,created_at,updated_at,payment_id')
       .eq('id', orderId)
       .ilike('customer_email', email)
       .maybeSingle();
@@ -66,10 +57,7 @@ export async function GET(request: Request) {
       console.error('Public order status error:', error);
       return NextResponse.json({ error: 'Não foi possível consultar o pedido.' }, { status: 500 });
     }
-
-    if (!data) {
-      return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
-    }
+    if (!data) return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
 
     const { data: items, error: itemsError } = await admin
       .from('order_items')
