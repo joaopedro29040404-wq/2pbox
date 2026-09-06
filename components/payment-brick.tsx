@@ -7,6 +7,10 @@ type PixData = { qrCode?: string | null; qrCodeBase64?: string | null; ticketUrl
 type PaymentResult = { id?: string | number; status?: string; statusDetail?: string; paymentMethodId?: string; pix?: PixData | null };
 type Props = { amount: number; orderId: string; email: string; cpf?: string; preferenceId?: string; onResult: (result: PaymentResult) => void; onError: (message: string) => void };
 
+declare global {
+  interface Window { MP_DEVICE_SESSION_ID?: string }
+}
+
 let initializedKey = '';
 const terminalStatuses = ['approved', 'rejected', 'cancelled'];
 
@@ -89,10 +93,11 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
           const timeout = window.setTimeout(() => controller.abort(), 20000);
           let response: Response;
           try {
+            const deviceId = String(window.MP_DEVICE_SESSION_ID || '').trim();
             response = await fetch('/api/mercadopago/create-payment', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ formData: enrichedFormData, selectedPaymentMethod, orderId, total: amount }),
+              body: JSON.stringify({ formData: enrichedFormData, selectedPaymentMethod, orderId, total: amount, deviceId: deviceId || undefined }),
               signal: controller.signal,
               cache: 'no-store',
             });
