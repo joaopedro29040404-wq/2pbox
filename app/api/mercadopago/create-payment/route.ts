@@ -124,3 +124,4 @@ export async function POST(request: Request) {
 }
 
 // Production deployment trigger marker: force a fresh Git SHA for Vercel deployment.
+// Deployment retry marker: keep Production Git integration active.
