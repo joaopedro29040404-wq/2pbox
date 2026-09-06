@@ -1,10 +1,27 @@
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+function getAccessToken() {
+  // Mantém o nome oficial usado pela aplicação e aceita os nomes alternativos
+  // mais comuns para evitar falha quando a variável foi cadastrada com underscore.
+  return (
+    process.env.MERCADOPAGO_ACCESS_TOKEN ||
+    process.env.MERCADO_PAGO_ACCESS_TOKEN ||
+    process.env.MP_ACCESS_TOKEN ||
+    ''
+  ).trim();
+}
 
 export async function POST(request: Request) {
-  const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
-  if (!accessToken) return NextResponse.json({ error: 'Mercado Pago não configurado no servidor.' }, { status: 500 });
+  const accessToken = getAccessToken();
+  if (!accessToken) {
+    return NextResponse.json(
+      { error: 'Mercado Pago não configurado no servidor. Verifique a variável de Access Token no ambiente Production da Vercel e faça um novo deploy.' },
+      { status: 500 }
+    );
+  }
 
   try {
     const body = await request.json();
@@ -17,7 +34,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Dados inválidos para iniciar o pagamento.' }, { status: 400 });
     }
 
-    const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || '';
+    const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || 'https://2pbox.vercel.app';
     const preference = {
       items: items.map((item: { id?: string; name: string; price: number; quantity: number }) => ({
         id: item.id,
