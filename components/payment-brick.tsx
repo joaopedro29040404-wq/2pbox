@@ -10,11 +10,17 @@ type Props = { amount: number; orderId: string; email: string; cpf?: string; pre
 
 const terminalStatuses = ['approved', 'rejected', 'cancelled'];
 
+function splitName(value: string) {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  return { firstName: parts[0] || '', lastName: parts.slice(1).join(' ') || '' };
+}
+
 export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId, onResult, onError }: Props) {
   const [pix, setPix] = useState<PixData | null>(null);
   const [paymentId, setPaymentId] = useState<string | number | null>(null);
   const [copyMessage, setCopyMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [storedName, setStoredName] = useState('');
 
   useEffect(() => {
     const publicKey = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY;
@@ -22,8 +28,13 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
     if (initializedKey !== publicKey) { initMercadoPago(publicKey, { locale: 'pt-BR' }); initializedKey = publicKey; }
   }, [onError]);
 
-  // Webhook é a fonte oficial; esta consulta é o fallback para o checkout não
-  // ficar parado durante testes ou quando a notificação ainda está a caminho.
+  useEffect(() => {
+    try {
+      const savedName = window.localStorage.getItem('2p_checkout_name') || '';
+      if (savedName) setStoredName(savedName);
+    } catch {}
+  }, [orderId]);
+
   useEffect(() => {
     if (!paymentId) return;
     let active = true;
@@ -60,11 +71,24 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
   </div>;
 
   const normalizedCpf = String(cpf || '').replace(/\D/g, '');
-  const payerIdentification = normalizedCpf.length === 11 ? { type: 'CPF', number: normalizedCpf } : undefined;
+  const storedCpf = (() => { try { return window.localStorage.getItem('2p_checkout_cpf') || ''; } catch { return ''; } })();
+  const effectiveCpf = normalizedCpf || storedCpf;
+  const payerIdentification = effectiveCpf.length === 11 ? { type: 'CPF', number: effectiveCpf } : undefined;
   const normalizedEmail = email.trim().toLowerCase();
+  const { firstName, lastName } = splitName(storedName);
 
   return <div className="payment-brick-wrap"><Payment
-    initialization={{ amount, ...(preferenceId ? { preferenceId } : {}), payer: { ...(normalizedEmail ? { email: normalizedEmail } : {}), ...(payerIdentification ? { identification: payerIdentification } : {}) } }}
+    key={`${preferenceId}:${normalizedEmail}:${effectiveCpf}:${storedName}`}
+    initialization={{
+      amount,
+      ...(preferenceId ? { preferenceId } : {}),
+      payer: {
+        ...(normalizedEmail ? { email: normalizedEmail } : {}),
+        ...(firstName ? { firstName } : {}),
+        ...(lastName ? { lastName } : {}),
+        ...(payerIdentification ? { identification: payerIdentification } : {}),
+      },
+    }}
     customization={{
       paymentMethods: { creditCard: 'all', debitCard: 'all', prepaidCard: 'all', ticket: 'all', bankTransfer: 'all', mercadoPago: 'all' },
       visual: { defaultPaymentOption: { creditCardForm: true } },
