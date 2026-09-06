@@ -20,7 +20,8 @@ export async function getStoreSettings(): Promise<StoreSettings> {
   try {
     const { data, error } = await supabase
       .from('store_settings')
-      .select('name,whatsapp,hours,pickup,shipping')
+      .select('name,whatsapp,hours,pickup,shipping,updated_at')
+      .order('updated_at', { ascending: false, nullsFirst: false })
       .limit(1)
       .maybeSingle();
 
@@ -28,9 +29,11 @@ export async function getStoreSettings(): Promise<StoreSettings> {
 
     return {
       ...DEFAULT_STORE_SETTINGS,
-      ...data,
+      name: data.name || DEFAULT_STORE_SETTINGS.name,
       whatsapp: data.whatsapp || DEFAULT_STORE_SETTINGS.whatsapp,
       hours: data.hours || DEFAULT_STORE_SETTINGS.hours,
+      pickup: data.pickup || DEFAULT_STORE_SETTINGS.pickup,
+      shipping: data.shipping || DEFAULT_STORE_SETTINGS.shipping,
     };
   } catch {
     return DEFAULT_STORE_SETTINGS;
