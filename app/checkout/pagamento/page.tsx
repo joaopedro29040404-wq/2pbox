@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import PaymentBrick from '@/components/payment-brick';
 
 function PaymentPage() {
   const params = useSearchParams();
+  const router = useRouter();
   const orderId = params.get('orderId') || '';
   const amount = Number(params.get('total') || 0);
   const email = params.get('email') || '';
@@ -16,6 +17,16 @@ function PaymentPage() {
 
   if (!orderId || !amount) return <main className="payment-page"><div className="payment-card"><h1>Pagamento indisponível</h1><p>Não foi possível carregar os dados do pagamento.</p><Link href="/carrinho">Voltar ao carrinho</Link></div></main>;
 
+  const handlePaymentResult = (result: { id?: string | number; status?: string; statusDetail?: string }) => {
+    const status = result.status || 'pending';
+    if (status === 'approved') { setPaid(true); return; }
+    setError('');
+    const query = new URLSearchParams({ payment: status });
+    if (result.id) query.set('paymentId', String(result.id));
+    if (result.statusDetail) query.set('statusDetail', result.statusDetail);
+    router.push(`/pagamento/${encodeURIComponent(orderId)}?${query.toString()}`);
+  };
+
   return (
     <main className="payment-page">
       <div className="payment-top">PAGAMENTO SEGURO <span>•</span> 2P BOX</div>
@@ -23,7 +34,7 @@ function PaymentPage() {
       <section className="payment-container">
         <div className="payment-heading"><p>PEDIDO {orderId}</p><h1>Finalize seu pagamento</h1><span>Você está em um ambiente seguro. Escolha a forma de pagamento abaixo.</span></div>
         <div className="payment-card">
-          {paid ? <div className="payment-success"><div className="success-mark">✓</div><h2>Pagamento enviado!</h2><p>Recebemos o pagamento do pedido <strong>{orderId}</strong>. Você pode acompanhar o pedido pela sua conta.</p><Link href={`/pedido/${orderId}`} className="payment-button">Acompanhar pedido</Link></div> : <><div className="payment-total"><span>Total do pedido</span><strong>R$ {amount.toFixed(2).replace('.', ',')}</strong></div><PaymentBrick amount={amount} orderId={orderId} email={email} preferenceId={preferenceId} onResult={(result) => { if (result.status === 'approved') setPaid(true); else setError(`Pagamento ${result.status || 'em análise'}. Você poderá acompanhar o pedido.`); }} onError={setError}/>{error && <div className="payment-error">{error}</div>}</>}
+          {paid ? <div className="payment-success"><div className="success-mark">✓</div><h2>Pagamento confirmado!</h2><p>O pagamento do pedido <strong>{orderId}</strong> foi aprovado pelo Mercado Pago.</p><Link href={`/pedido/${orderId}`} className="payment-button">Acompanhar pedido</Link></div> : <><div className="payment-total"><span>Total do pedido</span><strong>R$ {amount.toFixed(2).replace('.', ',')}</strong></div><PaymentBrick amount={amount} orderId={orderId} email={email} preferenceId={preferenceId} onResult={handlePaymentResult} onError={setError}/>{error && <div className="payment-error">{error}</div>}</>}
         </div>
         <p className="payment-note">Seus dados de pagamento são processados pelo Mercado Pago. A 2P Box não recebe nem armazena os dados do seu cartão.</p>
       </section>
