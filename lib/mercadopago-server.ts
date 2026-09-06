@@ -34,46 +34,72 @@ export async function syncOrderPayment(orderId: string, payment: any) {
   if (mpStatus === 'approved') {
     paymentStatus = 'approved';
     orderStatus = 'confirmed';
-  } else if (['rejected', 'cancelled', 'refunded', 'charged_back'].includes(mpStatus)) {
-    paymentStatus = mpStatus === 'rejected' ? 'rejected' : 'cancelled';
+  } else if (['rejected'].includes(mpStatus)) {
+    paymentStatus = 'rejected';
+    orderStatus = 'cancelled';
+  } else if (['cancelled', 'refunded', 'charged_back'].includes(mpStatus)) {
+    paymentStatus = 'cancelled';
     orderStatus = 'cancelled';
   } else if (['in_process', 'pending', 'authorized'].includes(mpStatus)) {
     paymentStatus = mpStatus;
     orderStatus = 'pending';
   }
 
-  const { data: currentOrder, error: currentOrderError } = await admin
-    .from('orders')
-    .select('status,payment_status,payment_id')
-    .eq('id', orderId)
-    .maybeSingle();
-  if (currentOrderError) throw currentOrderError;
-
-  // Uma consulta atrasada nunca deve desfazer uma aprovação já confirmada.
-  const currentIsApproved = currentOrder?.status === 'confirmed' || currentOrder?.payment_status === 'approved';
-  const currentPaymentId = currentOrder?.payment_id ? String(currentOrder.payment_id) : '';
   const incomingPaymentId = payment?.id ? String(payment.id) : '';
-  const isDifferentPayment = Boolean(currentPaymentId && incomingPaymentId && currentPaymentId !== incomingPaymentId);
+  const statusDetail = String(payment?.status_detail || '').trim() || null;
 
-  if (currentIsApproved && isDifferentPayment && paymentStatus !== 'approved' && paymentStatus !== 'cancelled') {
-    return {
-      paymentStatus: String(currentOrder.payment_status || 'approved'),
-      orderStatus: String(currentOrder.status || 'confirmed'),
-      mpStatus,
-      paymentId: currentPaymentId,
-    };
+  // A sincronização definitiva acontece dentro de uma função SQL com lock no
+  // pedido. Assim, webhook, polling e submit simultâneos não podem sobrescrever
+  // uma aprovação com um evento atrasado nem devolver estoque duas vezes.
+  const { data, error } = await admin.rpc('sync_order_payment_state', {
+    p_order_id: orderId,
+    p_payment_id: incomingPaymentId || null,
+    p_payment_status: paymentStatus,
+    p_order_status: orderStatus,
+    p_status_detail: statusDetail,
+  });
+
+  if (error) {
+    // Compatibilidade temporária caso a migration ainda não tenha sido executada.
+    // O deploy continua funcional, mas a devolução automática de estoque depende
+    // da migration 20260906_payment_flow_hardening.sql.
+    console.error('Payment state RPC error:', error);
+    const { data: currentOrder, error: currentOrderError } = await admin
+      .from('orders')
+      .select('status,payment_status,payment_id')
+      .eq('id', orderId)
+      .maybeSingle();
+    if (currentOrderError) throw currentOrderError;
+
+    const currentIsApproved = currentOrder?.status === 'confirmed' || currentOrder?.payment_status === 'approved';
+    if (currentIsApproved && paymentStatus !== 'approved') {
+      return {
+        paymentStatus: String(currentOrder?.payment_status || 'approved'),
+        orderStatus: String(currentOrder?.status || 'confirmed'),
+        mpStatus,
+        paymentId: String(currentOrder?.payment_id || incomingPaymentId || ''),
+        statusDetail,
+      };
+    }
+
+    const { error: updateError } = await admin
+      .from('orders')
+      .update({
+        payment_id: incomingPaymentId || currentOrder?.payment_id || null,
+        payment_status: paymentStatus,
+        status: orderStatus,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', orderId);
+    if (updateError) throw updateError;
   }
 
-  const { error } = await admin
-    .from('orders')
-    .update({
-      payment_id: incomingPaymentId || currentPaymentId || null,
-      payment_status: paymentStatus,
-      status: orderStatus,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', orderId);
-
-  if (error) throw error;
-  return { paymentStatus, orderStatus, mpStatus, paymentId: incomingPaymentId || currentPaymentId || null };
+  const synced = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
+  return {
+    paymentStatus: String(synced.payment_status || paymentStatus),
+    orderStatus: String(synced.order_status || orderStatus),
+    mpStatus,
+    paymentId: String(synced.payment_id || incomingPaymentId || ''),
+    statusDetail,
+  };
 }
