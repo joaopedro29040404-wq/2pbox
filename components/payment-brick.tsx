@@ -4,12 +4,10 @@ import { Payment, initMercadoPago } from '@mercadopago/sdk-react';
 import { useEffect, useState } from 'react';
 
 type PixData = { qrCode?: string | null; qrCodeBase64?: string | null; ticketUrl?: string | null };
-type PaymentResult = { id?: string | number; status?: string; statusDetail?: string; paymentMethodId?: string; pix?: PixData | null };
+type PaymentResult = { id?: string | number; status?: string; statusDetail?: string; paymentMethodId?: string; pix?: PixData | null; mercadoPagoOrderId?: string | null; mercadoPagoPaymentId?: string | null; orderStatus?: string | null; orderStatusDetail?: string | null; paymentStatus?: string | null; paymentStatusDetail?: string | null; message?: string | null; cause?: unknown };
 type Props = { amount: number; orderId: string; email: string; cpf?: string; preferenceId?: string; onResult: (result: PaymentResult) => void; onError: (message: string) => void };
 
-declare global {
-  interface Window { MP_DEVICE_SESSION_ID?: string }
-}
+declare global { interface Window { MP_DEVICE_SESSION_ID?: string } }
 
 let initializedKey = '';
 const terminalStatuses = ['approved', 'rejected', 'cancelled'];
@@ -19,7 +17,6 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
   const [paymentId, setPaymentId] = useState<string | number | null>(null);
   const [copyMessage, setCopyMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
   const publicKey = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY || '';
 
   useEffect(() => {
@@ -29,16 +26,12 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
 
   useEffect(() => {
     if (!paymentId) return;
-    let active = true;
-    let timer: number | undefined;
+    let active = true; let timer: number | undefined;
     const check = async () => {
       try {
         const response = await fetch(`/api/mercadopago/payment-status?orderId=${encodeURIComponent(orderId)}&paymentId=${encodeURIComponent(String(paymentId))}`, { cache: 'no-store' });
         const data = await response.json();
-        if (active && terminalStatuses.includes(data.paymentStatus)) {
-          onResult({ id: paymentId, status: data.paymentStatus, statusDetail: data.statusDetail || undefined });
-          return;
-        }
+        if (active && terminalStatuses.includes(data.paymentStatus)) { onResult({ id: paymentId, status: data.paymentStatus, statusDetail: data.statusDetail || undefined }); return; }
       } catch {}
       if (active) timer = window.setTimeout(check, 2500);
     };
@@ -48,34 +41,29 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
 
   async function copyPixCode() {
     if (!pix?.qrCode) return;
-    try { await navigator.clipboard.writeText(pix.qrCode); setCopyMessage('Código Pix copiado!'); window.setTimeout(() => setCopyMessage(''), 2200); }
-    catch { setCopyMessage('Selecione e copie o código manualmente.'); }
+    try { await navigator.clipboard.writeText(pix.qrCode); setCopyMessage('Código Pix copiado!'); window.setTimeout(() => setCopyMessage(''), 2200); } catch { setCopyMessage('Selecione e copie o código manualmente.'); }
   }
 
-  if (pix) return <div className="pix-payment-result">
-    <div><strong>PAGAMENTO PIX</strong><h3>Escaneie o QR Code para pagar</h3><p>Quando o Mercado Pago confirmar, o pedido será atualizado automaticamente.</p></div>
-    {pix.qrCodeBase64 && <div className="pix-qr"><img src={`data:image/jpeg;base64,${pix.qrCodeBase64}`} alt="QR Code Pix para pagamento" /></div>}
-    {pix.qrCode && <div className="pix-copy"><label htmlFor="pix-copy-code">Pix Copia e Cola</label><div><input id="pix-copy-code" readOnly value={pix.qrCode} onFocus={e => e.currentTarget.select()} /><button type="button" onClick={copyPixCode}>Copiar</button></div>{copyMessage && <small>{copyMessage}</small>}</div>}
-    {pix.ticketUrl && <a href={pix.ticketUrl} target="_blank" rel="noreferrer">Abrir pagamento do Mercado Pago ↗</a>}
-    {paymentId && <small>Pagamento #{paymentId} • aguardando confirmação automática</small>}
-    <style jsx>{`.pix-payment-result{display:grid;gap:16px;padding:22px;border:1px solid #e5e5e5;border-radius:14px;background:#fff;text-align:center;overflow:hidden;width:100%;box-sizing:border-box}.pix-payment-result h3{margin:5px 0}.pix-payment-result p{margin:0;color:#777;font-size:12px}.pix-qr{width:min(280px,100%);margin:auto;padding:12px;border:1px solid #eee;border-radius:12px}.pix-qr img{display:block;width:100%;height:auto}.pix-copy{text-align:left}.pix-copy>div{display:flex;gap:8px}.pix-copy input{min-width:0;flex:1;padding:11px;border:1px solid #ddd;border-radius:8px}.pix-copy button{border:0;border-radius:8px;background:#111;color:#fff;padding:0 15px;font-weight:700}.pix-payment-result a{color:#111;font-weight:700;text-decoration:underline}@media(max-width:600px){.pix-payment-result{padding:16px}.pix-copy>div{display:grid}.pix-copy button{min-height:40px}}`}</style>
-  </div>;
+  if (pix) return <div className="pix-payment-result"><div><strong>PAGAMENTO PIX</strong><h3>Escaneie o QR Code para pagar</h3><p>Quando o Mercado Pago confirmar, o pedido será atualizado automaticamente.</p></div>{pix.qrCodeBase64 && <div className="pix-qr"><img src={`data:image/jpeg;base64,${pix.qrCodeBase64}`} alt="QR Code Pix para pagamento" /></div>}{pix.qrCode && <div className="pix-copy"><label htmlFor="pix-copy-code">Pix Copia e Cola</label><div><input id="pix-copy-code" readOnly value={pix.qrCode} onFocus={e => e.currentTarget.select()} /><button type="button" onClick={copyPixCode}>Copiar</button></div>{copyMessage && <small>{copyMessage}</small>}</div>}{pix.ticketUrl && <a href={pix.ticketUrl} target="_blank" rel="noreferrer">Abrir pagamento do Mercado Pago ↗</a>}{paymentId && <small>Pagamento #{paymentId} • aguardando confirmação automática</small>}<style jsx>{`.pix-payment-result{display:grid;gap:16px;padding:22px;border:1px solid #e5e5e5;border-radius:14px;background:#fff;text-align:center;overflow:hidden;width:100%;box-sizing:border-box}.pix-payment-result h3{margin:5px 0}.pix-payment-result p{margin:0;color:#777;font-size:12px}.pix-qr{width:min(280px,100%);margin:auto;padding:12px;border:1px solid #eee;border-radius:12px}.pix-qr img{display:block;width:100%;height:auto}.pix-copy{text-align:left}.pix-copy>div{display:flex;gap:8px}.pix-copy input{min-width:0;flex:1;padding:11px;border:1px solid #ddd;border-radius:8px}.pix-copy button{border:0;border-radius:8px;background:#111;color:#fff;padding:0 15px;font-weight:700}.pix-payment-result a{color:#111;font-weight:700;text-decoration:underline}@media(max-width:600px){.pix-payment-result{padding:16px}.pix-copy>div{display:grid}.pix-copy button{min-height:40px}}`}</style></div>;
 
   const payerEmail = email.trim().toLowerCase();
   const payerCpf = (cpf || '').replace(/\D/g, '');
-  const payer = {
-    ...(payerEmail ? { email: payerEmail } : {}),
-    ...(payerCpf.length === 11 ? { identification: { type: 'CPF', number: payerCpf } } : {}),
-  };
+  const payer = { ...(payerEmail ? { email: payerEmail } : {}), ...(payerCpf.length === 11 ? { identification: { type: 'CPF', number: payerCpf } } : {}) };
   const hasPreference = Boolean(preferenceId?.trim());
-  const paymentMethods = hasPreference
-    ? { creditCard: 'all', debitCard: 'all', prepaidCard: 'all', ticket: 'all', bankTransfer: 'all', mercadoPago: 'all' } as const
-    : { creditCard: 'all', debitCard: 'all', prepaidCard: 'all', ticket: 'all', bankTransfer: 'all' } as const;
+  const paymentMethods = hasPreference ? { creditCard: 'all', debitCard: 'all', prepaidCard: 'all', ticket: 'all', bankTransfer: 'all', mercadoPago: 'all' } as const : { creditCard: 'all', debitCard: 'all', prepaidCard: 'all', ticket: 'all', bankTransfer: 'all' } as const;
 
   const redirectToResult = (paymentResult: PaymentResult) => {
     const query = new URLSearchParams({ payment: paymentResult.status || 'pending' });
     if (paymentResult.id) query.set('paymentId', String(paymentResult.id));
     if (paymentResult.statusDetail) query.set('statusDetail', paymentResult.statusDetail);
+    if (paymentResult.mercadoPagoOrderId) query.set('mpOrderId', String(paymentResult.mercadoPagoOrderId));
+    if (paymentResult.mercadoPagoPaymentId) query.set('mpPaymentId', String(paymentResult.mercadoPagoPaymentId));
+    if (paymentResult.orderStatus) query.set('orderStatus', String(paymentResult.orderStatus));
+    if (paymentResult.orderStatusDetail) query.set('orderStatusDetail', String(paymentResult.orderStatusDetail));
+    if (paymentResult.paymentStatus) query.set('paymentStatus', String(paymentResult.paymentStatus));
+    if (paymentResult.paymentStatusDetail) query.set('paymentStatusDetail', String(paymentResult.paymentStatusDetail));
+    if (paymentResult.message) query.set('mpMessage', String(paymentResult.message));
+    if (paymentResult.cause) query.set('mpCause', typeof paymentResult.cause === 'string' ? paymentResult.cause : JSON.stringify(paymentResult.cause));
     window.location.replace(`/pagamento/${encodeURIComponent(orderId)}?${query.toString()}`);
   };
 
@@ -89,42 +77,26 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
         try {
           const cardholderName = String(additionalData?.cardholderName || '').trim();
           const enrichedFormData = { ...formData, ...(cardholderName ? { cardholderName, card_holder_name: cardholderName } : {}) };
-          const controller = new AbortController();
-          const timeout = window.setTimeout(() => controller.abort(), 20000);
+          const controller = new AbortController(); const timeout = window.setTimeout(() => controller.abort(), 20000);
           let response: Response;
           try {
             const deviceId = String(window.MP_DEVICE_SESSION_ID || '').trim();
-            response = await fetch('/api/mercadopago/create-payment', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ formData: enrichedFormData, selectedPaymentMethod, orderId, total: amount, deviceId: deviceId || undefined }),
-              signal: controller.signal,
-              cache: 'no-store',
-            });
+            response = await fetch('/api/mercadopago/create-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ formData: enrichedFormData, selectedPaymentMethod, orderId, total: amount, deviceId: deviceId || undefined }), signal: controller.signal, cache: 'no-store' });
           } finally { window.clearTimeout(timeout); }
-
           let result: PaymentResult & { error?: string };
-          try { result = await response.json(); }
-          catch { result = { status: 'rejected', statusDetail: 'Resposta inválida do servidor.' }; }
-
+          try { result = await response.json(); } catch { result = { status: 'rejected', statusDetail: 'Resposta inválida do servidor.' }; }
           try { localStorage.setItem('2p_guest_order_email', email.trim().toLowerCase()); localStorage.setItem('2p_last_order_id', orderId); } catch {}
-
           if (!response.ok) {
             const detail = result.statusDetail || result.error || `Falha no pagamento (HTTP ${response.status}).`;
-            if (result.id) { redirectToResult({ id: result.id, status: result.status || 'rejected', statusDetail: detail }); return; }
-            redirectToResult({ status: 'error', statusDetail: detail });
+            redirectToResult({ ...result, status: result.status || 'rejected', statusDetail: detail });
             return;
           }
-
-          const transactionResult: PaymentResult = { id: result.id, status: result.status || 'pending', statusDetail: result.statusDetail, paymentMethodId: result.paymentMethodId };
+          const transactionResult: PaymentResult = { ...result, id: result.id, status: result.status || 'pending', statusDetail: result.statusDetail, paymentMethodId: result.paymentMethodId };
           if (result.paymentMethodId === 'pix' && result.pix) { setPaymentId(result.id ?? null); setPix(result.pix); return; }
           redirectToResult(transactionResult);
         } catch (error) {
-          const message = error instanceof DOMException && error.name === 'AbortError'
-            ? 'O Mercado Pago demorou para responder. Vamos verificar o pagamento na próxima tela.'
-            : error instanceof Error ? error.message : 'Não foi possível processar o pagamento.';
-          console.error('Mercado Pago submit error:', error);
-          redirectToResult({ status: 'error', statusDetail: message });
+          const message = error instanceof DOMException && error.name === 'AbortError' ? 'O Mercado Pago demorou para responder. Vamos verificar o pagamento na próxima tela.' : error instanceof Error ? error.message : 'Não foi possível processar o pagamento.';
+          console.error('Mercado Pago submit error:', error); redirectToResult({ status: 'error', statusDetail: message });
         } finally { setSubmitting(false); }
       }}
       onReady={() => undefined}
