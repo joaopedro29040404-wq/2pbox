@@ -28,19 +28,38 @@ export async function GET(request: Request) {
     }
     if (!currentOrder) return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
 
-    // Webhook é a fonte oficial. Esta reconciliação curta é o fallback para
-    // testes e para o caso de a notificação ainda estar a caminho.
+    // O webhook é a fonte oficial, mas a página de acompanhamento precisa
+    // conseguir reconciliar o pagamento mesmo se o webhook ainda estiver a
+    // caminho ou se o payment_id ainda não tiver sido gravado no pedido.
     const accessToken = getMercadoPagoAccessToken();
-    if (accessToken && currentOrder.payment_id) {
+    if (accessToken) {
       try {
-        const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(String(currentOrder.payment_id))}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-          cache: 'no-store',
-        });
-        if (paymentResponse.ok) {
-          const payment = await paymentResponse.json();
-          await syncOrderPayment(orderId, payment);
+        let paymentId = String(currentOrder.payment_id || '').trim();
+        let payment: any = null;
+
+        if (paymentId) {
+          const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(paymentId)}`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            cache: 'no-store',
+          });
+          if (paymentResponse.ok) payment = await paymentResponse.json();
         }
+
+        // Fallback importante: localizar o pagamento pela external_reference
+        // (orderId). Isso cobre o intervalo entre a criação do pagamento e a
+        // persistência do payment_id, além de webhook atrasado.
+        if (!payment) {
+          const searchResponse = await fetch(`https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(orderId)}&sort=date_created&criteria=desc&limit=10`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            cache: 'no-store',
+          });
+          if (searchResponse.ok) {
+            const searchResult = await searchResponse.json();
+            payment = searchResult?.results?.[0] || null;
+          }
+        }
+
+        if (payment) await syncOrderPayment(orderId, payment);
       } catch (syncError) {
         console.error('Public order Mercado Pago reconciliation error:', syncError);
       }
