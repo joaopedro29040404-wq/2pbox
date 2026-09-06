@@ -7,21 +7,28 @@ export const runtime = 'nodejs';
 
 function validateWebhookSignature(request: Request, dataId: string) {
   const secret = String(process.env.MERCADOPAGO_WEBHOOK_SECRET || '').trim();
-  if (!secret) return true; // Mantém os testes atuais funcionando até a secret ser configurada.
-
   const xSignature = request.headers.get('x-signature') || '';
   const xRequestId = request.headers.get('x-request-id') || '';
-  const parts = Object.fromEntries(xSignature.split(',').map((part) => part.split('=').map((value) => value.trim())).filter(([key, value]) => key && value));
+
+  if (!secret) return process.env.NODE_ENV !== 'production';
+
+  const parts: Record<string, string> = {};
+  for (const part of xSignature.split(',')) {
+    const [rawKey, ...rawValue] = part.split('=');
+    const key = String(rawKey || '').trim();
+    const value = rawValue.join('=').trim();
+    if (key && value) parts[key] = value;
+  }
+
   const ts = String(parts.ts || '');
   const v1 = String(parts.v1 || '');
   if (!v1 || !ts) return false;
 
-  const manifestParts = [];
+  const manifestParts: string[] = [];
   if (dataId) manifestParts.push(`id:${dataId};`);
   if (xRequestId) manifestParts.push(`request-id:${xRequestId};`);
-  if (ts) manifestParts.push(`ts:${ts};`);
-  const manifest = manifestParts.join('');
-  const expected = createHmac('sha256', secret).update(manifest).digest('hex');
+  manifestParts.push(`ts:${ts};`);
+  const expected = createHmac('sha256', secret).update(manifestParts.join('')).digest('hex');
 
   try {
     return expected.length === v1.length && timingSafeEqual(Buffer.from(expected), Buffer.from(v1));
@@ -41,7 +48,7 @@ export async function POST(request: Request) {
     if (!paymentId) return NextResponse.json({ ok: true });
 
     if (!validateWebhookSignature(request, paymentId)) {
-      return NextResponse.json({ error: 'Assinatura do webhook inválida.' }, { status: 401 });
+      return NextResponse.json({ error: 'Assinatura do webhook inválida ou não configurada.' }, { status: 401 });
     }
 
     const accessToken = getMercadoPagoAccessToken();
