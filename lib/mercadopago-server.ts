@@ -42,15 +42,38 @@ export async function syncOrderPayment(orderId: string, payment: any) {
     orderStatus = 'pending';
   }
 
+  const { data: currentOrder, error: currentOrderError } = await admin
+    .from('orders')
+    .select('status,payment_status,payment_id')
+    .eq('id', orderId)
+    .maybeSingle();
+  if (currentOrderError) throw currentOrderError;
+
+  // Uma consulta atrasada nunca deve desfazer uma aprovação já confirmada.
+  const currentIsApproved = currentOrder?.status === 'confirmed' || currentOrder?.payment_status === 'approved';
+  const currentPaymentId = currentOrder?.payment_id ? String(currentOrder.payment_id) : '';
+  const incomingPaymentId = payment?.id ? String(payment.id) : '';
+  const isDifferentPayment = Boolean(currentPaymentId && incomingPaymentId && currentPaymentId !== incomingPaymentId);
+
+  if (currentIsApproved && isDifferentPayment && paymentStatus !== 'approved' && paymentStatus !== 'cancelled') {
+    return {
+      paymentStatus: String(currentOrder.payment_status || 'approved'),
+      orderStatus: String(currentOrder.status || 'confirmed'),
+      mpStatus,
+      paymentId: currentPaymentId,
+    };
+  }
+
   const { error } = await admin
     .from('orders')
     .update({
-      payment_id: String(payment.id),
+      payment_id: incomingPaymentId || currentPaymentId || null,
       payment_status: paymentStatus,
       status: orderStatus,
+      updated_at: new Date().toISOString(),
     })
     .eq('id', orderId);
 
   if (error) throw error;
-  return { paymentStatus, orderStatus, mpStatus, paymentId: String(payment.id) };
+  return { paymentStatus, orderStatus, mpStatus, paymentId: incomingPaymentId || currentPaymentId || null };
 }
