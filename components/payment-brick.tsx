@@ -88,6 +88,7 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
           try { localStorage.setItem('2p_guest_order_email', email.trim().toLowerCase()); localStorage.setItem('2p_last_order_id', orderId); } catch {}
           if (!response.ok) {
             const detail = result.statusDetail || result.error || `Falha no pagamento (HTTP ${response.status}).`;
+            console.error('Mercado Pago rejection diagnostics:', { httpStatus: response.status, ...result });
             redirectToResult({ ...result, status: result.status || 'rejected', statusDetail: detail });
             return;
           }
