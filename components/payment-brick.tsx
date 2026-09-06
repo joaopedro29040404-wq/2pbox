@@ -64,6 +64,13 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
     ? { creditCard: 'all', debitCard: 'all', prepaidCard: 'all', ticket: 'all', bankTransfer: 'all', mercadoPago: 'all' } as const
     : { creditCard: 'all', debitCard: 'all', prepaidCard: 'all', ticket: 'all', bankTransfer: 'all' } as const;
 
+  const redirectToResult = (paymentResult: PaymentResult) => {
+    const query = new URLSearchParams({ payment: paymentResult.status || 'pending' });
+    if (paymentResult.id) query.set('paymentId', String(paymentResult.id));
+    if (paymentResult.statusDetail) query.set('statusDetail', paymentResult.statusDetail);
+    window.location.replace(`/pagamento/${encodeURIComponent(orderId)}?${query.toString()}`);
+  };
+
   return <div className="payment-brick-wrap">
     <Payment
       initialization={{ amount, ...(hasPreference ? { preferenceId: preferenceId!.trim() } : {}), payer }}
@@ -74,29 +81,56 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
         try {
           const cardholderName = String(additionalData?.cardholderName || '').trim();
           const enrichedFormData = { ...formData, ...(cardholderName ? { cardholderName, card_holder_name: cardholderName } : {}) };
-          const response = await fetch('/api/mercadopago/create-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ formData: enrichedFormData, selectedPaymentMethod, orderId, total: amount }) });
-          const result: PaymentResult & { error?: string } = await response.json();
+          const controller = new AbortController();
+          const timeout = window.setTimeout(() => controller.abort(), 20000);
+          let response: Response;
+          try {
+            response = await fetch('/api/mercadopago/create-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ formData: enrichedFormData, selectedPaymentMethod, orderId, total: amount }),
+              signal: controller.signal,
+              cache: 'no-store',
+            });
+          } finally { window.clearTimeout(timeout); }
+
+          let result: PaymentResult & { error?: string };
+          try { result = await response.json(); }
+          catch { result = { status: 'rejected', statusDetail: 'Resposta inválida do servidor.' }; }
+
           try { localStorage.setItem('2p_guest_order_email', normalizedEmail); localStorage.setItem('2p_last_order_id', orderId); } catch {}
-          const redirectToResult = (paymentResult: PaymentResult) => {
-            const query = new URLSearchParams({ payment: paymentResult.status || 'pending' });
-            if (paymentResult.id) query.set('paymentId', String(paymentResult.id));
-            if (paymentResult.statusDetail) query.set('statusDetail', paymentResult.statusDetail);
-            window.location.replace(`/pagamento/${encodeURIComponent(orderId)}?${query.toString()}`);
-          };
+
           if (!response.ok) {
-            if (result.id) { redirectToResult({ id: result.id, status: result.status || 'rejected', statusDetail: result.statusDetail || result.error }); return; }
-            onError(result.statusDetail || result.error || 'Não foi possível processar o pagamento.');
-            throw new Error(result.statusDetail || result.error || 'Pagamento recusado');
+            const detail = result.statusDetail || result.error || `Falha no pagamento (HTTP ${response.status}).`;
+            // Se o Mercado Pago criou um pagamento antes de responder com erro,
+            // acompanhamos esse pagamento em vez de deixar o Brick preso/resetado.
+            if (result.id) {
+              redirectToResult({ id: result.id, status: result.status || 'rejected', statusDetail: detail });
+              return;
+            }
+            // Mesmo sem paymentId, sai do Brick e leva o cliente para uma tela
+            // controlada pela 2P Box, onde o erro pode ser exibido e o pedido retomado.
+            redirectToResult({ status: 'error', statusDetail: detail });
+            return;
           }
+
           const transactionResult: PaymentResult = { id: result.id, status: result.status || 'pending', statusDetail: result.statusDetail, paymentMethodId: result.paymentMethodId };
           if (result.paymentMethodId === 'pix' && result.pix) { setPaymentId(result.id ?? null); setPix(result.pix); return; }
           redirectToResult(transactionResult);
+        } catch (error) {
+          const message = error instanceof DOMException && error.name === 'AbortError'
+            ? 'O Mercado Pago demorou para responder. Vamos verificar o pagamento na próxima tela.'
+            : error instanceof Error ? error.message : 'Não foi possível processar o pagamento.';
+          console.error('Mercado Pago submit error:', error);
+          // Nunca deixar o usuário preso no Brick depois de clicar em Pagar.
+          redirectToResult({ status: 'error', statusDetail: message });
         } finally { setSubmitting(false); }
       }}
       onReady={() => undefined}
       onError={error => { console.error('Mercado Pago Brick:', error); onError('O Mercado Pago encontrou um problema no formulário. Confira os campos e tente novamente.'); }}
     />
+    {submitting && <div className="payment-processing" role="status" aria-live="polite">Processando pagamento… não feche esta tela.</div>}
     <div className="payment-mobile-note">Pagamento protegido pelo Mercado Pago. Os dados do cartão são tratados pelo Brick oficial e não ficam armazenados na 2P Box.</div>
-    <style jsx>{`.payment-brick-wrap{width:100%;max-width:100%;min-width:0;overflow:visible;box-sizing:border-box}.payment-brick-wrap :global(*){box-sizing:border-box}.payment-mobile-note{margin-top:10px;text-align:center;color:#8a8a86;font-size:9px;line-height:1.45}@media(max-width:600px){.payment-brick-wrap{padding:0;width:100%}}`}</style>
+    <style jsx>{`.payment-brick-wrap{width:100%;max-width:100%;min-width:0;overflow:visible;box-sizing:border-box}.payment-brick-wrap :global(*){box-sizing:border-box}.payment-processing{margin:12px 0;padding:12px;border-radius:10px;background:#111;color:#fff;text-align:center;font:700 12px/1.4 Inter,Arial,sans-serif}.payment-mobile-note{margin-top:10px;text-align:center;color:#8a8a86;font-size:9px;line-height:1.45}@media(max-width:600px){.payment-brick-wrap{padding:0;width:100%}}`}</style>
   </div>;
 }
