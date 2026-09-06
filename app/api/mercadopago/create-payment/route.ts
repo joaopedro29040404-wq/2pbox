@@ -15,14 +15,12 @@ export async function POST(request: Request) {
     if (!formData || !orderId || !Number.isFinite(amount) || amount <= 0) return NextResponse.json({ error: 'Dados inválidos para criar o pagamento.' }, { status: 400 });
 
     const paymentMethodId = String(formData.payment_method_id || '').trim();
-    const publicKey = String(process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY || '').trim();
-    const isTestEnvironment = publicKey.startsWith('TEST-');
+    if (!paymentMethodId) return NextResponse.json({ error: 'Método de pagamento não identificado.' }, { status: 400 });
 
-    // In Mercado Pago's test card environment the buyer identity is the
-    // official test user. The real customer's e-mail remains stored on the
-    // 2P Box order, but must not be mixed into the test payment user.
-    const submittedEmail = String(formData.payer?.email || formData.email || formData.cardholderEmail || '').trim().toLowerCase();
-    const payerEmail = isTestEnvironment ? 'test@testuser.com' : submittedEmail;
+    // The Card Payment Brick already supplies the payer identity. Do not replace
+    // it with a synthetic test user: Mercado Pago's Brick card tests require
+    // the payer email to be different from the real Mercado Pago account email.
+    const payerEmail = String(formData.payer?.email || formData.email || formData.cardholderEmail || '').trim().toLowerCase();
     if (!payerEmail) return NextResponse.json({ error: 'Informe um e-mail válido para o pagamento.' }, { status: 400 });
 
     const identificationType = String(
@@ -38,10 +36,7 @@ export async function POST(request: Request) {
       ''
     ).replace(/\D/g, '');
 
-    // Identification is optional for the payment request. In test mode we
-    // deliberately omit it so a real customer's CPF cannot be associated
-    // with Mercado Pago's test buyer and trigger a user mismatch.
-    const identification = !isTestEnvironment && identificationType && identificationNumber
+    const identification = identificationType && identificationNumber
       ? { type: identificationType, number: identificationNumber }
       : undefined;
 
@@ -62,7 +57,7 @@ export async function POST(request: Request) {
       issuer_id: formData.issuer_id ? Number(formData.issuer_id) : undefined,
       payer: {
         email: payerEmail,
-        identification,
+        ...(identification ? { identification } : {}),
         first_name: formData.payer?.first_name || nameParts[0] || undefined,
         last_name: formData.payer?.last_name || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined),
       },
