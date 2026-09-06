@@ -10,16 +10,14 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { formData, orderId, total, deviceId } = body;
+    const { formData, orderId, total, deviceId, additionalData } = body;
     const amount = Number(total);
     if (!formData || !orderId || !Number.isFinite(amount) || amount <= 0) return NextResponse.json({ error: 'Dados inválidos para criar o pagamento.' }, { status: 400 });
 
     const paymentMethodId = String(formData.payment_method_id || '').trim();
     if (!paymentMethodId) return NextResponse.json({ error: 'Método de pagamento não identificado.' }, { status: 400 });
+    if (!formData.token) return NextResponse.json({ error: 'Token do cartão não foi gerado pelo Payment Brick.' }, { status: 400 });
 
-    // The Card Payment Brick already supplies the payer identity. Do not replace
-    // it with a synthetic test user: Mercado Pago's Brick card tests require
-    // the payer email to be different from the real Mercado Pago account email.
     const payerEmail = String(formData.payer?.email || formData.email || formData.cardholderEmail || '').trim().toLowerCase();
     if (!payerEmail) return NextResponse.json({ error: 'Informe um e-mail válido para o pagamento.' }, { status: 400 });
 
@@ -35,34 +33,37 @@ export async function POST(request: Request) {
       formData.payer?.identification?.number ||
       ''
     ).replace(/\D/g, '');
+    const identification = identificationType && identificationNumber ? { type: identificationType, number: identificationNumber } : undefined;
 
-    const identification = identificationType && identificationNumber
-      ? { type: identificationType, number: identificationNumber }
-      : undefined;
-
-    const cardholderName = String(
-      formData.cardholderName ||
-      formData.card_holder_name ||
-      ''
-    ).trim();
+    const cardholderName = String(formData.cardholderName || formData.card_holder_name || '').trim();
     const nameParts = cardholderName ? cardholderName.split(/\s+/).filter(Boolean) : [];
+    const paymentTypeId = String(additionalData?.paymentTypeId || formData.payment_type_id || '').trim();
+    const paymentMethodType = paymentTypeId === 'debit_card' ? 'debit_card' : 'credit_card';
 
     const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || 'https://2pbox.vercel.app';
-    const paymentBody = {
-      transaction_amount: amount,
-      token: formData.token || undefined,
-      description: `Pedido 2P Box ${orderId}`,
-      installments: Number(formData.installments || 1),
-      payment_method_id: paymentMethodId,
-      issuer_id: formData.issuer_id ? Number(formData.issuer_id) : undefined,
+    const orderBody = {
+      type: 'online',
+      processing_mode: 'automatic',
+      capture_mode: 'automatic_async',
+      total_amount: amount.toFixed(2),
+      external_reference: String(orderId).slice(0, 64),
       payer: {
         email: payerEmail,
         ...(identification ? { identification } : {}),
-        first_name: formData.payer?.first_name || nameParts[0] || undefined,
-        last_name: formData.payer?.last_name || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined),
+        ...(formData.payer?.first_name || nameParts[0] ? { first_name: formData.payer?.first_name || nameParts[0] } : {}),
+        ...(formData.payer?.last_name || nameParts.length > 1 ? { last_name: formData.payer?.last_name || nameParts.slice(1).join(' ') } : {}),
       },
-      external_reference: String(orderId),
-      notification_url: `${origin}/api/mercadopago/webhook`,
+      transactions: {
+        payments: [{
+          amount: amount.toFixed(2),
+          payment_method: {
+            id: paymentMethodId,
+            type: paymentMethodType,
+            token: String(formData.token),
+            installments: Number(formData.installments || 1),
+          },
+        }],
+      },
     };
 
     const headers: Record<string, string> = {
@@ -73,37 +74,50 @@ export async function POST(request: Request) {
     const normalizedDeviceId = String(deviceId || '').trim();
     if (normalizedDeviceId) headers['X-meli-session-id'] = normalizedDeviceId;
 
-    const response = await fetch('https://api.mercadopago.com/v1/payments', {
+    const response = await fetch('https://api.mercadopago.com/v1/orders', {
       method: 'POST',
       headers,
-      body: JSON.stringify(paymentBody),
+      body: JSON.stringify(orderBody),
       cache: 'no-store',
     });
 
-    const result = await response.json();
+    const result = await response.json().catch(() => null);
     if (!response.ok) {
-      console.error('Mercado Pago Payment Brick error:', result);
-      if (result?.id && result?.status) {
-        try { await syncOrderPayment(String(orderId), result); } catch (syncError) { console.error('Rejected payment sync error:', syncError); }
-      }
+      console.error('Mercado Pago Orders API error:', { status: response.status, result, orderId });
       return NextResponse.json({
-        id: result?.id || null,
-        status: result?.status || 'rejected',
-        statusDetail: result?.status_detail || result?.message || null,
-        paymentMethodId: result?.payment_method_id || paymentMethodId || null,
-        error: result?.message || 'O Mercado Pago recusou o pagamento.',
+        id: null,
+        status: 'rejected',
+        statusDetail: result?.message || result?.cause?.[0]?.description || null,
+        paymentMethodId,
+        error: result?.message || 'O Mercado Pago recusou a order.',
+        details: result,
       }, { status: response.status >= 400 && response.status < 500 ? response.status : 502 });
     }
 
-    try { await syncOrderPayment(String(orderId), result); } catch (syncError) { console.error('Order payment sync error:', syncError); }
-    const transactionData = result?.point_of_interaction?.transaction_data || {};
-    const isPix = paymentMethodId === 'pix' || result?.payment_method_id === 'pix';
+    const payment = result?.transactions?.payments?.[0];
+    const paymentId = payment?.id ? String(payment.id) : null;
+    const status = payment?.status || result?.status || 'pending';
+    const statusDetail = payment?.status_detail || result?.status_detail || null;
+    const normalizedResult = {
+      ...result,
+      id: paymentId || result?.id,
+      status,
+      status_detail: statusDetail,
+      payment_method_id: payment?.payment_method?.id || paymentMethodId,
+      order_id: result?.id || null,
+    };
+
+    try { await syncOrderPayment(String(orderId), normalizedResult); } catch (syncError) { console.error('Order payment sync error:', syncError); }
+
+    const transactionData = payment?.point_of_interaction?.transaction_data || result?.point_of_interaction?.transaction_data || {};
+    const isPix = paymentMethodId === 'pix';
 
     return NextResponse.json({
-      id: result.id,
-      status: result.status,
-      statusDetail: result.status_detail,
-      paymentMethodId: result.payment_method_id,
+      id: paymentId || result?.id,
+      orderId: result?.id || null,
+      status,
+      statusDetail,
+      paymentMethodId: payment?.payment_method?.id || paymentMethodId,
       pix: isPix ? {
         qrCode: transactionData.qr_code || null,
         qrCodeBase64: transactionData.qr_code_base64 || null,
@@ -111,7 +125,7 @@ export async function POST(request: Request) {
       } : null,
     });
   } catch (error) {
-    console.error('Mercado Pago Payment Brick error:', error);
+    console.error('Mercado Pago Orders API error:', error);
     return NextResponse.json({ error: 'Não foi possível processar o pagamento.' }, { status: 502 });
   }
 }
