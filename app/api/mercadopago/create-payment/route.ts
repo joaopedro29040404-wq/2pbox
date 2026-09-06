@@ -35,11 +35,12 @@ export async function POST(request: Request) {
     if (normalizedDeviceId) headers['X-meli-session-id'] = normalizedDeviceId;
     const response = await fetch('https://api.mercadopago.com/v1/orders', { method: 'POST', headers, body: JSON.stringify(orderBody), cache: 'no-store' });
     const result = await response.json().catch(() => null);
+    const diagnostics = { mercadoPagoOrderId: result?.id || null, mercadoPagoPaymentId: result?.transactions?.payments?.[0]?.id || result?.transactions?.payments?.[0]?.reference_id || null, orderStatus: result?.status || null, orderStatusDetail: result?.status_detail || null, paymentStatus: result?.transactions?.payments?.[0]?.status || null, paymentStatusDetail: result?.transactions?.payments?.[0]?.status_detail || null, cause: result?.cause || null, message: result?.message || null };
     if (!response.ok) {
-      console.error('Mercado Pago Orders API error:', { status: response.status, result, orderId });
+      console.error('Mercado Pago Orders API error:', { status: response.status, result, orderId, diagnostics });
       const cause = Array.isArray(result?.cause) ? result.cause[0] : null;
       const detail = result?.status_detail || cause?.code || cause?.description || result?.message || null;
-      return NextResponse.json({ id: null, mercadoPagoOrderId: result?.id || null, mercadoPagoPaymentId: null, status: 'rejected', orderStatus: result?.status || 'rejected', orderStatusDetail: result?.status_detail || detail, paymentStatus: null, paymentStatusDetail: null, statusDetail: detail, paymentMethodId, error: detail || 'O Mercado Pago recusou a order.', details: result }, { status: response.status >= 400 && response.status < 500 ? response.status : 502 });
+      return NextResponse.json({ id: null, ...diagnostics, status: 'rejected', statusDetail: detail, paymentMethodId, error: detail || 'O Mercado Pago recusou a order.', details: result }, { status: response.status >= 400 && response.status < 500 ? response.status : 502 });
     }
     const payment = result?.transactions?.payments?.[0];
     const mercadoPagoOrderId = result?.id ? String(result.id) : null;
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
     try { await syncOrderPayment(String(orderId), normalizedResult); } catch (syncError) { console.error('Order payment sync error:', syncError); }
     const transactionData = payment?.point_of_interaction?.transaction_data || result?.point_of_interaction?.transaction_data || {};
     const isPix = paymentMethodId === 'pix';
-    return NextResponse.json({ id: mercadoPagoPaymentId || mercadoPagoOrderId, orderId: mercadoPagoOrderId, mercadoPagoOrderId, mercadoPagoPaymentId, status, statusDetail, orderStatus, orderStatusDetail, paymentStatus, paymentStatusDetail, paymentMethodId: payment?.payment_method?.id || paymentMethodId, pix: isPix ? { qrCode: transactionData.qr_code || null, qrCodeBase64: transactionData.qr_code_base64 || null, ticketUrl: transactionData.ticket_url || null } : null });
+    return NextResponse.json({ id: mercadoPagoPaymentId || mercadoPagoOrderId, orderId: mercadoPagoOrderId, ...diagnostics, status, statusDetail, paymentMethodId: payment?.payment_method?.id || paymentMethodId, pix: isPix ? { qrCode: transactionData.qr_code || null, qrCodeBase64: transactionData.qr_code_base64 || null, ticketUrl: transactionData.ticket_url || null } : null });
   } catch (error) {
     console.error('Mercado Pago Orders API error:', error);
     return NextResponse.json({ error: 'Não foi possível processar o pagamento.' }, { status: 502 });
