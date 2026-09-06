@@ -10,7 +10,7 @@ type Props = { amount: number; orderId: string; email: string; cpf?: string; pre
 let initializedKey = '';
 const terminalStatuses = ['approved', 'rejected', 'cancelled'];
 
-export default function PaymentBrick({ amount, orderId, email, cpf, onResult, onError }: Props) {
+export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId, onResult, onError }: Props) {
   const [pix, setPix] = useState<PixData | null>(null);
   const [paymentId, setPaymentId] = useState<string | number | null>(null);
   const [copyMessage, setCopyMessage] = useState('');
@@ -59,11 +59,15 @@ export default function PaymentBrick({ amount, orderId, email, cpf, onResult, on
   const normalizedEmail = email.trim().toLowerCase();
   const normalizedCpf = (cpf || '').replace(/\D/g, '');
   const payer = { ...(normalizedEmail ? { email: normalizedEmail } : {}), ...(normalizedCpf.length === 11 ? { identification: { type: 'CPF', number: normalizedCpf } } : {}) };
+  const hasPreference = Boolean(preferenceId?.trim());
+  const paymentMethods = hasPreference
+    ? { creditCard: 'all', debitCard: 'all', prepaidCard: 'all', ticket: 'all', bankTransfer: 'all', mercadoPago: 'all' }
+    : { creditCard: 'all', debitCard: 'all', prepaidCard: 'all', ticket: 'all', bankTransfer: 'all' };
 
   return <div className="payment-brick-wrap">
     <Payment
-      initialization={{ amount, payer }}
-      customization={{ paymentMethods: { creditCard: 'all', debitCard: 'all', prepaidCard: 'all', ticket: 'all', bankTransfer: 'all', mercadoPago: 'all' }, visual: { defaultPaymentOption: { creditCardForm: true } } }}
+      initialization={{ amount, ...(hasPreference ? { preferenceId: preferenceId!.trim() } : {}), payer }}
+      customization={{ paymentMethods, visual: { defaultPaymentOption: { creditCardForm: true } } }}
       onSubmit={async ({ selectedPaymentMethod, formData }, additionalData) => {
         if (submitting) return;
         setSubmitting(true);
