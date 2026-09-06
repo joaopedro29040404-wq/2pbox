@@ -17,6 +17,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Dados inválidos para iniciar o pagamento.' }, { status: 400 });
     }
 
+    const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || '';
     const preference = {
       items: items.map((item: { id?: string; name: string; price: number; quantity: number }) => ({
         id: item.id,
@@ -27,6 +28,12 @@ export async function POST(request: Request) {
       })),
       external_reference: orderId,
       ...(email ? { payer: { email } } : {}),
+      back_urls: {
+        success: `${origin}/pedido/${encodeURIComponent(orderId)}?payment=approved`,
+        pending: `${origin}/pedido/${encodeURIComponent(orderId)}?payment=pending`,
+        failure: `${origin}/pedido/${encodeURIComponent(orderId)}?payment=failure`,
+      },
+      auto_return: 'approved',
     };
 
     const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
@@ -38,16 +45,10 @@ export async function POST(request: Request) {
     const result = await response.json();
     if (!response.ok) {
       console.error('Mercado Pago preference error:', result);
-      return NextResponse.json({ error: 'O Mercado Pago recusou a criação da preferência.' }, { status: 502 });
+      return NextResponse.json({ error: result?.message || 'O Mercado Pago recusou a criação da preferência.' }, { status: 502 });
     }
 
-    const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || '';
-    const params = new URLSearchParams({ orderId, total: String(total), preferenceId: String(result.id) });
-    if (email) params.set('email', email);
-    const brickUrl = `${origin}/checkout/pagamento?${params.toString()}`;
-
-    // initPoint é mantido para compatibilidade com o checkout atual, mas agora aponta para o Payment Brick da própria 2P Box.
-    return NextResponse.json({ id: result.id, brickUrl, initPoint: brickUrl });
+    return NextResponse.json({ id: result.id });
   } catch (error) {
     console.error('Mercado Pago API error:', error);
     return NextResponse.json({ error: 'Não foi possível iniciar o pagamento.' }, { status: 500 });
