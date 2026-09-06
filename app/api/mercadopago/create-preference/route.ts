@@ -1,25 +1,12 @@
 import { NextResponse } from 'next/server';
+import { getMercadoPagoAccessToken } from '@/lib/mercadopago-server';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-function getAccessToken() {
-  return (
-    process.env.MERCADOPAGO_ACCESS_TOKEN ||
-    process.env.MERCADO_PAGO_ACCESS_TOKEN ||
-    process.env.MP_ACCESS_TOKEN ||
-    ''
-  ).trim();
-}
-
 export async function POST(request: Request) {
-  const accessToken = getAccessToken();
-  if (!accessToken) {
-    return NextResponse.json(
-      { error: 'Mercado Pago não configurado no servidor. Verifique a variável de Access Token no ambiente Production da Vercel e faça um novo deploy.' },
-      { status: 500 }
-    );
-  }
+  const accessToken = getMercadoPagoAccessToken();
+  if (!accessToken) return NextResponse.json({ error: 'Mercado Pago não configurado no servidor.' }, { status: 500 });
 
   try {
     const body = await request.json();
@@ -27,15 +14,11 @@ export async function POST(request: Request) {
     const total = Number(body.total);
     const orderId = String(body.orderId || '');
     const email = String(body.email || '').trim();
-
-    if (!items.length || !orderId || !Number.isFinite(total) || total <= 0) {
-      return NextResponse.json({ error: 'Dados inválidos para iniciar o pagamento.' }, { status: 400 });
-    }
+    if (!items.length || !orderId || !Number.isFinite(total) || total <= 0) return NextResponse.json({ error: 'Dados inválidos para iniciar o pagamento.' }, { status: 400 });
 
     const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || 'https://2pbox.vercel.app';
-    // O e-mail acompanha o retorno do Mercado Pago para que uma compra sem login
-    // também consiga abrir a página de detalhes do pedido depois do pagamento.
     const guestParam = email ? `&email=${encodeURIComponent(email)}` : '';
+    const webhookUrl = `${origin}/api/mercadopago/webhook`;
     const preference = {
       items: items.map((item: { id?: string; name: string; price: number; quantity: number }) => ({
         id: item.id,
@@ -46,10 +29,11 @@ export async function POST(request: Request) {
       })),
       external_reference: orderId,
       ...(email ? { payer: { email } } : {}),
+      notification_url: webhookUrl,
       back_urls: {
-        success: `${origin}/pedido/${encodeURIComponent(orderId)}?payment=approved${guestParam}`,
-        pending: `${origin}/pedido/${encodeURIComponent(orderId)}?payment=pending${guestParam}`,
-        failure: `${origin}/pedido/${encodeURIComponent(orderId)}?payment=failure${guestParam}`,
+        success: `${origin}/pagamento/${encodeURIComponent(orderId)}?payment=approved${guestParam}`,
+        pending: `${origin}/pagamento/${encodeURIComponent(orderId)}?payment=pending${guestParam}`,
+        failure: `${origin}/pagamento/${encodeURIComponent(orderId)}?payment=failure${guestParam}`,
       },
       auto_return: 'approved',
     };
@@ -65,7 +49,6 @@ export async function POST(request: Request) {
       console.error('Mercado Pago preference error:', result);
       return NextResponse.json({ error: result?.message || 'O Mercado Pago recusou a criação da preferência.' }, { status: 502 });
     }
-
     return NextResponse.json({ id: result.id });
   } catch (error) {
     console.error('Mercado Pago API error:', error);
