@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAdminSupabase } from '@/lib/mercadopago-server';
+import { getAdminSupabase, getMercadoPagoAccessToken, syncOrderPayment } from '@/lib/mercadopago-server';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -17,6 +17,42 @@ export async function GET(request: Request) {
     const admin = getAdminSupabase();
     if (!admin) {
       return NextResponse.json({ error: 'Servidor não configurado.' }, { status: 500 });
+    }
+
+    // Sempre que o cliente abrir/atualizar o pedido, consulta o Mercado Pago
+    // novamente. Isso mantém o status correto mesmo se o webhook demorar ou
+    // não chegar durante os testes.
+    const { data: currentOrder, error: currentOrderError } = await admin
+      .from('orders')
+      .select('id,customer_email,payment_id')
+      .eq('id', orderId)
+      .ilike('customer_email', email)
+      .maybeSingle();
+
+    if (currentOrderError) {
+      console.error('Public order lookup error:', currentOrderError);
+      return NextResponse.json({ error: 'Não foi possível consultar o pedido.' }, { status: 500 });
+    }
+
+    if (!currentOrder) {
+      return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
+    }
+
+    const accessToken = getMercadoPagoAccessToken();
+    if (accessToken && currentOrder.payment_id) {
+      try {
+        const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(String(currentOrder.payment_id))}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          cache: 'no-store',
+        });
+        if (paymentResponse.ok) {
+          const payment = await paymentResponse.json();
+          await syncOrderPayment(orderId, payment);
+        }
+      } catch (syncError) {
+        console.error('Public order Mercado Pago reconciliation error:', syncError);
+        // A consulta da página continua funcionando com o último status salvo.
+      }
     }
 
     const { data, error } = await admin
