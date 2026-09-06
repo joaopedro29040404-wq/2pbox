@@ -77,13 +77,20 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
           const response = await fetch('/api/mercadopago/create-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ formData: enrichedFormData, selectedPaymentMethod, orderId, total: amount }) });
           const result: PaymentResult & { error?: string } = await response.json();
           try { localStorage.setItem('2p_guest_order_email', normalizedEmail); localStorage.setItem('2p_last_order_id', orderId); } catch {}
+          const redirectToResult = (paymentResult: PaymentResult) => {
+            const query = new URLSearchParams({ payment: paymentResult.status || 'pending' });
+            if (paymentResult.id) query.set('paymentId', String(paymentResult.id));
+            if (paymentResult.statusDetail) query.set('statusDetail', paymentResult.statusDetail);
+            window.location.replace(`/pagamento/${encodeURIComponent(orderId)}?${query.toString()}`);
+          };
           if (!response.ok) {
-            if (result.id) { onResult({ id: result.id, status: result.status || 'rejected', statusDetail: result.statusDetail || result.error }); return; }
+            if (result.id) { redirectToResult({ id: result.id, status: result.status || 'rejected', statusDetail: result.statusDetail || result.error }); return; }
             onError(result.statusDetail || result.error || 'Não foi possível processar o pagamento.');
             throw new Error(result.statusDetail || result.error || 'Pagamento recusado');
           }
+          const transactionResult: PaymentResult = { id: result.id, status: result.status || 'pending', statusDetail: result.statusDetail, paymentMethodId: result.paymentMethodId };
           if (result.paymentMethodId === 'pix' && result.pix) { setPaymentId(result.id ?? null); setPix(result.pix); return; }
-          onResult({ id: result.id, status: result.status || 'pending', statusDetail: result.statusDetail });
+          redirectToResult(transactionResult);
         } finally { setSubmitting(false); }
       }}
       onReady={() => undefined}
