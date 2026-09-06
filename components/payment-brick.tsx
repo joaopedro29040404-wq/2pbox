@@ -1,50 +1,45 @@
 'use client';
 
-import { Payment } from '@mercadopago/sdk-react';
-import { initMercadoPago } from '@mercadopago/sdk-react';
-import { useEffect, useRef } from 'react';
+import { Payment, initMercadoPago } from '@mercadopago/sdk-react';
+import { useEffect } from 'react';
 
-let initialized = false;
+let initializedKey = '';
 
-export default function PaymentBrick({ amount, orderId, email, onResult, onError }: { amount: number; orderId: string; email: string; onResult: (result: { id?: string | number; status?: string; statusDetail?: string }) => void; onError: (message: string) => void }) {
-  const mounted = useRef(false);
+type Props = {
+  amount: number;
+  orderId: string;
+  email: string;
+  preferenceId?: string;
+  onResult: (result: { id?: string | number; status?: string; statusDetail?: string }) => void;
+  onError: (message: string) => void;
+};
 
+export default function PaymentBrick({ amount, orderId, email, preferenceId, onResult, onError }: Props) {
   useEffect(() => {
     const publicKey = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY;
     if (!publicKey) {
-      onError('Mercado Pago ainda não foi configurado no site.');
+      onError('A chave pública do Mercado Pago ainda não foi configurada na Vercel.');
       return;
     }
-    if (!initialized) {
+    if (initializedKey !== publicKey) {
       initMercadoPago(publicKey, { locale: 'pt-BR' });
-      initialized = true;
+      initializedKey = publicKey;
     }
-    mounted.current = true;
-    return () => { mounted.current = false; };
   }, [onError]);
-
-  const initialization = { amount, payer: { email } };
-  const customization = {
-    paymentMethods: {
-      creditCard: 'all' as const,
-      debitCard: 'all' as const,
-      prepaidCard: 'all' as const,
-      ticket: 'all' as const,
-      bankTransfer: 'all' as const,
-      mercadoPago: 'all' as const,
-    },
-    visual: { style: { theme: 'default' as const } },
-  };
 
   return (
     <div className="payment-brick-wrap">
       <Payment
-        initialization={initialization}
-        customization={customization}
+        initialization={{ amount, ...(preferenceId ? { preferenceId } : {}), payer: { email } }}
+        customization={{
+          paymentMethods: {
+            creditCard: 'all', debitCard: 'all', prepaidCard: 'all',
+            ticket: 'all', bankTransfer: 'all', mercadoPago: 'all',
+          },
+        }}
         onSubmit={async ({ formData }) => {
           const response = await fetch('/api/mercadopago/create-payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ formData, orderId, total: amount }),
           });
           const result = await response.json();
@@ -54,8 +49,8 @@ export default function PaymentBrick({ amount, orderId, email, onResult, onError
           }
           onResult(result);
         }}
-        onReady={() => {}}
-        onError={(error) => onError('O Mercado Pago encontrou um problema ao carregar o pagamento. Tente novamente.')}
+        onReady={() => undefined}
+        onError={() => onError('O Mercado Pago encontrou um problema ao carregar o pagamento. Tente novamente.')}
       />
       <style jsx>{`.payment-brick-wrap{width:100%;min-width:0}.payment-brick-wrap :global(*){box-sizing:border-box}`}</style>
     </div>
