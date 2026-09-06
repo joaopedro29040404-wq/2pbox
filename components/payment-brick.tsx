@@ -17,12 +17,6 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
   const [submitting, setSubmitting] = useState(false);
 
   const publicKey = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY || '';
-  const isTestEnvironment = publicKey.startsWith('TEST-');
-  // Mercado Pago's card test environment uses a dedicated test buyer identity.
-  // Keep the customer's real checkout e-mail in 2P Box, but use the official
-  // test payer identity when the Brick is running with a TEST public key.
-  const mercadoPagoPayerEmail = isTestEnvironment ? 'test@testuser.com' : email.trim().toLowerCase();
-  const mercadoPagoPayerCpf = isTestEnvironment ? '' : (cpf || '').replace(/\D/g, '');
 
   useEffect(() => {
     if (!publicKey) return onError('A chave pública do Mercado Pago ainda não foi configurada na Vercel.');
@@ -63,9 +57,11 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
     <style jsx>{`.pix-payment-result{display:grid;gap:16px;padding:22px;border:1px solid #e5e5e5;border-radius:14px;background:#fff;text-align:center;overflow:hidden;width:100%;box-sizing:border-box}.pix-payment-result h3{margin:5px 0}.pix-payment-result p{margin:0;color:#777;font-size:12px}.pix-qr{width:min(280px,100%);margin:auto;padding:12px;border:1px solid #eee;border-radius:12px}.pix-qr img{display:block;width:100%;height:auto}.pix-copy{text-align:left}.pix-copy>div{display:flex;gap:8px}.pix-copy input{min-width:0;flex:1;padding:11px;border:1px solid #ddd;border-radius:8px}.pix-copy button{border:0;border-radius:8px;background:#111;color:#fff;padding:0 15px;font-weight:700}.pix-payment-result a{color:#111;font-weight:700;text-decoration:underline}@media(max-width:600px){.pix-payment-result{padding:16px}.pix-copy>div{display:grid}.pix-copy button{min-height:40px}}`}</style>
   </div>;
 
+  const payerEmail = email.trim().toLowerCase();
+  const payerCpf = (cpf || '').replace(/\D/g, '');
   const payer = {
-    ...(mercadoPagoPayerEmail ? { email: mercadoPagoPayerEmail } : {}),
-    ...(mercadoPagoPayerCpf.length === 11 ? { identification: { type: 'CPF', number: mercadoPagoPayerCpf } } : {}),
+    ...(payerEmail ? { email: payerEmail } : {}),
+    ...(payerCpf.length === 11 ? { identification: { type: 'CPF', number: payerCpf } } : {}),
   };
   const hasPreference = Boolean(preferenceId?.trim());
   const paymentMethods = hasPreference
@@ -96,7 +92,7 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
             response = await fetch('/api/mercadopago/create-payment', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ formData: enrichedFormData, selectedPaymentMethod, orderId, total: amount, testPayerEmail: isTestEnvironment ? 'test@testuser.com' : undefined }),
+              body: JSON.stringify({ formData: enrichedFormData, selectedPaymentMethod, orderId, total: amount }),
               signal: controller.signal,
               cache: 'no-store',
             });
