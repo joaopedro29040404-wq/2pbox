@@ -19,14 +19,12 @@ export async function POST(request: Request) {
     const total = Number(body.total);
     const orderId = String(body.orderId || '');
     const email = String(body.email || '').trim().toLowerCase();
+    const bodyName = String(body.name || '').trim();
+    const bodyCpf = String(body.cpf || '').replace(/\D/g, '');
     if (!items.length || !orderId || !Number.isFinite(total) || total <= 0) {
       return NextResponse.json({ error: 'Dados inválidos para iniciar o pagamento.' }, { status: 400 });
     }
 
-    // A preferência é criada depois do pedido. Recuperamos os dados já
-    // registrados no pedido para que o Payment Brick receba o comprador
-    // completo desde a primeira renderização, evitando autofill do navegador
-    // aparecer visualmente sem fazer parte do estado interno do Brick.
     let payer: Record<string, unknown> = email ? { email } : {};
     try {
       const admin = getAdminSupabase();
@@ -36,17 +34,35 @@ export async function POST(request: Request) {
           .select('customer_name,customer_email')
           .eq('id', orderId)
           .maybeSingle();
-        const customerName = String(order?.customer_name || '').trim();
+        const customerName = bodyName || String(order?.customer_name || '').trim();
         const customerEmail = String(order?.customer_email || email).trim().toLowerCase();
         const { firstName, lastName } = splitName(customerName);
         payer = {
           ...(customerEmail ? { email: customerEmail } : {}),
           ...(firstName ? { name: firstName } : {}),
           ...(lastName ? { surname: lastName } : {}),
+          ...(bodyCpf.length === 11 ? { identification: { type: 'CPF', number: bodyCpf } } : {}),
+        };
+      } else if (bodyName || bodyCpf.length === 11) {
+        const { firstName, lastName } = splitName(bodyName);
+        payer = {
+          ...(email ? { email } : {}),
+          ...(firstName ? { name: firstName } : {}),
+          ...(lastName ? { surname: lastName } : {}),
+          ...(bodyCpf.length === 11 ? { identification: { type: 'CPF', number: bodyCpf } } : {}),
         };
       }
     } catch (error) {
       console.warn('Não foi possível carregar os dados do comprador para a preferência:', error);
+      if (bodyName || bodyCpf.length === 11) {
+        const { firstName, lastName } = splitName(bodyName);
+        payer = {
+          ...(email ? { email } : {}),
+          ...(firstName ? { name: firstName } : {}),
+          ...(lastName ? { surname: lastName } : {}),
+          ...(bodyCpf.length === 11 ? { identification: { type: 'CPF', number: bodyCpf } } : {}),
+        };
+      }
     }
 
     const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || 'https://2pbox.vercel.app';
