@@ -18,20 +18,14 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
 
   useEffect(() => {
     const publicKey = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY;
-    if (!publicKey) {
-      onError('A chave pública do Mercado Pago ainda não foi configurada na Vercel.');
-      return;
-    }
-    if (initializedKey !== publicKey) {
-      initMercadoPago(publicKey, { locale: 'pt-BR' });
-      initializedKey = publicKey;
-    }
+    if (!publicKey) { onError('A chave pública do Mercado Pago ainda não foi configurada na Vercel.'); return; }
+    if (initializedKey !== publicKey) { initMercadoPago(publicKey, { locale: 'pt-BR' }); initializedKey = publicKey; }
   }, [onError]);
 
-  // Fallback de sincronização: o webhook é a fonte oficial, mas a tela também
-  // consulta o servidor para não depender de um refresh manual durante os testes.
+  // Webhook = fonte oficial. Esta consulta é um fallback para a tela não ficar
+  // parada enquanto o webhook chega ou durante testes de Pix/cartão.
   useEffect(() => {
-    if (!paymentId || pix) return;
+    if (!paymentId) return;
     let active = true;
     let timer: number | undefined;
     const check = async () => {
@@ -43,35 +37,21 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
           onResult({ id: paymentId, status: data.paymentStatus, statusDetail: data.statusDetail || undefined });
           return;
         }
-      } catch {
-        // Continua tentando até o webhook/status confirmar o pagamento.
-      }
+      } catch {}
       timer = window.setTimeout(check, 2500);
     };
     timer = window.setTimeout(check, 1500);
     return () => { active = false; if (timer) window.clearTimeout(timer); };
-  }, [paymentId, orderId, pix, onResult]);
+  }, [paymentId, orderId, onResult]);
 
   async function copyPixCode() {
     if (!pix?.qrCode) return;
-    try {
-      await navigator.clipboard.writeText(pix.qrCode);
-      setCopyMessage('Código Pix copiado!');
-      window.setTimeout(() => setCopyMessage(''), 2200);
-    } catch {
-      setCopyMessage('Selecione e copie o código manualmente.');
-    }
+    try { await navigator.clipboard.writeText(pix.qrCode); setCopyMessage('Código Pix copiado!'); window.setTimeout(() => setCopyMessage(''), 2200); }
+    catch { setCopyMessage('Selecione e copie o código manualmente.'); }
   }
 
   if (pix) return <div className="pix-payment-result">
-    <div className="pix-payment-head">
-      <div>
-        <span className="pix-eyebrow">PAGAMENTO PIX</span>
-        <h3>Escaneie o QR Code para pagar</h3>
-        <p>O QR Code e o Pix Copia e Cola ficam nesta tela. Quando o Mercado Pago confirmar, o pedido será atualizado automaticamente.</p>
-      </div>
-      <strong>R$ {amount.toFixed(2).replace('.', ',')}</strong>
-    </div>
+    <div className="pix-payment-head"><div><span className="pix-eyebrow">PAGAMENTO PIX</span><h3>Escaneie o QR Code para pagar</h3><p>O QR Code e o Pix Copia e Cola ficam nesta tela. Quando o Mercado Pago confirmar, o pedido será atualizado automaticamente.</p></div><strong>R$ {amount.toFixed(2).replace('.', ',')}</strong></div>
     {pix.qrCodeBase64 && <div className="pix-qr"><img src={`data:image/jpeg;base64,${pix.qrCodeBase64}`} alt="QR Code Pix para pagamento" /></div>}
     {pix.qrCode && <div className="pix-copy-box"><label>Pix Copia e Cola</label><div><input readOnly value={pix.qrCode} onFocus={(e) => e.currentTarget.select()} aria-label="Pix Copia e Cola" /><button type="button" onClick={copyPixCode}>Copiar</button></div>{copyMessage && <small>{copyMessage}</small>}</div>}
     {pix.ticketUrl && <a className="pix-link" href={pix.ticketUrl} target="_blank" rel="noreferrer">Abrir pagamento do Mercado Pago ↗</a>}
@@ -81,55 +61,29 @@ export default function PaymentBrick({ amount, orderId, email, cpf, preferenceId
 
   const normalizedCpf = String(cpf || '').replace(/\D/g, '');
   const payerIdentification = normalizedCpf.length === 11 ? { type: 'CPF', number: normalizedCpf } : undefined;
-
-  return <div className="payment-brick-wrap">
-    <Payment
-      initialization={{ amount, ...(preferenceId ? { preferenceId } : {}), payer: { email, ...(payerIdentification ? { identification: payerIdentification } : {}) } }}
-      customization={{ paymentMethods: { creditCard: 'all', debitCard: 'all', prepaidCard: 'all', ticket: 'all', bankTransfer: 'all', mercadoPago: 'all' } }}
-      onSubmit={async ({ formData }, additionalData) => {
-        if (submitting) return;
-        setSubmitting(true);
-        try {
-          // O nome do titular fica em additionalData no Payment Brick. É ele que
-          // o Mercado Pago usa nos cartões de teste (APRO, OTHE, CONT etc.).
-          const cardholderName = String(additionalData?.cardholderName || '').trim();
-          const enrichedFormData = {
-            ...formData,
-            ...(cardholderName ? { cardholderName, card_holder_name: cardholderName } : {}),
-          };
-          const response = await fetch('/api/mercadopago/create-payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ formData: enrichedFormData, orderId, total: amount }),
-          });
-          const result: PaymentResult & { error?: string } = await response.json();
-          window.localStorage.setItem('2p_guest_order_email', email.trim().toLowerCase());
-          window.localStorage.setItem('2p_last_order_id', orderId);
-
-          if (!response.ok) {
-            if (result.id) {
-              onResult({ id: result.id, status: result.status || 'rejected', statusDetail: result.statusDetail || result.error });
-              return;
-            }
-            onError(result?.statusDetail || result?.error || 'Não foi possível processar o pagamento.');
-            throw new Error(result?.statusDetail || result?.error || 'Pagamento recusado');
-          }
-
-          if (result.paymentMethodId === 'pix' && result.pix) {
-            setPaymentId(result.id ?? null);
-            setPix(result.pix);
-            return;
-          }
-
-          onResult({ id: result.id, status: result.status || 'pending', statusDetail: result.statusDetail });
-        } finally {
-          setSubmitting(false);
+  return <div className="payment-brick-wrap"><Payment
+    initialization={{ amount, ...(preferenceId ? { preferenceId } : {}), payer: { email, ...(payerIdentification ? { identification: payerIdentification } : {}) } }}
+    customization={{ paymentMethods: { creditCard: 'all', debitCard: 'all', prepaidCard: 'all', ticket: 'all', bankTransfer: 'all', mercadoPago: 'all' } }}
+    onSubmit={async ({ formData }, additionalData) => {
+      if (submitting) return;
+      setSubmitting(true);
+      try {
+        const cardholderName = String(additionalData?.cardholderName || '').trim();
+        const enrichedFormData = { ...formData, ...(cardholderName ? { cardholderName, card_holder_name: cardholderName } : {}) };
+        const response = await fetch('/api/mercadopago/create-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ formData: enrichedFormData, orderId, total: amount }) });
+        const result: PaymentResult & { error?: string } = await response.json();
+        window.localStorage.setItem('2p_guest_order_email', email.trim().toLowerCase());
+        window.localStorage.setItem('2p_last_order_id', orderId);
+        if (!response.ok) {
+          if (result.id) { onResult({ id: result.id, status: result.status || 'rejected', statusDetail: result.statusDetail || result.error }); return; }
+          onError(result?.statusDetail || result?.error || 'Não foi possível processar o pagamento.');
+          throw new Error(result?.statusDetail || result?.error || 'Pagamento recusado');
         }
-      }}
-      onReady={() => undefined}
-      onError={() => onError('O Mercado Pago encontrou um problema ao carregar o pagamento. Tente novamente.')}
-    />
-    <div className="payment-mobile-note">Pagamento protegido pelo Mercado Pago. No celular, toque dentro de cada campo e preencha normalmente; os dados do cartão permanecem protegidos pelo Brick.</div>
-    <style jsx>{`.payment-brick-wrap{width:100%;min-width:0;overflow:visible}.payment-brick-wrap :global(*){box-sizing:border-box}.payment-mobile-note{margin-top:10px;text-align:center;color:#8a8a86;font-size:9px;line-height:1.45}.payment-brick-wrap :global(input),.payment-brick-wrap :global(select),.payment-brick-wrap :global(button){max-width:100%}`}</style>
-  </div>;
+        if (result.paymentMethodId === 'pix' && result.pix) { setPaymentId(result.id ?? null); setPix(result.pix); return; }
+        onResult({ id: result.id, status: result.status || 'pending', statusDetail: result.statusDetail });
+      } finally { setSubmitting(false); }
+    }}
+    onReady={() => undefined}
+    onError={() => onError('O Mercado Pago encontrou um problema ao carregar o pagamento. Tente novamente.')}
+  /><div className="payment-mobile-note">Pagamento protegido pelo Mercado Pago. No celular, toque dentro de cada campo e preencha normalmente.</div><style jsx>{`.payment-brick-wrap{width:100%;min-width:0;overflow:visible}.payment-brick-wrap :global(*){box-sizing:border-box}.payment-mobile-note{margin-top:10px;text-align:center;color:#8a8a86;font-size:9px;line-height:1.45}`}</style></div>;
 }
