@@ -10,15 +10,16 @@ function validateWebhookSignature(request: Request, dataId: string) {
   const xSignature = request.headers.get('x-signature') || '';
   const xRequestId = request.headers.get('x-request-id') || '';
 
-  // Em desenvolvimento, ainda permitimos a ausência da secret para não bloquear
-  // testes locais. Em produção, sem secret, o webhook falha fechado.
   if (!secret) return process.env.NODE_ENV !== 'production';
 
-  const parts = Object.fromEntries(
-    xSignature.split(',')
-      .map((part) => part.split('=').map((value) => value.trim()))
-      .filter(([key, value]) => key && value),
-  );
+  const parts: Record<string, string> = {};
+  for (const part of xSignature.split(',')) {
+    const [rawKey, ...rawValue] = part.split('=');
+    const key = String(rawKey || '').trim();
+    const value = rawValue.join('=').trim();
+    if (key && value) parts[key] = value;
+  }
+
   const ts = String(parts.ts || '');
   const v1 = String(parts.v1 || '');
   if (!v1 || !ts) return false;
