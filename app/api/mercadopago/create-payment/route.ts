@@ -26,6 +26,14 @@ export async function POST(request: Request) {
     const payerEmail = String(formData.payer?.email || formData.cardholderEmail || '').trim();
     if (!payerEmail) return NextResponse.json({ error: 'Informe um e-mail válido para o pagamento.' }, { status: 400 });
 
+    const identification = formData.payer?.identification || (
+      formData.identificationType && formData.identificationNumber
+        ? { type: formData.identificationType, number: String(formData.identificationNumber).replace(/\D/g, '') }
+        : undefined
+    );
+    const cardholderName = String(formData.cardholderName || '').trim();
+    const nameParts = cardholderName ? cardholderName.split(/\s+/).filter(Boolean) : [];
+
     const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || 'https://2pbox.vercel.app';
     const paymentBody = {
       transaction_amount: amount,
@@ -36,8 +44,9 @@ export async function POST(request: Request) {
       issuer_id: formData.issuer_id ? Number(formData.issuer_id) : undefined,
       payer: {
         email: payerEmail,
-        identification: formData.payer?.identification || (formData.identificationType && formData.identificationNumber ? { type: formData.identificationType, number: formData.identificationNumber } : undefined),
-        first_name: formData.payer?.first_name || formData.cardholderName,
+        identification,
+        first_name: formData.payer?.first_name || nameParts[0] || undefined,
+        last_name: formData.payer?.last_name || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined),
       },
       external_reference: String(orderId),
       notification_url: `${origin}/api/mercadopago/webhook`,
@@ -57,11 +66,18 @@ export async function POST(request: Request) {
     const result = await response.json();
     if (!response.ok) {
       console.error('Mercado Pago Payment Brick error:', result);
-      return NextResponse.json({ error: result.message || 'O Mercado Pago recusou o pagamento.' }, { status: response.status >= 400 && response.status < 500 ? response.status : 502 });
+      if (result?.id && result?.status) {
+        try { await syncOrderPayment(String(orderId), result); } catch (syncError) { console.error('Rejected payment sync error:', syncError); }
+      }
+      return NextResponse.json({
+        id: result?.id || null,
+        status: result?.status || 'rejected',
+        statusDetail: result?.status_detail || result?.message || null,
+        paymentMethodId: result?.payment_method_id || paymentMethodId || null,
+        error: result?.message || 'O Mercado Pago recusou o pagamento.',
+      }, { status: response.status >= 400 && response.status < 500 ? response.status : 502 });
     }
 
-    // Registra imediatamente o ID e o status. O webhook e a consulta de status
-    // continuam atualizando o pedido quando o Mercado Pago mudar o resultado.
     try { await syncOrderPayment(String(orderId), result); } catch (syncError) { console.error('Order payment sync error:', syncError); }
 
     const transactionData = result?.point_of_interaction?.transaction_data || {};
