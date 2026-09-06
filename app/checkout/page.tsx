@@ -1,87 +1,182 @@
 'use client';
-import {useEffect,useState,Suspense} from 'react';
+
+import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
-import {ArrowLeft,CheckCircle2,Loader2,UserRound,Store,MessageCircle,FileText,LockKeyhole,ShieldCheck,MapPin,CreditCard} from 'lucide-react';
-import {useSearchParams} from 'next/navigation';
-import {useCart} from '@/components/cart-provider';
-import {supabase} from '@/lib/supabase';
-import {getStoreSettings} from '@/lib/store-settings';
+import { ArrowLeft, CheckCircle2, Loader2, UserRound, Store, MessageCircle, FileText, LockKeyhole, ShieldCheck, MapPin, CreditCard } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { useCart } from '@/components/cart-provider';
+import { supabase } from '@/lib/supabase';
+import { getStoreSettings } from '@/lib/store-settings';
 import PaymentBrick from '@/components/payment-brick';
 
-type Delivery='pickup'|'whatsapp_shipping';
-type AuthUser={id:string;email?:string|null;user_metadata?:{full_name?:string;phone?:string;cpf?:string}};
-type AuthData={user:AuthUser|null};
+type Delivery = 'pickup' | 'whatsapp_shipping';
+type AuthUser = { id: string; email?: string | null; user_metadata?: { full_name?: string; phone?: string; cpf?: string } };
+type AuthData = { user: AuthUser | null };
 
-function CheckoutForm(){
- const{items,total,clear}=useCart();const searchParams=useSearchParams();
- const[name,setName]=useState(''),[phone,setPhone]=useState(''),[email,setEmail]=useState(''),[cpf,setCpf]=useState(''),[type,setType]=useState<Delivery>('pickup'),[notes,setNotes]=useState('');
- const[cep,setCep]=useState(''),[street,setStreet]=useState(''),[number,setNumber]=useState(''),[complement,setComplement]=useState(''),[neighborhood,setNeighborhood]=useState(''),[city,setCity]=useState(''),[state,setState]=useState('');
- const[user,setUser]=useState<AuthUser|null>(null),[status,setStatus]=useState(''),[done,setDone]=useState(false),[orderId,setOrderId]=useState(''),[accessSent,setAccessSent]=useState(false),[storeWhatsApp,setStoreWhatsApp]=useState('5511999999999');
- const[preferenceId,setPreferenceId]=useState('');
- const[paymentError,setPaymentError]=useState('');
+function CheckoutForm() {
+  const { items, total, clear } = useCart();
+  const searchParams = useSearchParams();
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [cpf, setCpf] = useState('');
+  const [type, setType] = useState<Delivery>('pickup');
+  const [notes, setNotes] = useState('');
+  const [cep, setCep] = useState('');
+  const [street, setStreet] = useState('');
+  const [number, setNumber] = useState('');
+  const [complement, setComplement] = useState('');
+  const [neighborhood, setNeighborhood] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [status, setStatus] = useState('');
+  const [done, setDone] = useState(false);
+  const [orderId, setOrderId] = useState('');
+  const [accessSent, setAccessSent] = useState(false);
+  const [storeWhatsApp, setStoreWhatsApp] = useState('5511999999999');
+  const [preferenceId, setPreferenceId] = useState('');
+  const [paymentError, setPaymentError] = useState('');
 
- useEffect(()=>{
-   setType(searchParams.get('entrega')==='shipping'?'whatsapp_shipping':'pickup');
-   const client=supabase;if(!client)return;
-   Promise.all([client.auth.getUser(),getStoreSettings()]).then(([authResult,settings])=>{
-     const{data}: {data:AuthData}=authResult;
-     if(data.user){setUser(data.user);setEmail(data.user.email||'');setName(data.user.user_metadata?.full_name||'');setPhone(data.user.user_metadata?.phone||'');setCpf(data.user.user_metadata?.cpf||'')}
-     if(settings.whatsapp?.trim())setStoreWhatsApp(settings.whatsapp.trim())
-   })
- },[searchParams]);
+  useEffect(() => {
+    setType(searchParams.get('entrega') === 'shipping' ? 'whatsapp_shipping' : 'pickup');
+    const client = supabase;
+    if (!client) return;
+    Promise.all([client.auth.getUser(), getStoreSettings()]).then(([authResult, settings]) => {
+      const { data }: { data: AuthData } = authResult;
+      if (data.user) {
+        setUser(data.user);
+        setEmail(data.user.email || '');
+        setName(data.user.user_metadata?.full_name || '');
+        setPhone(data.user.user_metadata?.phone || '');
+        setCpf(data.user.user_metadata?.cpf || '');
+      }
+      if (settings.whatsapp?.trim()) setStoreWhatsApp(settings.whatsapp.trim());
+    });
+  }, [searchParams]);
 
- async function submitCheckout(){
-  const client=supabase;if(!client||!items.length)return;
-  setStatus('');setPaymentError('');
-  if(!name.trim()||!phone.trim()||!email.trim()){setStatus('Preencha nome, telefone e e-mail.');return}
-  if(type==='whatsapp_shipping'&&(!cep.trim()||!street.trim()||!number.trim()||!neighborhood.trim()||!city.trim()||!state.trim())){setStatus('Preencha o endereço para calcular o frete pelo WhatsApp.');return}
-  setStatus('Registrando seu pedido...');
-  if(user){const{error}=await client.auth.updateUser({data:{full_name:name.trim(),phone:phone.trim(),cpf:cpf.replace(/\D/g,'')||null}});if(error){setStatus(error.message);return}}
-  const address=type==='whatsapp_shipping'?{postal_code:cep.trim(),street:street.trim(),number:number.trim(),complement:complement.trim(),neighborhood:neighborhood.trim(),city:city.trim(),state:state.trim(),recipient_name:name.trim(),phone:phone.trim()}:null;
-  const{data,error}=await client.rpc('create_order_with_stock_v2',{p_customer_name:name.trim(),p_customer_phone:phone.trim(),p_customer_email:email.trim(),p_delivery_type:type,p_notes:notes.trim()||null,p_items:items.map(i=>({id:i.id,quantity:i.quantity})),p_delivery_address:address});
-  if(error){setStatus(error.message.replace(/^.*?: /,''));return}
-  const id=data as string;setOrderId(id);
-
-  try{window.localStorage.setItem('2p_guest_order_email',email.trim().toLowerCase());window.localStorage.setItem('2p_last_order_id',id);window.localStorage.setItem('2p_checkout_name',name.trim());window.localStorage.setItem('2p_checkout_cpf',cpf.replace(/\D/g,''))}catch{}
-  if(!user){const{error:otpError}=await client.auth.signInWithOtp({email:email.trim(),options:{emailRedirectTo:`${window.location.origin}/conta`,shouldCreateUser:true}});setAccessSent(!otpError)}
-
-  if(type==='pickup'){
-    setStatus('Preparando pagamento seguro...');
-    try{
-      const payment=await fetch('/api/mercadopago/create-preference',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderId:id,total,email:email.trim(),name:name.trim(),cpf:cpf.replace(/\D/g,''),items:items.map(i=>({id:i.id,name:i.name,price:i.price,quantity:i.quantity}))})});
-      const paymentData=await payment.json();
-      if(!payment.ok||!paymentData.id){setStatus(paymentData.error||'Não foi possível preparar o pagamento.');return}
-      setPreferenceId(String(paymentData.id));
-      setStatus('');
+  async function submitCheckout() {
+    const client = supabase;
+    if (!client || !items.length) return;
+    setStatus('');
+    setPaymentError('');
+    if (!name.trim() || !phone.trim() || !email.trim()) {
+      setStatus('Preencha nome, telefone e e-mail.');
       return;
-    }catch{setStatus('Não foi possível conectar ao Mercado Pago. Tente novamente.');return}
+    }
+    if (type === 'whatsapp_shipping' && (!cep.trim() || !street.trim() || !number.trim() || !neighborhood.trim() || !city.trim() || !state.trim())) {
+      setStatus('Preencha o endereço para calcular o frete pelo WhatsApp.');
+      return;
+    }
+    setStatus('Registrando seu pedido...');
+    if (user) {
+      const { error } = await client.auth.updateUser({ data: { full_name: name.trim(), phone: phone.trim(), cpf: cpf.replace(/\D/g, '') || null } });
+      if (error) {
+        setStatus(error.message);
+        return;
+      }
+    }
+
+    const address = type === 'whatsapp_shipping'
+      ? { postal_code: cep.trim(), street: street.trim(), number: number.trim(), complement: complement.trim(), neighborhood: neighborhood.trim(), city: city.trim(), state: state.trim(), recipient_name: name.trim(), phone: phone.trim() }
+      : null;
+
+    const { data, error } = await client.rpc('create_order_with_stock_v2', {
+      p_customer_name: name.trim(),
+      p_customer_phone: phone.trim(),
+      p_customer_email: email.trim(),
+      p_delivery_type: type,
+      p_notes: notes.trim() || null,
+      p_items: items.map(i => ({ id: i.id, quantity: i.quantity })),
+      p_delivery_address: address,
+    });
+    if (error) {
+      setStatus(error.message.replace(/^.*?: /, ''));
+      return;
+    }
+
+    const id = data as string;
+    setOrderId(id);
+    const cleanCpf = cpf.replace(/\D/g, '');
+    try {
+      window.localStorage.setItem('2p_guest_order_email', email.trim().toLowerCase());
+      window.localStorage.setItem('2p_last_order_id', id);
+      window.localStorage.setItem('2p_checkout_name', name.trim());
+      window.localStorage.setItem('2p_checkout_cpf', cleanCpf);
+    } catch {}
+
+    if (!user) {
+      const { error: otpError } = await client.auth.signInWithOtp({
+        email: email.trim(),
+        options: { emailRedirectTo: `${window.location.origin}/conta`, shouldCreateUser: true },
+      });
+      setAccessSent(!otpError);
+    }
+
+    if (type === 'pickup') {
+      setStatus('Preparando pagamento seguro...');
+      try {
+        const payment = await fetch('/api/mercadopago/create-preference', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: id,
+            total,
+            email: email.trim(),
+            name: name.trim(),
+            cpf: cleanCpf,
+            items: items.map(i => ({ id: i.id, name: i.name, price: i.price, quantity: i.quantity })),
+          }),
+        });
+        const paymentData = await payment.json();
+        if (!payment.ok || !paymentData.id) {
+          setStatus(paymentData.error || 'Não foi possível preparar o pagamento.');
+          return;
+        }
+        setPreferenceId(String(paymentData.id));
+        setStatus('');
+        return;
+      } catch {
+        setStatus('Não foi possível conectar ao Mercado Pago. Tente novamente.');
+        return;
+      }
+    }
+
+    const list = items.map(i => `${i.quantity}x ${i.name} — R$ ${(i.price * i.quantity).toFixed(2).replace('.', ',')}`).join('\n');
+    const addressText = address
+      ? `\n\nENDEREÇO PARA FRETE\n${address.street}, ${address.number}${address.complement ? ` — ${address.complement}` : ''}\n${address.neighborhood} — ${address.city}/${address.state}\nCEP: ${address.postal_code}`
+      : '';
+    clear();
+    setDone(true);
+    const msg = `Olá, 2P Box!\n\nQuero calcular o frete para o pedido ${id}.\n\nCliente: ${name}\nTelefone: ${phone}\nE-mail: ${email}\n\n${list}\n\nTotal dos produtos: R$ ${total.toFixed(2).replace('.', ',')}\nForma de recebimento: Entrega — calcular frete pelo WhatsApp${addressText}${notes ? `\n\nObservações: ${notes}` : ''}`;
+    window.setTimeout(() => {
+      window.location.href = `https://wa.me/${storeWhatsApp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`;
+    }, 700);
   }
 
-  const list=items.map(i=>`${i.quantity}x ${i.name} — R$ ${(i.price*i.quantity).toFixed(2).replace('.',',')}`).join('\n');
-  const addressText=address?`\n\nENDEREÇO PARA FRETE\n${address.street}, ${address.number}${address.complement?` — ${address.complement}`:''}\n${address.neighborhood} — ${address.city}/${address.state}\nCEP: ${address.postal_code}`:'';
-  clear();setDone(true);
-  const msg=`Olá, 2P Box!\n\nQuero calcular o frete para o pedido ${id}.\n\nCliente: ${name}\nTelefone: ${phone}\nE-mail: ${email}\n\n${list}\n\nTotal dos produtos: R$ ${total.toFixed(2).replace('.',',')}\nForma de recebimento: Entrega — calcular frete pelo WhatsApp${addressText}${notes?`\n\nObservações: ${notes}`:''}`;
-  window.setTimeout(()=>{window.location.href=`https://wa.me/${storeWhatsApp.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`},700);
- }
+  const paymentReady = type === 'pickup' && !!preferenceId;
 
- const paymentReady=type==='pickup'&&!!preferenceId;
- if(done)return <main><div className="topbar">Pedido recebido • 2P Box</div><section className="container section checkout-success"><div className="category checkout-success-card"><div className="success-icon"><CheckCircle2 size={42}/></div><p className="eyebrow">TUDO CERTO</p><h1 className="checkout-title">Pedido recebido!</h1><p>Seu pedido <strong>{orderId}</strong> foi registrado. O WhatsApp será aberto para calcular o frete.</p>{!user&&<div className="guest-access"><ShieldCheck size={18}/><div><strong>Seu acesso à 2P Box</strong><span>{accessSent?'Enviamos um link de acesso para o seu e-mail. Abra o e-mail para entrar na sua conta sem precisar criar senha agora.':'Seu pedido foi concluído. Você poderá acompanhar pelo e-mail informado.'}</span></div></div>}<div style={{display:'flex',gap:10,justifyContent:'center',flexWrap:'wrap',marginTop:18}}><Link href={`/pedido/${encodeURIComponent(orderId)}`} className="primary">Acompanhar pedido</Link><Link href="/loja" className="secondary">Voltar à loja</Link></div></div></section><style jsx global>{`.guest-access{display:flex;align-items:flex-start;gap:10px;text-align:left;margin:20px auto 0;padding:14px 16px;max-width:520px;background:#fff9d9;border:1px solid #f0d65b;border-radius:10px;color:#5c5000}.guest-access svg{flex:none;margin-top:1px}.guest-access div{display:grid;gap:4px}.guest-access strong{font-size:11px}.guest-access span{font-size:10px;line-height:1.5;color:#766900}`}</style></main>;
+  if (done) {
+    return <main><div className="topbar">Pedido recebido • 2P Box</div><section className="container section checkout-success"><div className="category checkout-success-card"><div className="success-icon"><CheckCircle2 size={42} /></div><p className="eyebrow">TUDO CERTO</p><h1 className="checkout-title">Pedido recebido!</h1><p>Seu pedido <strong>{orderId}</strong> foi registrado. O WhatsApp será aberto para calcular o frete.</p>{!user && <div className="guest-access"><ShieldCheck size={18} /><div><strong>Seu acesso à 2P Box</strong><span>{accessSent ? 'Enviamos um link de acesso para o seu e-mail. Abra o e-mail para entrar na sua conta sem precisar criar senha agora.' : 'Seu pedido foi concluído. Você poderá acompanhar pelo e-mail informado.'}</span></div></div>}<div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 18 }}><Link href={`/pedido/${encodeURIComponent(orderId)}`} className="primary">Acompanhar pedido</Link><Link href="/loja" className="secondary">Voltar à loja</Link></div></div></section><style jsx global>{`.guest-access{display:flex;align-items:flex-start;gap:10px;text-align:left;margin:20px auto 0;padding:14px 16px;max-width:520px;background:#fff9d9;border:1px solid #f0d65b;border-radius:10px;color:#5c5000}.guest-access svg{flex:none;margin-top:1px}.guest-access div{display:grid;gap:4px}.guest-access strong{font-size:11px}.guest-access span{font-size:10px;line-height:1.5;color:#766900}`}</style></main>;
+  }
 
- const deliveryLabel=type==='pickup'?'Retirada na loja':'Calcular frete pelo WhatsApp';
- return <main><div className="topbar">Finalizar pedido <span>•</span> 2P Box</div><header className="header container checkout-header"><Link href="/" className="brand"><img className="brand-logo" src="/logo.pnh.png" alt="2P Box"/><div className="store-brand-copy"><strong>FINALIZAR PEDIDO</strong><small>INFORMAÇÕES PARA O SEU PEDIDO</small></div></Link></header>
- <section className="container section checkout-page"><Link href="/carrinho" className="secondary"><ArrowLeft size={16}/> Voltar ao carrinho</Link><div className="checkout-intro"><p className="eyebrow">ÚLTIMA ETAPA</p><h1 className="checkout-title">Finalizar pedido</h1><p>{user?'Seus dados já estão preenchidos. Confira antes de confirmar.':'Compre sem cadastro e sem criar senha. Informe apenas seus dados para concluir o pedido.'}</p></div>
- <div className="checkout-form category">
-  <div className="checkout-section"><div className="checkout-section-heading"><UserRound size={20}/><div><h2>Seus dados</h2><p>{user?'Dados da sua conta':'Usados para identificar e confirmar seu pedido'}</p></div></div><div className="form-grid"><label>Nome completo<input required placeholder="Digite seu nome" value={name} onChange={e=>setName(e.target.value)}/></label><label>WhatsApp / telefone<input required placeholder="(11) 99999-9999" value={phone} onChange={e=>setPhone(e.target.value)}/></label><label>E-mail<input required type="email" placeholder="seuemail@email.com" value={email} onChange={e=>setEmail(e.target.value)} disabled={!!user}/></label><label>CPF <span>(opcional)</span><input inputMode="numeric" placeholder="000.000.000-00" value={cpf} onChange={e=>setCpf(e.target.value)}/></label></div>{!user&&<div className="account-notice"><ShieldCheck size={18}/><span>Você não precisa criar senha para comprar. Depois do pedido, enviaremos um link de acesso ao seu e-mail para entrar na sua conta com segurança.</span></div>}</div>
-  <div className="checkout-section delivery-confirmation"><div className="checkout-section-heading"><Store size={20}/><div><h2>Forma de recebimento</h2><p>Escolhida no carrinho</p></div></div><div className="delivery-confirmed"><div className="delivery-confirmed-icon">{type==='pickup'?<Store size={22}/>:<MessageCircle size={22}/>}</div><div><strong>{deliveryLabel}</strong><span>{type==='pickup'?'Sem endereço e sem frete. Você concluirá o pagamento pelo Mercado Pago.':'O endereço só é solicitado para calcular o frete e será enviado junto com o pedido pelo WhatsApp.'}</span></div><LockKeyhole size={16}/></div><Link href="/carrinho" className="change-delivery">Voltar ao carrinho para alterar a forma de recebimento</Link></div>
-  {type==='whatsapp_shipping'&&<div className="checkout-section"><div className="checkout-section-heading"><MapPin size={20}/><div><h2>Endereço para o frete</h2><p>Preencha para enviarmos ao WhatsApp e calcularmos o valor da entrega.</p></div></div><div className="form-grid address-grid"><label>CEP<input required inputMode="numeric" placeholder="00000-000" value={cep} onChange={e=>setCep(e.target.value)}/></label><label>Rua / avenida<input required placeholder="Nome da rua" value={street} onChange={e=>setStreet(e.target.value)}/></label><label>Número<input required placeholder="123" value={number} onChange={e=>setNumber(e.target.value)}/></label><label>Complemento <span>(opcional)</span><input placeholder="Apto, bloco..." value={complement} onChange={e=>setComplement(e.target.value)}/></label><label>Bairro<input required placeholder="Seu bairro" value={neighborhood} onChange={e=>setNeighborhood(e.target.value)}/></label><label>Cidade<input required placeholder="Sua cidade" value={city} onChange={e=>setCity(e.target.value)}/></label><label>Estado<input required maxLength={2} placeholder="SP" value={state} onChange={e=>setState(e.target.value.toUpperCase())}/></label></div><div className="shipping-whatsapp-note"><MessageCircle size={17}/><span>Ao clicar no botão abaixo, enviaremos <strong>o pedido completo + endereço</strong> para a 2P Box no WhatsApp, já identificado como pedido de cálculo de frete.</span></div></div>}
-
-  <div className="checkout-section"><div className="checkout-section-heading"><FileText size={20}/><div><h2>Observações</h2><p>Alguma informação adicional?</p></div></div><textarea placeholder="Escreva uma observação, se necessário..." value={notes} onChange={e=>setNotes(e.target.value)}/></div>
-
-  {paymentReady&&<div className="checkout-section payment-section"><div className="checkout-section-heading"><CreditCard size={20}/><div><h2>Pagamento seguro</h2><p>Escolha como pagar pelo Mercado Pago</p></div></div><PaymentBrick amount={total} orderId={orderId} email={email} cpf={cpf} preferenceId={preferenceId} onResult={(result)=>{clear();window.location.href=`/pagamento/${encodeURIComponent(orderId)}?paymentId=${encodeURIComponent(String(result.id||''))}&payment=${encodeURIComponent(result.status||'pending')}`}} onError={(message)=>setPaymentError(message)}/>{paymentError&&<div className="checkout-status payment-error">{paymentError}</div>}</div>}
-  {!paymentReady&&status&&<div className="checkout-status"><Loader2 size={17}/>{status}</div>}
-  {!paymentReady&&<div className="checkout-footer"><div><span>Total dos produtos</span><strong>R$ {total.toFixed(2).replace('.',',')}</strong></div><button type="button" onClick={submitCheckout} className={`primary checkout-submit ${type==='whatsapp_shipping'?'whatsapp-submit':''}`} disabled={!items.length||!!done}>{items.length?(type==='whatsapp_shipping'?'Calcular frete pelo WhatsApp':'Continuar para pagamento'):'Carrinho vazio'}</button></div>}
- </div></section>
- <style jsx global>{`.delivery-confirmed{display:flex;align-items:center;gap:14px;padding:17px;border:1px solid #d9d9d9;border-radius:12px;background:#fafafa;color:#111}.delivery-confirmed-icon{width:42px;height:42px;flex:none;border-radius:9px;background:#ffc400;display:grid;place-items:center}.delivery-confirmed>div:nth-child(2){display:grid;gap:5px;flex:1}.delivery-confirmed strong{font-size:14px}.delivery-confirmed span{font-size:11px;color:#666;line-height:1.4}.delivery-confirmed>svg{color:#888;flex:none}.change-delivery{display:inline-block;margin-top:11px;font-size:11px;color:#777;text-decoration:underline}.account-notice{display:flex;align-items:flex-start;gap:10px;padding:13px 14px;margin-top:16px;background:#fff9d9;border:1px solid #f0d65b;border-radius:9px;color:#5c5000;font-size:11px;line-height:1.5}.account-notice svg{flex:none;color:#a47700;margin-top:1px}.address-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.shipping-whatsapp-note{display:flex;align-items:flex-start;gap:9px;margin-top:15px;padding:13px 14px;border-radius:9px;background:#f4f4f4;color:#555;font-size:11px;line-height:1.5}.shipping-whatsapp-note svg{flex:none;color:#111}.whatsapp-submit{background:#ffc400!important;color:#111!important}.payment-section{overflow:visible}.payment-section :global(.payment-brick-wrap){margin-top:8px}.checkout-form{min-width:0}@media(max-width:600px){.address-grid{grid-template-columns:1fr}.checkout-section{min-width:0}.checkout-page{overflow-x:hidden}}`}</style></main>
+  const deliveryLabel = type === 'pickup' ? 'Retirada na loja' : 'Calcular frete pelo WhatsApp';
+  return <main><div className="topbar">Finalizar pedido <span>•</span> 2P Box</div><header className="header container checkout-header"><Link href="/" className="brand"><img className="brand-logo" src="/logo.pnh.png" alt="2P Box" /><div className="store-brand-copy"><strong>FINALIZAR PEDIDO</strong><small>INFORMAÇÕES PARA O SEU PEDIDO</small></div></Link></header>
+    <section className="container section checkout-page"><Link href="/carrinho" className="secondary"><ArrowLeft size={16} /> Voltar ao carrinho</Link><div className="checkout-intro"><p className="eyebrow">ÚLTIMA ETAPA</p><h1 className="checkout-title">Finalizar pedido</h1><p>{user ? 'Seus dados já estão preenchidos. Confira antes de confirmar.' : 'Compre sem cadastro e sem criar senha. Informe apenas seus dados para concluir o pedido.'}</p></div>
+      <div className="checkout-form category">
+        <div className="checkout-section"><div className="checkout-section-heading"><UserRound size={20} /><div><h2>Seus dados</h2><p>{user ? 'Dados da sua conta' : 'Usados para identificar e confirmar seu pedido'}</p></div></div><div className="form-grid"><label>Nome completo<input required placeholder="Digite seu nome" value={name} onChange={e => setName(e.target.value)} /></label><label>WhatsApp / telefone<input required placeholder="(11) 99999-9999" value={phone} onChange={e => setPhone(e.target.value)} /></label><label>E-mail<input required type="email" placeholder="seuemail@email.com" value={email} onChange={e => setEmail(e.target.value)} disabled={!!user} /></label><label>CPF <span>(opcional)</span><input inputMode="numeric" placeholder="000.000.000-00" value={cpf} onChange={e => setCpf(e.target.value)} /></label></div>{!user && <div className="account-notice"><ShieldCheck size={18} /><span>Você não precisa criar senha para comprar. Depois do pedido, enviaremos um link de acesso ao seu e-mail para entrar na sua conta com segurança.</span></div>}</div>
+        <div className="checkout-section delivery-confirmation"><div className="checkout-section-heading"><Store size={20} /><div><h2>Forma de recebimento</h2><p>Escolhida no carrinho</p></div></div><div className="delivery-confirmed"><div className="delivery-confirmed-icon">{type === 'pickup' ? <Store size={22} /> : <MessageCircle size={22} />}</div><div><strong>{deliveryLabel}</strong><span>{type === 'pickup' ? 'Sem endereço e sem frete. Você concluirá o pagamento pelo Mercado Pago.' : 'O endereço só é solicitado para calcular o frete e será enviado junto com o pedido pelo WhatsApp.'}</span></div><LockKeyhole size={16} /></div><Link href="/carrinho" className="change-delivery">Voltar ao carrinho para alterar a forma de recebimento</Link></div>
+        {type === 'whatsapp_shipping' && <div className="checkout-section"><div className="checkout-section-heading"><MapPin size={20} /><div><h2>Endereço para o frete</h2><p>Preencha para enviarmos ao WhatsApp e calcularmos o valor da entrega.</p></div></div><div className="form-grid address-grid"><label>CEP<input required inputMode="numeric" placeholder="00000-000" value={cep} onChange={e => setCep(e.target.value)} /></label><label>Rua / avenida<input required placeholder="Nome da rua" value={street} onChange={e => setStreet(e.target.value)} /></label><label>Número<input required placeholder="123" value={number} onChange={e => setNumber(e.target.value)} /></label><label>Complemento <span>(opcional)</span><input placeholder="Apto, bloco..." value={complement} onChange={e => setComplement(e.target.value)} /></label><label>Bairro<input required placeholder="Seu bairro" value={neighborhood} onChange={e => setNeighborhood(e.target.value)} /></label><label>Cidade<input required placeholder="Sua cidade" value={city} onChange={e => setCity(e.target.value)} /></label><label>Estado<input required maxLength={2} placeholder="SP" value={state} onChange={e => setState(e.target.value.toUpperCase())} /></label></div><div className="shipping-whatsapp-note"><MessageCircle size={17} /><span>Ao clicar no botão abaixo, enviaremos <strong>o pedido completo + endereço</strong> para a 2P Box no WhatsApp, já identificado como pedido de cálculo de frete.</span></div></div>}
+        <div className="checkout-section"><div className="checkout-section-heading"><FileText size={20} /><div><h2>Observações</h2><p>Alguma informação adicional?</p></div></div><textarea placeholder="Escreva uma observação, se necessário..." value={notes} onChange={e => setNotes(e.target.value)} /></div>
+        {paymentReady && <div className="checkout-section payment-section"><div className="checkout-section-heading"><CreditCard size={20} /><div><h2>Pagamento seguro</h2><p>Escolha como pagar pelo Mercado Pago</p></div></div><PaymentBrick amount={total} orderId={orderId} email={email} cpf={cpf} preferenceId={preferenceId} onResult={result => { clear(); window.location.href = `/pagamento/${encodeURIComponent(orderId)}?paymentId=${encodeURIComponent(String(result.id || ''))}&payment=${encodeURIComponent(result.status || 'pending')}`; }} onError={message => setPaymentError(message)} />{paymentError && <div className="checkout-status payment-error">{paymentError}</div>}</div>}
+        {!paymentReady && status && <div className="checkout-status"><Loader2 size={17} />{status}</div>}
+        {!paymentReady && <div className="checkout-footer"><div><span>Total dos produtos</span><strong>R$ {total.toFixed(2).replace('.', ',')}</strong></div><button type="button" onClick={submitCheckout} className={`primary checkout-submit ${type === 'whatsapp_shipping' ? 'whatsapp-submit' : ''}`} disabled={!items.length || !!done}>{items.length ? (type === 'whatsapp_shipping' ? 'Calcular frete pelo WhatsApp' : 'Continuar para pagamento') : 'Carrinho vazio'}</button></div>}
+      </div>
+    </section>
+    <style jsx global>{`.delivery-confirmed{display:flex;align-items:center;gap:14px;padding:17px;border:1px solid #d9d9d9;border-radius:12px;background:#fafafa;color:#111}.delivery-confirmed-icon{width:42px;height:42px;flex:none;border-radius:9px;background:#ffc400;display:grid;place-items:center}.delivery-confirmed>div:nth-child(2){display:grid;gap:5px;flex:1}.delivery-confirmed strong{font-size:14px}.delivery-confirmed span{font-size:11px;color:#666;line-height:1.4}.delivery-confirmed>svg{color:#888;flex:none}.change-delivery{display:inline-block;margin-top:11px;font-size:11px;color:#777;text-decoration:underline}.account-notice{display:flex;align-items:flex-start;gap:10px;padding:13px 14px;margin-top:16px;background:#fff9d9;border:1px solid #f0d65b;border-radius:9px;color:#5c5000;font-size:11px;line-height:1.5}.account-notice svg{flex:none;color:#a47700;margin-top:1px}.address-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.shipping-whatsapp-note{display:flex;align-items:flex-start;gap:9px;margin-top:15px;padding:13px 14px;border-radius:9px;background:#f4f4f4;color:#555;font-size:11px;line-height:1.5}.shipping-whatsapp-note svg{flex:none;color:#111}.whatsapp-submit{background:#ffc400!important;color:#111!important}.payment-section{overflow:visible}.payment-section :global(.payment-brick-wrap){margin-top:8px}.checkout-form{min-width:0}@media(max-width:600px){.address-grid{grid-template-columns:1fr}.checkout-section{min-width:0}.checkout-page{overflow-x:hidden}}`}</style>
+  </main>;
 }
 
-export default function Checkout(){return <Suspense fallback={<main><div className="topbar">Finalizar pedido • 2P Box</div><section className="container section"><p>Carregando checkout...</p></section></main></Suspense>}
+export default function Checkout() {
+  return <Suspense fallback={<main><div className="topbar">Finalizar pedido • 2P Box</div><section className="container section"><p>Carregando checkout...</p></section></main>}><CheckoutForm /></Suspense>;
+}
