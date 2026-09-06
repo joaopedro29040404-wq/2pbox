@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getMercadoPagoAccessToken } from '@/lib/mercadopago-server';
+import { getMercadoPagoAccessToken, getAdminSupabase } from '@/lib/mercadopago-server';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+function splitName(value: string) {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  return { firstName: parts[0] || '', lastName: parts.slice(1).join(' ') || '' };
+}
 
 export async function POST(request: Request) {
   const accessToken = getMercadoPagoAccessToken();
@@ -13,8 +18,36 @@ export async function POST(request: Request) {
     const items = Array.isArray(body.items) ? body.items : [];
     const total = Number(body.total);
     const orderId = String(body.orderId || '');
-    const email = String(body.email || '').trim();
-    if (!items.length || !orderId || !Number.isFinite(total) || total <= 0) return NextResponse.json({ error: 'Dados inválidos para iniciar o pagamento.' }, { status: 400 });
+    const email = String(body.email || '').trim().toLowerCase();
+    if (!items.length || !orderId || !Number.isFinite(total) || total <= 0) {
+      return NextResponse.json({ error: 'Dados inválidos para iniciar o pagamento.' }, { status: 400 });
+    }
+
+    // A preferência é criada depois do pedido. Recuperamos os dados já
+    // registrados no pedido para que o Payment Brick receba o comprador
+    // completo desde a primeira renderização, evitando autofill do navegador
+    // aparecer visualmente sem fazer parte do estado interno do Brick.
+    let payer: Record<string, unknown> = email ? { email } : {};
+    try {
+      const admin = getAdminSupabase();
+      if (admin) {
+        const { data: order } = await admin
+          .from('orders')
+          .select('customer_name,customer_email')
+          .eq('id', orderId)
+          .maybeSingle();
+        const customerName = String(order?.customer_name || '').trim();
+        const customerEmail = String(order?.customer_email || email).trim().toLowerCase();
+        const { firstName, lastName } = splitName(customerName);
+        payer = {
+          ...(customerEmail ? { email: customerEmail } : {}),
+          ...(firstName ? { name: firstName } : {}),
+          ...(lastName ? { surname: lastName } : {}),
+        };
+      }
+    } catch (error) {
+      console.warn('Não foi possível carregar os dados do comprador para a preferência:', error);
+    }
 
     const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || 'https://2pbox.vercel.app';
     const guestParam = email ? `&email=${encodeURIComponent(email)}` : '';
@@ -28,7 +61,7 @@ export async function POST(request: Request) {
         currency_id: 'BRL',
       })),
       external_reference: orderId,
-      ...(email ? { payer: { email } } : {}),
+      ...(Object.keys(payer).length ? { payer } : {}),
       notification_url: webhookUrl,
       back_urls: {
         success: `${origin}/pagamento/${encodeURIComponent(orderId)}?payment=approved${guestParam}`,
