@@ -28,40 +28,45 @@ export async function GET(request: Request) {
     }
     if (!currentOrder) return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
 
-    // O webhook é a fonte oficial, mas a página de acompanhamento precisa
-    // conseguir reconciliar o pagamento mesmo se o webhook ainda estiver a
-    // caminho ou se o payment_id ainda não tiver sido gravado no pedido.
     const accessToken = getMercadoPagoAccessToken();
+    let latestPayment: any = null;
+
     if (accessToken) {
       try {
         let paymentId = String(currentOrder.payment_id || '').trim();
-        let payment: any = null;
 
         if (paymentId) {
           const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(paymentId)}`, {
             headers: { Authorization: `Bearer ${accessToken}` },
             cache: 'no-store',
           });
-          if (paymentResponse.ok) payment = await paymentResponse.json();
+          if (paymentResponse.ok) latestPayment = await paymentResponse.json();
         }
 
-        // Fallback importante: localizar o pagamento pela external_reference
-        // (orderId). Isso cobre o intervalo entre a criação do pagamento e a
-        // persistência do payment_id, além de webhook atrasado.
-        if (!payment) {
+        // Fallback: localizar o pagamento pelo vínculo imutável do pedido.
+        // Isso cobre o intervalo entre criação do pagamento e persistência do ID.
+        if (!latestPayment) {
           const searchResponse = await fetch(`https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(orderId)}&sort=date_created&criteria=desc&limit=10`, {
             headers: { Authorization: `Bearer ${accessToken}` },
             cache: 'no-store',
           });
           if (searchResponse.ok) {
             const searchResult = await searchResponse.json();
-            payment = searchResult?.results?.[0] || null;
+            latestPayment = searchResult?.results?.[0] || null;
           }
         }
 
-        if (payment) await syncOrderPayment(orderId, payment);
+        if (latestPayment) {
+          try {
+            await syncOrderPayment(orderId, latestPayment);
+          } catch (syncError) {
+            // A tela ainda pode refletir o estado oficial retornado pelo Mercado Pago
+            // enquanto a persistência é corrigida pelo webhook/tentativa seguinte.
+            console.error('Public order Mercado Pago reconciliation error:', syncError);
+          }
+        }
       } catch (syncError) {
-        console.error('Public order Mercado Pago reconciliation error:', syncError);
+        console.error('Public order Mercado Pago lookup error:', syncError);
       }
     }
 
@@ -78,6 +83,19 @@ export async function GET(request: Request) {
     }
     if (!data) return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
 
+    // Se a persistência estiver momentaneamente atrasada, nunca mostre um
+    // "Aguardando pagamento" falso quando o Mercado Pago já informou outro estado.
+    // O banco continua sendo atualizado pelo sync/webhook na próxima tentativa.
+    const mpStatus = String(latestPayment?.status || '').toLowerCase();
+    const validPaymentStatuses = new Set(['pending', 'in_process', 'authorized', 'approved', 'rejected', 'cancelled']);
+    const responseOrder = { ...data } as any;
+    if (validPaymentStatuses.has(mpStatus)) {
+      responseOrder.payment_status = mpStatus;
+      responseOrder.payment_id = String(latestPayment?.id || responseOrder.payment_id || '');
+      if (mpStatus === 'approved') responseOrder.status = 'confirmed';
+      else if (['rejected', 'cancelled'].includes(mpStatus)) responseOrder.status = 'cancelled';
+    }
+
     const { data: items, error: itemsError } = await admin
       .from('order_items')
       .select('product_id,product_name,quantity,unit_price')
@@ -90,7 +108,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json(
-      { order: data, items: items || [] },
+      { order: responseOrder, items: items || [], payment: latestPayment ? { id: String(latestPayment.id || ''), status: mpStatus, statusDetail: latestPayment.status_detail || null } : null },
       { headers: { 'Cache-Control': 'no-store, max-age=0' } },
     );
   } catch (error) {
