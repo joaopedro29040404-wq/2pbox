@@ -108,7 +108,7 @@ export default function PaymentBrick({ amount, orderId, email, cpf, onResult, on
     <div className="payment-brick-wrap">
       <CardPayment
         initialization={{ amount, ...(payer ? { payer } : {}) }}
-        onSubmit={async (formData) => {
+        onSubmit={async (formData, additionalData) => {
           if (submitting) return;
           setSubmitting(true);
           try {
@@ -121,7 +121,7 @@ export default function PaymentBrick({ amount, orderId, email, cpf, onResult, on
               response = await fetch('/api/mercadopago/create-payment', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ formData: enrichedFormData, orderId, total: amount, deviceId: deviceId || undefined }),
+                body: JSON.stringify({ formData: enrichedFormData, orderId, total: amount, deviceId: deviceId || undefined, additionalData: additionalData || null }),
                 signal: controller.signal,
                 cache: 'no-store',
               });
