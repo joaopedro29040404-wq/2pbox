@@ -21,7 +21,7 @@ function Diagnostics({ searchParams }: { searchParams: ReturnType<typeof useSear
   const raw = searchParams.get('mpDiagnostics');
   let parsed: Record<string, unknown> = {};
   try { if (raw) parsed = JSON.parse(raw); } catch { parsed = { raw }; }
-  const entries: Array<[string, unknown]> = [
+  const candidates: [string, unknown][] = [
     ['HTTP status', parsed.httpStatus ?? searchParams.get('httpStatus')],
     ['Order ID Mercado Pago', parsed.mercadoPagoOrderId ?? searchParams.get('mpOrderId')],
     ['Payment ID Mercado Pago', parsed.mercadoPagoPaymentId ?? searchParams.get('mpPaymentId') ?? searchParams.get('paymentId')],
@@ -34,7 +34,9 @@ function Diagnostics({ searchParams }: { searchParams: ReturnType<typeof useSear
     ['Método de pagamento', parsed.paymentMethodId ?? searchParams.get('paymentMethodId')],
     ['Mensagem Mercado Pago', parsed.message ?? searchParams.get('mpMessage')],
     ['Cause', parsed.cause ?? searchParams.get('mpCause')],
-  ].filter((entry): entry is [string, unknown] => entry[1] !== null && entry[1] !== undefined && entry[1] !== '');
+  ];
+  const entries: [string, unknown][] = [];
+  for (const entry of candidates) { if (entry[1] !== null && entry[1] !== undefined && entry[1] !== '') entries.push(entry); }
   if (!entries.length) return null;
   return <details className="diagnostics" open><summary>Diagnóstico técnico completo do Mercado Pago</summary><div className="diagnostics-grid">{entries.map(([label, value]) => <div key={label}><span>{label}</span><code>{typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}</code></div>)}</div></details>;
 }
