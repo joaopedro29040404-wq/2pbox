@@ -34,7 +34,7 @@ function Diagnostics({ searchParams }: { searchParams: ReturnType<typeof useSear
     ['Método de pagamento', parsed.paymentMethodId ?? searchParams.get('paymentMethodId')],
     ['Mensagem Mercado Pago', parsed.message ?? searchParams.get('mpMessage')],
     ['Cause', parsed.cause ?? searchParams.get('mpCause')],
-  ].filter(([, value]) => value !== null && value !== undefined && value !== '');
+  ].filter((entry): entry is [string, unknown] => entry[1] !== null && entry[1] !== undefined && entry[1] !== '');
   if (!entries.length) return null;
   return <details className="diagnostics" open><summary>Diagnóstico técnico completo do Mercado Pago</summary><div className="diagnostics-grid">{entries.map(([label, value]) => <div key={label}><span>{label}</span><code>{typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}</code></div>)}</div></details>;
 }
