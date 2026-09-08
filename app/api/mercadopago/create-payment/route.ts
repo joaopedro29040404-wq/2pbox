@@ -48,38 +48,22 @@ export async function POST(request: Request) {
     const normalizedDeviceId = String(deviceId || '').trim();
 
     if (isLegacyTestToken) {
-      // TEST-* credentials are valid for the legacy /v1/payments API.
-      // additional_info.payer accepts the supplemental payer fields documented
-      // by Mercado Pago; card identification belongs only to the top-level payer.
-      const additionalInfoPayer = {
-        ...(formData.payer?.first_name || nameParts[0] ? { first_name: formData.payer?.first_name || nameParts[0] } : {}),
-        ...(formData.payer?.last_name || nameParts.length > 1 ? { last_name: formData.payer?.last_name || nameParts.slice(1).join(' ') } : {}),
-      };
+      // TEST-* /v1/payments must stay as close as possible to Mercado Pago's
+      // documented minimal card-payment payload. In particular, do not send
+      // additional_info.payer or other optional payer metadata in this path.
+      // The cardholder name is used by Mercado Pago's test-card rules during
+      // tokenization, so it does not need to be repeated in the API payload.
       const paymentBody = {
-        additional_info: {
-          items: [{
-            id: String(orderId).slice(0, 64),
-            title: `Pedido 2P Box ${String(orderId).slice(0, 50)}`,
-            quantity: 1,
-            unit_price: amount,
-          }],
-          ...(Object.keys(additionalInfoPayer).length ? { payer: additionalInfoPayer } : {}),
-        },
         transaction_amount: amount,
         token,
         description: `Pedido 2P Box ${String(orderId).slice(0, 50)}`,
         installments,
         payment_method_id: paymentMethodId,
-        ...(issuerId !== undefined ? { issuer_id: issuerId } : {}),
         external_reference: String(orderId).slice(0, 64),
         notification_url: `${siteUrl}/api/mercadopago/webhook`,
         payer: {
-          type: 'customer',
-          entity_type: 'individual',
           email: payerEmail,
           ...(identification ? { identification } : {}),
-          ...(formData.payer?.first_name || nameParts[0] ? { first_name: formData.payer?.first_name || nameParts[0] } : {}),
-          ...(formData.payer?.last_name || nameParts.length > 1 ? { last_name: formData.payer?.last_name || nameParts.slice(1).join(' ') } : {}),
         },
       };
 
@@ -123,7 +107,7 @@ export async function POST(request: Request) {
           hasIdentification: Boolean(identification),
           hasCardholderName: Boolean(cardholderName),
           hasDeviceSession: Boolean(normalizedDeviceId),
-          hasAdditionalInfo: true,
+          hasAdditionalInfo: false,
         },
       };
 
