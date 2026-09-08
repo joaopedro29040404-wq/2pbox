@@ -48,13 +48,12 @@ export async function POST(request: Request) {
     const normalizedDeviceId = String(deviceId || '').trim();
 
     if (isLegacyTestToken) {
-      // TEST-* credentials are valid for the legacy /v1/payments API. Keep this
-      // request aligned with Mercado Pago's documented card-payment payload,
-      // including additional_info, while never sending a stale issuer_id.
+      // TEST-* credentials are valid for the legacy /v1/payments API.
+      // additional_info.payer accepts the supplemental payer fields documented
+      // by Mercado Pago; card identification belongs only to the top-level payer.
       const additionalInfoPayer = {
         ...(formData.payer?.first_name || nameParts[0] ? { first_name: formData.payer?.first_name || nameParts[0] } : {}),
         ...(formData.payer?.last_name || nameParts.length > 1 ? { last_name: formData.payer?.last_name || nameParts.slice(1).join(' ') } : {}),
-        ...(identification ? { identification } : {}),
       };
       const paymentBody = {
         additional_info: {
