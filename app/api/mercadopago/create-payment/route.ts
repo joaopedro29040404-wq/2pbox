@@ -30,10 +30,11 @@ export async function POST(request: Request) {
 
     const rawPayerEmail = String(formData.payer?.email || formData.email || formData.cardholderEmail || '').trim().toLowerCase();
     const isLegacyTestToken = /^TEST-/i.test(accessToken);
-    // Mercado Pago requires a test buyer email in test integrations. Keep the
-    // production value untouched; only normalize the TEST credential path.
-    const payerEmail = isLegacyTestToken && !/@testuser\.com$/i.test(rawPayerEmail)
-      ? 'test@testuser.com'
+    // TEST credentials used by the legacy /v1/payments flow must not receive
+    // test@testuser.com. That address is reserved for the Orders test flow;
+    // Card Payments accepts a normal payer email (the docs use test_payer@example.com).
+    const payerEmail = isLegacyTestToken && /@testuser\.com$/i.test(rawPayerEmail)
+      ? 'test_payer@example.com'
       : rawPayerEmail;
     if (!payerEmail) return NextResponse.json({ error: 'Informe um e-mail válido para o pagamento.' }, { status: 400 });
 
@@ -49,9 +50,6 @@ export async function POST(request: Request) {
     const normalizedDeviceId = String(deviceId || '').trim();
 
     if (isLegacyTestToken) {
-      // Use the documented /v1/payments flow for TEST credentials. Keep the
-      // request deliberately close to Mercado Pago's Card Payment Brick
-      // example: only fields required/known by the Brick are sent.
       const paymentBody = {
         transaction_amount: amount,
         token,
@@ -62,6 +60,8 @@ export async function POST(request: Request) {
         external_reference: String(orderId).slice(0, 64),
         notification_url: `${siteUrl}/api/mercadopago/webhook`,
         payer: {
+          type: 'customer',
+          entity_type: 'individual',
           email: payerEmail,
           ...(identification ? { identification } : {}),
           ...(formData.payer?.first_name || nameParts[0] ? { first_name: formData.payer?.first_name || nameParts[0] } : {}),
@@ -105,6 +105,7 @@ export async function POST(request: Request) {
           issuerId: issuerId ?? null,
           hasCardToken: Boolean(token),
           hasIdentification: Boolean(identification),
+          hasCardholderName: Boolean(cardholderName),
           hasDeviceSession: Boolean(normalizedDeviceId),
         },
       };
