@@ -41,7 +41,12 @@ export async function POST(request: Request) {
     const identificationType = String(formData.cardholderIdentificationType || formData.identificationType || formData.payer?.identification?.type || '').trim();
     const identificationNumber = String(formData.cardholderIdentificationNumber || formData.identificationNumber || formData.payer?.identification?.number || '').replace(/\D/g, '');
     const identification = identificationType && identificationNumber ? { type: identificationType, number: identificationNumber } : undefined;
-    const issuerId = formData.issuer_id != null && Number.isFinite(Number(formData.issuer_id)) && Number(formData.issuer_id) > 0 ? Number(formData.issuer_id) : undefined;
+    const receivedIssuerId = formData.issuer_id != null && Number.isFinite(Number(formData.issuer_id)) && Number(formData.issuer_id) > 0 ? Number(formData.issuer_id) : undefined;
+    // The Card Payment Brick can return an issuer_id from a stale/mismatched
+    // BIN context. Mercado Pago can infer the issuer from the card token, and
+    // sending a wrong issuer causes error 10111 (forced_issuer). In TEST mode,
+    // deliberately omit issuer_id so the API resolves it from the token.
+    const issuerId = isLegacyTestToken ? undefined : receivedIssuerId;
     const installments = Number(formData.installments || 1);
     const cardholderName = String(formData.cardholderName || formData.card_holder_name || additionalData?.cardholderName || '').trim();
     const nameParts = cardholderName ? cardholderName.split(/\s+/).filter(Boolean) : [];
@@ -103,6 +108,8 @@ export async function POST(request: Request) {
           installments,
           amount,
           issuerId: issuerId ?? null,
+          receivedIssuerId: receivedIssuerId ?? null,
+          issuerIdSent: issuerId !== undefined,
           hasCardToken: Boolean(token),
           hasIdentification: Boolean(identification),
           hasCardholderName: Boolean(cardholderName),
