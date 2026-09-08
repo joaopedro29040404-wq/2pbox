@@ -30,9 +30,6 @@ export async function POST(request: Request) {
 
     const rawPayerEmail = String(formData.payer?.email || formData.email || formData.cardholderEmail || '').trim().toLowerCase();
     const isLegacyTestToken = /^TEST-/i.test(accessToken);
-    // TEST credentials used by the legacy /v1/payments flow must not receive
-    // test@testuser.com. That address is reserved for the Orders test flow;
-    // Card Payments accepts a normal payer email (the docs use test_payer@example.com).
     const payerEmail = isLegacyTestToken && /@testuser\.com$/i.test(rawPayerEmail)
       ? 'test_payer@example.com'
       : rawPayerEmail;
@@ -42,10 +39,6 @@ export async function POST(request: Request) {
     const identificationNumber = String(formData.cardholderIdentificationNumber || formData.identificationNumber || formData.payer?.identification?.number || '').replace(/\D/g, '');
     const identification = identificationType && identificationNumber ? { type: identificationType, number: identificationNumber } : undefined;
     const receivedIssuerId = formData.issuer_id != null && Number.isFinite(Number(formData.issuer_id)) && Number(formData.issuer_id) > 0 ? Number(formData.issuer_id) : undefined;
-    // The Card Payment Brick can return an issuer_id from a stale/mismatched
-    // BIN context. Mercado Pago can infer the issuer from the card token, and
-    // sending a wrong issuer causes error 10111 (forced_issuer). In TEST mode,
-    // deliberately omit issuer_id so the API resolves it from the token.
     const issuerId = isLegacyTestToken ? undefined : receivedIssuerId;
     const installments = Number(formData.installments || 1);
     const cardholderName = String(formData.cardholderName || formData.card_holder_name || additionalData?.cardholderName || '').trim();
@@ -55,7 +48,24 @@ export async function POST(request: Request) {
     const normalizedDeviceId = String(deviceId || '').trim();
 
     if (isLegacyTestToken) {
+      // TEST-* credentials are valid for the legacy /v1/payments API. Keep this
+      // request aligned with Mercado Pago's documented card-payment payload,
+      // including additional_info, while never sending a stale issuer_id.
+      const additionalInfoPayer = {
+        ...(formData.payer?.first_name || nameParts[0] ? { first_name: formData.payer?.first_name || nameParts[0] } : {}),
+        ...(formData.payer?.last_name || nameParts.length > 1 ? { last_name: formData.payer?.last_name || nameParts.slice(1).join(' ') } : {}),
+        ...(identification ? { identification } : {}),
+      };
       const paymentBody = {
+        additional_info: {
+          items: [{
+            id: String(orderId).slice(0, 64),
+            title: `Pedido 2P Box ${String(orderId).slice(0, 50)}`,
+            quantity: 1,
+            unit_price: amount,
+          }],
+          ...(Object.keys(additionalInfoPayer).length ? { payer: additionalInfoPayer } : {}),
+        },
         transaction_amount: amount,
         token,
         description: `Pedido 2P Box ${String(orderId).slice(0, 50)}`,
@@ -114,6 +124,7 @@ export async function POST(request: Request) {
           hasIdentification: Boolean(identification),
           hasCardholderName: Boolean(cardholderName),
           hasDeviceSession: Boolean(normalizedDeviceId),
+          hasAdditionalInfo: true,
         },
       };
 
