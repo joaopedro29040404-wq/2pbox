@@ -24,34 +24,34 @@ export default function TrackOrderPage() {
 
   return (
     <main className="track-page">
-      <div className="topbar">
+      <div className="track-topbar">
         <span>QUALIDADE</span><b>•</b><span>VARIEDADE</span><b>•</b><span>CONFIANÇA</span>
       </div>
 
       <header className="track-header">
         <div className="track-header-inner">
-          <Link href="/" className="brand" aria-label="2P Box - voltar para a loja">
+          <Link href="/" className="track-brand" aria-label="2P Box - voltar para a loja">
             <img src="/logo.pnh.png" alt="2P Box" />
-            <div>
+            <span>
               <strong>2P BOX</strong>
               <small>ACOMPANHAMENTO DE PEDIDO</small>
-            </div>
+            </span>
           </Link>
-          <Link href="/loja" className="store-link">Voltar para a loja</Link>
+          <Link href="/loja" className="track-store-link">Voltar para a loja</Link>
         </div>
       </header>
 
-      <section className="track-section">
+      <section className="track-content">
         <div className="track-card">
-          <div className="icon"><Package size={25} strokeWidth={2.1} /></div>
-          <p className="eyebrow">COMPRA SEM LOGIN</p>
+          <div className="track-icon"><Package size={25} strokeWidth={2.1} /></div>
+          <p className="track-eyebrow">COMPRA SEM LOGIN</p>
           <h1>Acompanhe seu pedido</h1>
-          <p className="intro">
+          <p className="track-intro">
             Consulte o andamento da sua compra informando o número do pedido e o e-mail usado no checkout.
           </p>
 
           <form onSubmit={submit} noValidate>
-            <div className="field">
+            <div className="track-field">
               <label htmlFor="order">Número do pedido</label>
               <input
                 id="order"
@@ -63,7 +63,7 @@ export default function TrackOrderPage() {
               />
             </div>
 
-            <div className="field">
+            <div className="track-field">
               <label htmlFor="email">E-mail da compra</label>
               <input
                 id="email"
@@ -82,60 +82,69 @@ export default function TrackOrderPage() {
             </button>
           </form>
 
-          <Link href="/loja" className="back">
+          <Link href="/loja" className="track-back">
             <ArrowLeft size={15} />
             Voltar para a loja
           </Link>
         </div>
       </section>
 
-      <footer>
+      <footer className="track-footer">
         <span>2P BOX</span>
         <span>QUALIDADE • VARIEDADE • CONFIANÇA</span>
       </footer>
 
       <style jsx>{`
         .track-page {
+          width: 100%;
+          min-width: 0;
           min-height: 100svh;
+          overflow-x: hidden;
           display: grid;
           grid-template-rows: auto auto 1fr auto;
           background: #f7f7f5;
           color: #111;
         }
 
-        .topbar {
+        .track-topbar {
+          width: 100%;
           min-height: 30px;
+          padding: 7px 16px;
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 10px;
-          padding: 7px 16px;
           background: #111;
           color: #fff;
           font-size: 8px;
           font-weight: 800;
           letter-spacing: .18em;
+          text-align: center;
         }
 
-        .topbar b { opacity: .45; }
+        .track-topbar b { opacity: .45; }
 
         .track-header {
+          width: 100%;
           background: #fff;
           border-bottom: 1px solid #e8e8e5;
         }
 
         .track-header-inner {
           width: min(1180px, calc(100% - 40px));
+          min-width: 0;
           min-height: 78px;
           margin: 0 auto;
+          padding: 0;
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 20px;
         }
 
-        .brand {
+        .track-brand {
           min-width: 0;
+          max-width: 100%;
           display: inline-flex;
           align-items: center;
           gap: 10px;
@@ -143,18 +152,38 @@ export default function TrackOrderPage() {
           text-decoration: none;
         }
 
-        .brand img {
+        .track-brand img {
           width: 60px;
           height: 48px;
-          object-fit: contain;
           flex: 0 0 auto;
+          object-fit: contain;
         }
 
-        .brand div { display: grid; gap: 2px; min-width: 0; }
-        .brand strong { font-size: 15px; font-weight: 950; letter-spacing: .1em; line-height: 1; }
-        .brand small { color: #999; font-size: 7px; font-weight: 800; letter-spacing: .13em; white-space: nowrap; }
+        .track-brand span {
+          min-width: 0;
+          display: grid;
+          gap: 3px;
+        }
 
-        .store-link {
+        .track-brand strong {
+          display: block;
+          font-size: 15px;
+          font-weight: 950;
+          letter-spacing: .1em;
+          line-height: 1;
+        }
+
+        .track-brand small {
+          display: block;
+          color: #999;
+          font-size: 7px;
+          font-weight: 800;
+          letter-spacing: .13em;
+          white-space: nowrap;
+        }
+
+        .track-store-link {
+          flex: 0 0 auto;
           color: #333;
           text-decoration: none;
           font-size: 10px;
@@ -162,13 +191,12 @@ export default function TrackOrderPage() {
           padding: 10px 13px;
           border: 1px solid #deded9;
           border-radius: 8px;
-          transition: background .18s ease, border-color .18s ease;
+          white-space: nowrap;
         }
 
-        .store-link:hover { background: #f7f7f5; border-color: #cfcfca; }
-
-        .track-section {
+        .track-content {
           width: 100%;
+          min-width: 0;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -177,6 +205,7 @@ export default function TrackOrderPage() {
 
         .track-card {
           width: min(520px, 100%);
+          min-width: 0;
           padding: 38px 40px 32px;
           background: #fff;
           border: 1px solid #e4e4df;
@@ -185,7 +214,7 @@ export default function TrackOrderPage() {
           text-align: center;
         }
 
-        .icon {
+        .track-icon {
           width: 58px;
           height: 58px;
           margin: 0 auto 18px;
@@ -196,7 +225,7 @@ export default function TrackOrderPage() {
           color: #111;
         }
 
-        .eyebrow {
+        .track-eyebrow {
           margin: 0 0 8px;
           color: #a17a00;
           font-size: 9px;
@@ -209,42 +238,64 @@ export default function TrackOrderPage() {
           font-size: clamp(27px, 4vw, 34px);
           line-height: 1.08;
           letter-spacing: -.035em;
+          overflow-wrap: anywhere;
         }
 
-        .intro {
-          max-width: 410px;
+        .track-intro {
+          width: min(410px, 100%);
           margin: 13px auto 28px;
           color: #70706c;
           font-size: 12px;
           line-height: 1.65;
         }
 
-        .track-card form { display: grid; gap: 16px; text-align: left; }
-        .field { display: grid; gap: 7px; }
-        .track-card label { color: #222; font-size: 10px; font-weight: 900; }
-
-        .track-card input {
+        .track-card form {
           width: 100%;
-          height: 46px;
+          min-width: 0;
+          display: grid;
+          gap: 16px;
+          text-align: left;
+        }
+
+        .track-field {
+          width: 100%;
+          min-width: 0;
+          display: grid;
+          gap: 7px;
+        }
+
+        .track-field label {
+          color: #222;
+          font-size: 10px;
+          font-weight: 900;
+        }
+
+        .track-field input {
+          width: 100%;
+          min-width: 0;
+          height: 48px;
           box-sizing: border-box;
           border: 1px solid #d8d8d3;
           border-radius: 9px;
           padding: 0 13px;
           background: #fff;
           color: #111;
-          font: inherit;
-          font-size: 13px;
+          font-family: inherit;
+          font-size: 16px;
+          line-height: 1;
           outline: none;
-          transition: border-color .18s ease, box-shadow .18s ease;
+          -webkit-appearance: none;
         }
 
-        .track-card input::placeholder { color: #a6a6a2; }
-        .track-card input:focus { border-color: #111; box-shadow: 0 0 0 3px rgba(255,196,0,.16); }
+        .track-field input::placeholder { color: #a6a6a2; }
+        .track-field input:focus { border-color: #111; box-shadow: 0 0 0 3px rgba(255,196,0,.16); }
 
         .track-card button {
           width: 100%;
-          min-height: 48px;
+          min-width: 0;
+          min-height: 50px;
           margin-top: 2px;
+          padding: 0 16px;
           border: 0;
           border-radius: 9px;
           background: #ffc400;
@@ -254,16 +305,13 @@ export default function TrackOrderPage() {
           justify-content: center;
           gap: 8px;
           cursor: pointer;
-          font-size: 11px;
+          font-family: inherit;
+          font-size: 12px;
           font-weight: 950;
-          letter-spacing: .01em;
-          transition: transform .15s ease, filter .15s ease;
+          white-space: normal;
         }
 
-        .track-card button:hover { filter: brightness(.97); transform: translateY(-1px); }
-        .track-card button:active { transform: translateY(0); }
-
-        .back {
+        .track-back {
           display: inline-flex;
           align-items: center;
           gap: 6px;
@@ -274,9 +322,8 @@ export default function TrackOrderPage() {
           font-weight: 850;
         }
 
-        .back:hover { color: #111; }
-
-        footer {
+        .track-footer {
+          width: 100%;
           min-height: 58px;
           box-sizing: border-box;
           padding: 18px 20px;
@@ -289,33 +336,76 @@ export default function TrackOrderPage() {
           font-size: 8px;
           font-weight: 900;
           letter-spacing: .16em;
+          text-align: center;
         }
 
-        footer span:first-child { color: #ffc400; }
+        .track-footer span:first-child { color: #ffc400; }
 
         @media (max-width: 600px) {
-          .topbar { font-size: 7px; gap: 7px; letter-spacing: .14em; }
-          .track-header-inner { width: min(100% - 28px, 1180px); min-height: 68px; }
-          .brand img { width: 52px; height: 42px; }
-          .brand strong { font-size: 13px; }
-          .brand small { font-size: 6px; letter-spacing: .1em; }
-          .store-link { padding: 9px 10px; font-size: 9px; }
-          .track-section { padding: 32px 14px 42px; align-items: flex-start; }
-          .track-card { padding: 30px 20px 26px; border-radius: 15px; }
-          .icon { width: 54px; height: 54px; margin-bottom: 16px; }
-          .track-card h1 { font-size: 26px; }
-          .intro { margin-bottom: 24px; font-size: 11.5px; }
-          .track-card input { height: 48px; }
+          .track-topbar {
+            min-height: 28px;
+            padding: 6px 10px;
+            gap: 7px;
+            font-size: 7px;
+            letter-spacing: .12em;
+          }
+
+          .track-header-inner {
+            width: 100%;
+            min-height: 68px;
+            padding: 0 14px;
+            gap: 10px;
+          }
+
+          .track-brand { gap: 8px; }
+          .track-brand img { width: 50px; height: 40px; }
+          .track-brand strong { font-size: 13px; letter-spacing: .08em; }
+          .track-brand small { font-size: 6px; letter-spacing: .08em; overflow: hidden; text-overflow: ellipsis; }
+          .track-store-link { padding: 9px 10px; font-size: 9px; }
+
+          .track-content {
+            align-items: flex-start;
+            padding: 28px 12px 38px;
+          }
+
+          .track-card {
+            width: 100%;
+            padding: 28px 18px 25px;
+            border-radius: 15px;
+          }
+
+          .track-icon { width: 54px; height: 54px; margin-bottom: 15px; }
+          .track-eyebrow { font-size: 8px; letter-spacing: .15em; }
+          .track-card h1 { font-size: clamp(24px, 7vw, 29px); }
+          .track-intro { margin-top: 12px; margin-bottom: 22px; font-size: 12px; line-height: 1.55; }
+          .track-card form { gap: 14px; }
+          .track-field input { height: 50px; }
           .track-card button { min-height: 50px; }
-          footer { flex-direction: column; gap: 5px; padding: 16px; font-size: 7px; }
+
+          .track-footer {
+            flex-direction: column;
+            gap: 5px;
+            padding: 15px 12px;
+            font-size: 7px;
+            letter-spacing: .13em;
+          }
         }
 
-        @media (max-width: 380px) {
-          .track-header-inner { width: calc(100% - 20px); }
-          .brand small { display: none; }
-          .store-link { padding: 8px; }
-          .track-section { padding-inline: 10px; }
-          .track-card { padding-inline: 17px; }
+        @media (max-width: 390px) {
+          .track-header-inner { padding-inline: 10px; }
+          .track-brand img { width: 44px; height: 36px; }
+          .track-brand strong { font-size: 12px; }
+          .track-brand small { display: none; }
+          .track-store-link { padding: 8px 9px; font-size: 8px; }
+          .track-content { padding-inline: 8px; }
+          .track-card { padding-inline: 15px; }
+        }
+
+        @media (max-width: 340px) {
+          .track-store-link { font-size: 0; }
+          .track-store-link::after { content: 'Loja'; font-size: 9px; }
+          .track-card h1 { font-size: 23px; }
+          .track-intro { font-size: 11px; }
         }
       `}</style>
     </main>
