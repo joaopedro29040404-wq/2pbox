@@ -11,111 +11,74 @@ export function getAdminSupabase() {
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 }
 
-function getPublicSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
-  if (!url || !anonKey) return null;
-  return createClient(url, anonKey, { auth: { autoRefreshToken: false, persistSession: false } });
-}
-
 const APPROVED = new Set(['approved', 'processed', 'accredited']);
 const REJECTED = new Set(['rejected', 'failed']);
 const CANCELLED = new Set(['cancelled', 'canceled', 'refunded', 'charged_back']);
+const IN_PROGRESS = new Set(['pending', 'in_process', 'authorized']);
 
+function normalizePaymentStatus(payment: any) {
+  const mpStatus = String(payment?.status || '').toLowerCase();
+  const mpOrderStatus = String(payment?.order_status || '').toLowerCase();
+  const mpDetail = String(payment?.status_detail || payment?.order_status_detail || '').toLowerCase();
+  const effective = mpOrderStatus || mpStatus;
+  if (APPROVED.has(effective) || APPROVED.has(mpStatus) || mpDetail === 'accredited') return 'approved';
+  if (REJECTED.has(effective) || REJECTED.has(mpStatus)) return 'rejected';
+  if (CANCELLED.has(effective) || CANCELLED.has(mpStatus)) return 'cancelled';
+  if (IN_PROGRESS.has(effective)) return effective;
+  return 'pending';
+}
+
+/**
+ * Single payment reconciliation path used by checkout, webhook and fallback APIs.
+ * Mercado Pago is authoritative for the incoming payment; orders is authoritative
+ * for the state returned to the application after the reconciliation is persisted.
+ */
 export async function syncOrderPayment(orderId: string, payment: any) {
   const admin = getAdminSupabase();
-  const publicClient = getPublicSupabase();
-  if (!admin && !publicClient) throw new Error('Supabase backend key não configurada.');
+  if (!admin) throw new Error('Supabase backend key não configurada.');
 
   const externalReference = String(payment?.external_reference || '').trim();
   if (!externalReference || externalReference !== orderId) throw new Error('Pagamento não pertence ao pedido informado.');
 
-  const mpStatus = String(payment?.status || '').toLowerCase();
-  const mpOrderStatus = String(payment?.order_status || '').toLowerCase();
-  const mpDetail = String(payment?.status_detail || payment?.order_status_detail || '').toLowerCase();
-  const effectiveStatus = mpOrderStatus || mpStatus;
-
-  let paymentStatus = 'pending';
-  if (APPROVED.has(effectiveStatus) || APPROVED.has(mpStatus) || mpDetail === 'accredited') paymentStatus = 'approved';
-  else if (REJECTED.has(effectiveStatus) || REJECTED.has(mpStatus)) paymentStatus = 'rejected';
-  else if (CANCELLED.has(effectiveStatus) || CANCELLED.has(mpStatus)) paymentStatus = 'cancelled';
-  else if (['in_process', 'pending', 'authorized'].includes(effectiveStatus)) paymentStatus = effectiveStatus;
-
-  const incomingPaymentId = payment?.id ? String(payment.id) : '';
+  const paymentStatus = normalizePaymentStatus(payment);
+  const paymentId = payment?.id ? String(payment.id) : '';
   const statusDetail = String(payment?.status_detail || payment?.order_status_detail || '').trim() || null;
-  const now = new Date().toISOString();
 
-  const reader = admin || publicClient;
-  const { data: current, error: currentError } = await reader!
+  // The database RPC is deliberately the only write path. It locks the order and
+  // prevents an older pending/rejected/cancelled response from overwriting a newer
+  // terminal state.
+  const { data: rpcResult, error: rpcError } = await admin.rpc('sync_order_payment_state', {
+    p_order_id: orderId,
+    p_payment_id: paymentId || null,
+    p_payment_status: paymentStatus,
+    p_order_status: paymentStatus === 'approved' ? 'confirmed' : 'pending',
+    p_status_detail: statusDetail,
+  });
+  if (rpcError) throw rpcError;
+
+  const { data: persisted, error: persistedError } = await admin
     .from('orders')
-    .select('status,payment_status,payment_id')
-    .eq('id', orderId)
-    .maybeSingle();
-  if (currentError) throw currentError;
-  if (!current) throw new Error('Pedido não encontrado.');
-
-  const currentApproved = String(current.payment_status || '').toLowerCase() === 'approved' || String(current.status || '').toLowerCase() === 'confirmed';
-  if (currentApproved && paymentStatus !== 'approved') {
-    return {
-      paymentStatus: 'approved',
-      orderStatus: String(current.status || 'confirmed'),
-      mpStatus,
-      paymentId: String(current.payment_id || incomingPaymentId || ''),
-      statusDetail: String(statusDetail || 'accredited'),
-    };
-  }
-
-  const targetOrderStatus = paymentStatus === 'approved' ? 'confirmed' : String(current.status || 'pending');
-  const updatePayload: Record<string, unknown> = {
-    payment_id: incomingPaymentId || current.payment_id || null,
-    payment_status: paymentStatus,
-    payment_status_detail: statusDetail,
-    payment_updated_at: now,
-    updated_at: now,
-  };
-  if (paymentStatus === 'approved') updatePayload.status = 'confirmed';
-
-  let updateError: any = null;
-  if (admin) {
-    const result = await admin.from('orders').update(updatePayload).eq('id', orderId);
-    updateError = result.error;
-  }
-
-  // The database already exposes a SECURITY DEFINER reconciliation function.
-  // Use it as a deterministic fallback when the Vercel service-role key is
-  // missing or a direct service-role update is unavailable.
-  if (updateError || !admin) {
-    const rpcClient = publicClient || admin;
-    if (!rpcClient) throw updateError || new Error('Cliente Supabase indisponível.');
-    const { error: rpcError } = await rpcClient.rpc('sync_order_payment_state', {
-      p_order_id: orderId,
-      p_payment_id: incomingPaymentId || current.payment_id || null,
-      p_payment_status: paymentStatus,
-      p_order_status: paymentStatus === 'approved' ? 'confirmed' : targetOrderStatus,
-      p_status_detail: statusDetail,
-    });
-    if (rpcError) throw updateError || rpcError;
-  }
-
-  const { data: persisted, error: persistedError } = await (admin || publicClient)!
-    .from('orders')
-    .select('status,payment_status,payment_status_detail,payment_id')
+    .select('status,payment_status,payment_status_detail,payment_id,payment_updated_at,updated_at')
     .eq('id', orderId)
     .maybeSingle();
   if (persistedError) throw persistedError;
   if (!persisted) throw new Error('Pedido não foi encontrado após a sincronização.');
 
-  const persistedPaymentStatus = String(persisted.payment_status || '').toLowerCase();
-  const persistedOrderStatus = String(persisted.status || '').toLowerCase();
+  const persistedPaymentStatus = String(persisted.payment_status || 'pending').toLowerCase();
+  const persistedOrderStatus = String(persisted.status || 'pending').toLowerCase();
+
   if (paymentStatus === 'approved' && (persistedPaymentStatus !== 'approved' || persistedOrderStatus !== 'confirmed')) {
-    throw new Error(`Sincronização incompleta: payment_status=${persistedPaymentStatus || 'null'}, status=${persistedOrderStatus || 'null'}.`);
+    throw new Error(`Sincronização incompleta: payment_status=${persistedPaymentStatus}, status=${persistedOrderStatus}.`);
   }
 
   return {
-    paymentStatus: persistedPaymentStatus || paymentStatus,
-    orderStatus: persistedOrderStatus || targetOrderStatus,
-    mpStatus,
-    paymentId: String(persisted.payment_id || incomingPaymentId || ''),
+    paymentStatus: persistedPaymentStatus,
+    orderStatus: persistedOrderStatus,
+    mpStatus: String(payment?.status || '').toLowerCase(),
+    paymentId: String(persisted.payment_id || paymentId || ''),
     statusDetail: persisted.payment_status_detail || statusDetail,
+    paymentUpdatedAt: persisted.payment_updated_at || null,
+    updatedAt: persisted.updated_at || null,
+    rpcResult,
   };
 }
