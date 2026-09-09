@@ -4,103 +4,62 @@ import { getAdminSupabase, getMercadoPagoAccessToken, syncOrderPayment } from '@
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const statusPriority: Record<string, number> = {
-  processed: 100, approved: 100, accredited: 100, authorized: 80,
-  in_process: 50, pending: 40, failed: 20, rejected: 20,
-  canceled: 10, cancelled: 10, refunded: 5, charged_back: 5,
-};
-const terminalOrderStatuses = new Set(['processed', 'approved', 'failed', 'canceled', 'cancelled', 'refunded', 'charged_back']);
-
-function normalizeOrderStatus(orderStatus: unknown, paymentStatus: unknown) {
-  const order = String(orderStatus || '').toLowerCase();
-  const payment = String(paymentStatus || '').toLowerCase();
-  if (terminalOrderStatuses.has(order)) return order;
-  return payment || order || 'pending';
-}
+const APPROVED = new Set(['approved', 'processed', 'accredited']);
+const statusPriority: Record<string, number> = { processed: 100, approved: 100, accredited: 100, authorized: 80, in_process: 50, pending: 40, failed: 20, rejected: 20, canceled: 10, cancelled: 10, refunded: 5, charged_back: 5 };
 
 function normalizeOrder(order: any, fallbackOrderId: string) {
   const payment = order?.transactions?.payments?.[0];
   if (!payment) return null;
-  return {
-    ...payment,
-    id: payment?.id || order?.id,
-    external_reference: String(order?.external_reference || fallbackOrderId),
-    status: normalizeOrderStatus(order?.status, payment?.status),
-    status_detail: payment?.status_detail || order?.status_detail || null,
-    order_status: String(order?.status || '').toLowerCase() || null,
-    order_status_detail: order?.status_detail || null,
-  };
+  const orderStatus = String(order?.status || '').toLowerCase();
+  const paymentStatus = String(payment?.status || '').toLowerCase();
+  const effectiveStatus = APPROVED.has(orderStatus) ? orderStatus : (APPROVED.has(paymentStatus) ? paymentStatus : paymentStatus || orderStatus || 'pending');
+  return { ...payment, id: payment?.id || order?.id, external_reference: String(order?.external_reference || fallbackOrderId), status: effectiveStatus, status_detail: payment?.status_detail || order?.status_detail || null, order_status: orderStatus || null, order_status_detail: order?.status_detail || null };
 }
 
-async function fetchOrder(accessToken: string, orderId: string) {
-  const response = await fetch(`https://api.mercadopago.com/v1/orders/${encodeURIComponent(orderId)}`, {
-    headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store',
-  });
+async function fetchOrder(accessToken: string, mpOrderId: string) {
+  const response = await fetch(`https://api.mercadopago.com/v1/orders/${encodeURIComponent(mpOrderId)}`, { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' });
   return { response, order: await response.json().catch(() => null) };
 }
 
-async function findBestOrder(accessToken: string, externalReference: string) {
-  // Mercado Pago exige begin_date e end_date na busca de Orders.
-  // A Order é a fonte de verdade da integração atual.
+async function findOrder(accessToken: string, externalReference: string) {
   const now = new Date();
-  const begin = new Date(now.getTime() - 1000 * 60 * 60 * 24 * 90);
-  const params = new URLSearchParams({
-    begin_date: begin.toISOString(),
-    end_date: now.toISOString(),
-    external_reference: externalReference,
-    type: 'online',
-    page: '1',
-    page_size: '50',
-    sort_by: 'created_date',
-    sort_order: 'desc',
-  });
-  const response = await fetch(`https://api.mercadopago.com/v1/orders?${params.toString()}`, {
-    headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store',
-  });
+  const begin = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+  const params = new URLSearchParams({ begin_date: begin.toISOString(), end_date: now.toISOString(), external_reference: externalReference, type: 'online', page: '1', page_size: '50', sort_by: 'created_date', sort_order: 'desc' });
+  const response = await fetch(`https://api.mercadopago.com/v1/orders?${params.toString()}`, { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' });
+  if (!response.ok) return null;
   const result = await response.json().catch(() => null);
-  if (!response.ok) {
-    console.error('Mercado Pago order search failed:', { status: response.status, result, externalReference });
-    return null;
-  }
   const orders = Array.isArray(result?.data) ? result.data : [];
-  const matching = orders.filter((order: any) => String(order?.external_reference || '').trim() === externalReference);
+  const matching = orders.filter((item: any) => String(item?.external_reference || '').trim() === externalReference);
   matching.sort((a: any, b: any) => {
     const pa = statusPriority[String(a?.status || '').toLowerCase()] || 0;
     const pb = statusPriority[String(b?.status || '').toLowerCase()] || 0;
     if (pb !== pa) return pb - pa;
-    return new Date(String(b?.last_updated_date || b?.created_date || 0)).getTime()
-      - new Date(String(a?.last_updated_date || a?.created_date || 0)).getTime();
+    return new Date(String(b?.last_updated_date || b?.created_date || 0)).getTime() - new Date(String(a?.last_updated_date || a?.created_date || 0)).getTime();
   });
   return matching[0] || null;
 }
 
 async function fetchLegacyPayment(accessToken: string, paymentId: string) {
-  const response = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(paymentId)}`, {
-    headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store',
-  });
+  const response = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(paymentId)}`, { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' });
   return { response, payment: await response.json().catch(() => null) };
 }
 
-async function findBestLegacyPayment(accessToken: string, externalReference: string) {
-  const response = await fetch(`https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(externalReference)}&sort=date_created&criteria=desc&limit=20`, {
-    headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store',
-  });
-  const result = await response.json().catch(() => null);
+async function findLegacyPayment(accessToken: string, externalReference: string) {
+  const response = await fetch(`https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(externalReference)}&sort=date_created&criteria=desc&limit=20`, { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' });
   if (!response.ok) return null;
+  const result = await response.json().catch(() => null);
   const payments = Array.isArray(result?.results) ? result.results : [];
-  const matching = payments.filter((payment: any) => String(payment?.external_reference || '').trim() === externalReference);
-  matching.sort((a: any, b: any) => {
+  payments.sort((a: any, b: any) => {
     const pa = statusPriority[String(a?.status || '').toLowerCase()] || 0;
     const pb = statusPriority[String(b?.status || '').toLowerCase()] || 0;
     if (pb !== pa) return pb - pa;
-    return new Date(String(b?.date_last_updated || b?.date_created || 0)).getTime()
-      - new Date(String(a?.date_last_updated || a?.date_created || 0)).getTime();
+    return new Date(String(b?.date_last_updated || b?.date_created || 0)).getTime() - new Date(String(a?.date_last_updated || a?.date_created || 0)).getTime();
   });
-  return matching[0] || null;
+  return payments[0] || null;
 }
 
 function responseFromSynced(synced: any, extra: Record<string, unknown> = {}) {
-  return NextResponse.json({ ...synced, statusDetail: synced?.statusDetail || null, ...extra });
+  return NextResponse.json({ paymentStatus: synced.paymentStatus, orderStatus: synced.orderStatus, paymentId: synced.paymentId || null, statusDetail: synced.statusDetail || null, ...extra }, { headers: { 'Cache-Control': 'no-store, max-age=0, s-maxage=0' } });
 }
 
 export async function GET(request: Request) {
@@ -111,113 +70,58 @@ export async function GET(request: Request) {
     const mpOrderId = String(url.searchParams.get('mpOrderId') || '').trim();
     if (!orderId) return NextResponse.json({ error: 'Pedido é obrigatório.' }, { status: 400 });
 
-    // Once the local order is confirmed, never allow a later polling response
-    // to downgrade it to pending.
     const admin = getAdminSupabase();
     if (admin) {
-      const { data: localOrder, error: localError } = await admin
-        .from('orders')
-        .select('status,payment_status,payment_status_detail,payment_id')
-        .eq('id', orderId)
-        .maybeSingle();
-      if (!localError && localOrder) {
-        const localPayment = String(localOrder.payment_status || '').toLowerCase();
-        const localOrderStatus = String(localOrder.status || '').toLowerCase();
-        if (localPayment === 'approved' || localOrderStatus === 'confirmed') {
-          return responseFromSynced({
-            paymentStatus: 'approved',
-            orderStatus: 'confirmed',
-            mpStatus: 'processed',
-            paymentId: String(localOrder.payment_id || paymentId || ''),
-            statusDetail: String(localOrder.payment_status_detail || 'accredited'),
-          }, { source: 'local_order' });
-        }
+      const { data: local, error } = await admin.from('orders').select('status,payment_status,payment_status_detail,payment_id').eq('id', orderId).maybeSingle();
+      if (!error && local) {
+        const approved = String(local.payment_status || '').toLowerCase() === 'approved' || String(local.status || '').toLowerCase() === 'confirmed';
+        if (approved) return responseFromSynced({ paymentStatus: 'approved', orderStatus: 'confirmed', paymentId: String(local.payment_id || paymentId || ''), statusDetail: local.payment_status_detail || 'accredited' }, { source: 'local_order' });
       }
     }
 
     const accessToken = getMercadoPagoAccessToken();
     if (!accessToken) return NextResponse.json({ error: 'Mercado Pago não configurado.' }, { status: 500 });
 
-    // 1. Prefer the MP Order ID returned by Checkout and query the authoritative order.
+    const reconcile = async (resource: any) => {
+      if (!resource) return null;
+      const payment = resource.transactions ? normalizeOrder(resource, orderId) : { ...resource, id: resource?.id ? String(resource.id) : paymentId || null, external_reference: String(resource?.external_reference || ''), status: resource?.status || 'pending', status_detail: resource?.status_detail || null };
+      if (!payment || String(payment.external_reference || '').trim() !== orderId) return null;
+      return syncOrderPayment(orderId, payment);
+    };
+
     if (mpOrderId) {
       try {
         const result = await fetchOrder(accessToken, mpOrderId);
-        if (result.response.ok && result.order) {
-          const payment = normalizeOrder(result.order, orderId);
-          if (payment && payment.external_reference === orderId) {
-            const synced = await syncOrderPayment(orderId, payment);
-            return responseFromSynced(synced, {
-              orderId: String(result.order?.id || mpOrderId),
-              mercadoPagoOrderStatus: result.order?.status || null,
-              mercadoPagoPaymentStatus: result.order?.transactions?.payments?.[0]?.status || null,
-              legacyPaymentsApi: false,
-            });
-          }
-        } else if (result.response.status !== 404) {
-          console.error('Mercado Pago direct order lookup failed:', { status: result.response.status, order: result.order, mpOrderId });
+        if (result.response.ok) {
+          const synced = await reconcile(result.order);
+          if (synced) return responseFromSynced(synced, { orderId: String(result.order?.id || mpOrderId), source: 'mercadopago_order' });
         }
       } catch (error) { console.error('Mercado Pago order lookup error:', error); }
     }
 
-    // 2. Legacy payment lookup for older orders.
     if (paymentId) {
       try {
         const result = await fetchLegacyPayment(accessToken, paymentId);
-        if (result.response.ok && result.payment) {
-          const payment = {
-            ...result.payment,
-            id: result.payment?.id ? String(result.payment.id) : paymentId,
-            external_reference: String(result.payment?.external_reference || ''),
-            status: result.payment?.status || 'pending',
-            status_detail: result.payment?.status_detail || null,
-          };
-          if (payment.external_reference === orderId) {
-            const synced = await syncOrderPayment(orderId, payment);
-            return responseFromSynced(synced, { orderId: null, legacyPaymentsApi: true });
-          }
+        if (result.response.ok) {
+          const synced = await reconcile(result.payment);
+          if (synced) return responseFromSynced(synced, { source: 'mercadopago_payment' });
         }
-      } catch (error) { console.error('Mercado Pago legacy payment lookup error:', error); }
+      } catch (error) { console.error('Mercado Pago payment lookup error:', error); }
     }
 
-    // 3. Search the current Orders API by our local external_reference.
-    // This is the critical fallback used by Admin, where only the local order ID
-    // and possibly a payment ID are available.
     try {
-      const mpOrder = await findBestOrder(accessToken, orderId);
-      const payment = normalizeOrder(mpOrder, orderId);
-      if (payment && payment.external_reference === orderId) {
-        const synced = await syncOrderPayment(orderId, payment);
-        return responseFromSynced(synced, {
-          orderId: String(mpOrder?.id || ''),
-          mercadoPagoOrderStatus: mpOrder?.status || null,
-          mercadoPagoPaymentStatus: mpOrder?.transactions?.payments?.[0]?.status || null,
-          legacyPaymentsApi: false,
-        });
-      }
+      const order = await findOrder(accessToken, orderId);
+      const synced = await reconcile(order);
+      if (synced) return responseFromSynced(synced, { orderId: String(order?.id || ''), source: 'mercadopago_order_search' });
     } catch (error) { console.error('Mercado Pago order search error:', error); }
 
-    // 4. Last compatibility fallback for legacy Payments API orders.
     try {
-      const legacyPayment = await findBestLegacyPayment(accessToken, orderId);
-      if (legacyPayment) {
-        const payment = {
-          ...legacyPayment,
-          id: legacyPayment?.id ? String(legacyPayment.id) : paymentId || null,
-          external_reference: String(legacyPayment?.external_reference || ''),
-          status: legacyPayment?.status || 'pending',
-          status_detail: legacyPayment?.status_detail || null,
-        };
-        if (payment.external_reference === orderId) {
-          const synced = await syncOrderPayment(orderId, payment);
-          return responseFromSynced(synced, { orderId: null, legacyPaymentsApi: true });
-        }
-      }
+      const payment = await findLegacyPayment(accessToken, orderId);
+      const synced = await reconcile(payment);
+      if (synced) return responseFromSynced(synced, { source: 'mercadopago_payment_search' });
     } catch (error) { console.error('Mercado Pago legacy payment search error:', error); }
 
-    return NextResponse.json({
-      paymentStatus: 'pending', orderStatus: 'pending', mpStatus: 'pending',
-      paymentId: paymentId || null, orderId: mpOrderId || null,
-    });
+    return responseFromSynced({ paymentStatus: 'pending', orderStatus: 'pending', paymentId: paymentId || null, statusDetail: null });
   } catch (error) {
     console.error('Mercado Pago payment status error:', error);
     return NextResponse.json({ error: 'Não foi possível consultar o status do pagamento.' }, { status: 500 });

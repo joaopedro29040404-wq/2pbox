@@ -6,11 +6,7 @@ export const runtime = 'nodejs';
 
 function safeCause(cause: unknown) {
   if (!Array.isArray(cause)) return cause ?? null;
-  return cause.map((item: any) => ({
-    code: item?.code ?? null,
-    description: item?.description ?? null,
-    data: item?.data ?? null,
-  }));
+  return cause.map((item: any) => ({ code: item?.code ?? null, description: item?.description ?? null, data: item?.data ?? null }));
 }
 
 export async function POST(request: Request) {
@@ -30,9 +26,7 @@ export async function POST(request: Request) {
 
     const rawPayerEmail = String(formData.payer?.email || formData.email || formData.cardholderEmail || '').trim().toLowerCase();
     const isLegacyTestToken = /^TEST-/i.test(accessToken);
-    const payerEmail = isLegacyTestToken && /@testuser\.com$/i.test(rawPayerEmail)
-      ? 'test_payer@example.com'
-      : rawPayerEmail;
+    const payerEmail = isLegacyTestToken && /@testuser\.com$/i.test(rawPayerEmail) ? 'test_payer@example.com' : rawPayerEmail;
     if (!payerEmail) return NextResponse.json({ error: 'Informe um e-mail válido para o pagamento.' }, { status: 400 });
 
     const identificationType = String(formData.cardholderIdentificationType || formData.identificationType || formData.payer?.identification?.type || '').trim();
@@ -47,6 +41,14 @@ export async function POST(request: Request) {
     const idempotencyKey = crypto.randomUUID();
     const normalizedDeviceId = String(deviceId || '').trim();
 
+    const commonHeaders: Record<string, string> = {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    };
+    if (normalizedDeviceId) commonHeaders['X-meli-session-id'] = normalizedDeviceId;
+
     if (isLegacyTestToken) {
       const paymentBody = {
         transaction_amount: amount,
@@ -56,107 +58,33 @@ export async function POST(request: Request) {
         payment_method_id: paymentMethodId,
         external_reference: String(orderId).slice(0, 64),
         notification_url: `${siteUrl}/api/mercadopago/webhook`,
-        payer: {
-          email: payerEmail,
-          ...(identification ? { identification } : {}),
-        },
+        payer: { email: payerEmail, ...(identification ? { identification } : {}) },
       };
-
-      const headers: Record<string, string> = {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        'X-Idempotency-Key': idempotencyKey,
-      };
-      if (normalizedDeviceId) headers['X-meli-session-id'] = normalizedDeviceId;
-
-      const response = await fetch('https://api.mercadopago.com/v1/payments', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(paymentBody),
-        cache: 'no-store',
-      });
+      const response = await fetch('https://api.mercadopago.com/v1/payments', { method: 'POST', headers: commonHeaders, body: JSON.stringify(paymentBody), cache: 'no-store' });
       const result = await response.json().catch(() => null);
       const mpRequestId = response.headers.get('x-request-id') || response.headers.get('x-correlation-id') || null;
-      const diagnostics = {
-        mercadoPagoOrderId: null,
-        mercadoPagoPaymentId: result?.id ? String(result.id) : null,
-        orderStatus: null,
-        orderStatusDetail: null,
-        paymentStatus: result?.status || null,
-        paymentStatusDetail: result?.status_detail || null,
-        cause: safeCause(result?.cause),
-        message: result?.message || null,
-        mpRequestId,
-        testEnvironment: true,
-        testBuyerEmailUsed: payerEmail,
-        requestSummary: {
-          endpoint: '/v1/payments', paymentMethodId, installments, amount,
-          issuerId: issuerId ?? null, receivedIssuerId: receivedIssuerId ?? null,
-          issuerIdSent: issuerId !== undefined, hasCardToken: Boolean(token),
-          hasIdentification: Boolean(identification), hasCardholderName: Boolean(cardholderName),
-          hasDeviceSession: Boolean(normalizedDeviceId), hasAdditionalInfo: false,
-        },
-      };
-
       if (!response.ok) {
-        console.error('Mercado Pago Payments API error:', { status: response.status, result, orderId, diagnostics });
         const cause = Array.isArray(result?.cause) ? result.cause[0] : null;
         const detail = result?.status_detail || cause?.code || cause?.description || result?.message || `HTTP ${response.status}`;
-        return NextResponse.json({ id: result?.id || null, ...diagnostics, status: result?.status || 'rejected', statusDetail: detail, paymentMethodId, error: detail, details: result }, { status: response.status });
+        return NextResponse.json({ id: result?.id || null, status: result?.status || 'rejected', statusDetail: detail, paymentMethodId, error: detail, details: result, mpRequestId }, { status: response.status });
       }
-
-      const normalizedResult = {
-        ...result,
-        id: result?.id ? String(result.id) : null,
-        status: result?.status || 'pending',
-        status_detail: result?.status_detail || null,
-        payment_method_id: result?.payment_method_id || paymentMethodId,
-        external_reference: String(result?.external_reference || orderId),
-      };
-      try { await syncOrderPayment(String(orderId), normalizedResult); } catch (syncError) { console.error('Legacy payment sync error:', syncError); }
-
-      return NextResponse.json({
-        id: normalizedResult.id, orderId: null, ...diagnostics,
-        status: normalizedResult.status, statusDetail: normalizedResult.status_detail,
-        paymentMethodId: normalizedResult.payment_method_id, legacyPaymentsApi: true, pix: null,
-      });
+      const normalizedResult = { ...result, id: result?.id ? String(result.id) : null, status: result?.status || 'pending', status_detail: result?.status_detail || null, payment_method_id: result?.payment_method_id || paymentMethodId, external_reference: String(result?.external_reference || orderId) };
+      let synced;
+      try {
+        synced = await syncOrderPayment(String(orderId), normalizedResult);
+      } catch (syncError) {
+        console.error('Legacy payment persistence error:', syncError);
+        return NextResponse.json({ id: normalizedResult.id, status: 'pending', statusDetail: 'Pagamento recebido. Estamos confirmando o pedido.', paymentMethodId: normalizedResult.payment_method_id, synchronizationPending: true, error: 'Pagamento recebido, mas a confirmação do pedido ainda está sendo sincronizada.' }, { status: 202 });
+      }
+      return NextResponse.json({ id: normalizedResult.id, orderId: null, status: synced.paymentStatus, statusDetail: synced.statusDetail, paymentStatus: synced.paymentStatus, orderStatus: synced.orderStatus, paymentMethodId: normalizedResult.payment_method_id, legacyPaymentsApi: true, pix: null });
     }
 
     const orderBody = {
-      type: 'online',
-      processing_mode: 'automatic',
-      total_amount: amount.toFixed(2),
-      external_reference: String(orderId).slice(0, 64),
-      notification_url: `${siteUrl}/api/mercadopago/webhook`,
-      payer: {
-        email: payerEmail,
-        ...(identification ? { identification } : {}),
-        ...(formData.payer?.first_name || nameParts[0] ? { first_name: formData.payer?.first_name || nameParts[0] } : {}),
-        ...(formData.payer?.last_name || nameParts.length > 1 ? { last_name: formData.payer?.last_name || nameParts.slice(1).join(' ') } : {}),
-      },
-      transactions: {
-        payments: [{
-          amount: amount.toFixed(2),
-          payment_method: {
-            id: paymentMethodId,
-            type: String(additionalData?.paymentTypeId || formData.payment_type_id || 'credit_card'),
-            token,
-            installments,
-          },
-        }],
-      },
+      type: 'online', processing_mode: 'automatic', total_amount: amount.toFixed(2), external_reference: String(orderId).slice(0, 64), notification_url: `${siteUrl}/api/mercadopago/webhook`,
+      payer: { email: payerEmail, ...(identification ? { identification } : {}), ...(formData.payer?.first_name || nameParts[0] ? { first_name: formData.payer?.first_name || nameParts[0] } : {}), ...(formData.payer?.last_name || nameParts.length > 1 ? { last_name: formData.payer?.last_name || nameParts.slice(1).join(' ') } : {}) },
+      transactions: { payments: [{ amount: amount.toFixed(2), payment_method: { id: paymentMethodId, type: String(additionalData?.paymentTypeId || formData.payment_type_id || 'credit_card'), token, installments } }] },
     };
-
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      'X-Idempotency-Key': idempotencyKey,
-    };
-    if (normalizedDeviceId) headers['X-meli-session-id'] = normalizedDeviceId;
-
-    const response = await fetch('https://api.mercadopago.com/v1/orders', { method: 'POST', headers, body: JSON.stringify(orderBody), cache: 'no-store' });
+    const response = await fetch('https://api.mercadopago.com/v1/orders', { method: 'POST', headers: commonHeaders, body: JSON.stringify(orderBody), cache: 'no-store' });
     const result = await response.json().catch(() => null);
     const diagnostics = {
       mercadoPagoOrderId: result?.id || null,
@@ -169,9 +97,7 @@ export async function POST(request: Request) {
       message: result?.message || null,
       mpRequestId: response.headers.get('x-request-id') || response.headers.get('x-correlation-id') || null,
     };
-
     if (!response.ok) {
-      console.error('Mercado Pago Orders API error:', { status: response.status, result, orderId, diagnostics });
       const cause = Array.isArray(result?.cause) ? result.cause[0] : null;
       const detail = result?.status_detail || cause?.code || cause?.description || result?.message || `HTTP ${response.status}`;
       return NextResponse.json({ id: null, ...diagnostics, status: 'rejected', statusDetail: detail, paymentMethodId, error: detail, details: result }, { status: response.status });
@@ -184,37 +110,21 @@ export async function POST(request: Request) {
     const paymentStatusDetail = payment?.status_detail || null;
     const orderStatus = String(result?.status || '').toLowerCase() || null;
     const orderStatusDetail = result?.status_detail || null;
-
-    // The Orders API is authoritative at the parent order level. A nested
-    // transaction may still say pending while the order is already processed.
-    const effectiveStatus = ['processed', 'approved', 'accredited', 'failed', 'rejected', 'canceled', 'cancelled', 'refunded', 'charged_back'].includes(orderStatus || '')
-      ? orderStatus
-      : paymentStatus || orderStatus || 'pending';
+    const effectiveStatus = ['processed', 'approved', 'accredited', 'failed', 'rejected', 'canceled', 'cancelled', 'refunded', 'charged_back'].includes(orderStatus || '') ? orderStatus : paymentStatus || orderStatus || 'pending';
     const statusDetail = paymentStatusDetail || orderStatusDetail || null;
-    const normalizedResult = {
-      ...result,
-      id: mercadoPagoPaymentId || mercadoPagoOrderId,
-      status: effectiveStatus,
-      status_detail: statusDetail,
-      payment_method_id: payment?.payment_method?.id || paymentMethodId,
-      order_id: mercadoPagoOrderId,
-      order_status: orderStatus,
-      order_status_detail: orderStatusDetail,
-      external_reference: String(result?.external_reference || orderId),
-    };
-    try { await syncOrderPayment(String(orderId), normalizedResult); } catch (syncError) { console.error('Order payment sync error:', syncError); }
+    const normalizedResult = { ...result, id: mercadoPagoPaymentId || mercadoPagoOrderId, status: effectiveStatus, status_detail: statusDetail, payment_method_id: payment?.payment_method?.id || paymentMethodId, order_id: mercadoPagoOrderId, order_status: orderStatus, order_status_detail: orderStatusDetail, external_reference: String(result?.external_reference || orderId) };
+
+    let synced;
+    try {
+      synced = await syncOrderPayment(String(orderId), normalizedResult);
+    } catch (syncError) {
+      console.error('Order payment persistence error:', syncError);
+      return NextResponse.json({ id: mercadoPagoPaymentId || mercadoPagoOrderId, orderId: mercadoPagoOrderId, ...diagnostics, status: 'pending', statusDetail: 'Pagamento recebido. Estamos confirmando o pedido.', paymentStatus: 'pending', orderStatus: 'pending', paymentMethodId: payment?.payment_method?.id || paymentMethodId, synchronizationPending: true, error: 'Pagamento recebido, mas a confirmação do pedido ainda está sendo sincronizada.', pix: null }, { status: 202 });
+    }
 
     const transactionData = payment?.point_of_interaction?.transaction_data || result?.point_of_interaction?.transaction_data || {};
     const isPix = paymentMethodId === 'pix';
-    return NextResponse.json({
-      id: mercadoPagoPaymentId || mercadoPagoOrderId,
-      orderId: mercadoPagoOrderId,
-      ...diagnostics,
-      status: effectiveStatus,
-      statusDetail,
-      paymentMethodId: payment?.payment_method?.id || paymentMethodId,
-      pix: isPix ? { qrCode: transactionData.qr_code || null, qrCodeBase64: transactionData.qr_code_base64 || null, ticketUrl: transactionData.ticket_url || null } : null,
-    });
+    return NextResponse.json({ id: mercadoPagoPaymentId || mercadoPagoOrderId, orderId: mercadoPagoOrderId, ...diagnostics, status: synced.paymentStatus, statusDetail: synced.statusDetail, paymentStatus: synced.paymentStatus, orderStatus: synced.orderStatus, paymentMethodId: payment?.payment_method?.id || paymentMethodId, pix: isPix ? { qrCode: transactionData.qr_code || null, qrCodeBase64: transactionData.qr_code_base64 || null, ticketUrl: transactionData.ticket_url || null } : null });
   } catch (error) {
     console.error('Mercado Pago payment creation error:', error);
     return NextResponse.json({ error: 'Não foi possível processar o pagamento.', message: error instanceof Error ? error.message : String(error) }, { status: 502 });
