@@ -1,1 +1,14 @@
 .tp-site .tp-cat-icon{background:#ffc400!important;color:#111!important;border:0!important}.tp-site .tp-cat-icon svg{color:#111!important;stroke:#111!important}.tp-site .tp-category:hover .tp-cat-icon{background:#ffc400!important;color:#111!important}.tp-site .tp-category{cursor:pointer}.tp-site .tp-account{color:#111!important}.tp-site .tp-hero-services{display:none!important}
+
+/* 2P Box — categorias responsivas: no celular, navegação horizontal */
+@media (max-width: 767px){
+  .home-category-grid{display:flex!important;grid-template-columns:none!important;gap:12px!important;overflow-x:auto!important;overflow-y:hidden!important;padding:0 2px 14px!important;margin:0!important;border-top:0!important;border-bottom:0!important;scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory}
+  .home-category-grid::-webkit-scrollbar{display:none}
+  .home-category-card{flex:0 0 82vw!important;width:82vw!important;min-height:250px!important;box-sizing:border-box!important;padding:24px!important;border:1px solid var(--line)!important;border-radius:14px!important;scroll-snap-align:start;background:#fff!important}
+  .home-category-card:hover{background:#fff!important}
+  .home-category-icon{width:52px!important;height:52px!important;flex:0 0 52px!important}
+  .home-category-copy{min-width:0!important;padding-right:20px!important}
+  .home-category-copy h3{font-size:30px!important;line-height:.94!important;overflow-wrap:anywhere!important;word-break:normal!important}
+  .home-category-copy span{font-size:12px!important;line-height:1.45!important}
+  .home-category-arrow{right:22px!important;bottom:24px!important}
+}
