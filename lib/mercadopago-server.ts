@@ -27,39 +27,53 @@ export async function syncOrderPayment(orderId: string, payment: any) {
   const effectiveStatus = mpOrderStatus || mpStatus;
 
   let paymentStatus = 'pending';
-  let orderStatus = 'pending';
-  if (APPROVED.has(effectiveStatus) || APPROVED.has(mpStatus) || mpDetail === 'accredited') { paymentStatus = 'approved'; orderStatus = 'confirmed'; }
-  else if (REJECTED.has(effectiveStatus) || REJECTED.has(mpStatus)) { paymentStatus = 'rejected'; orderStatus = 'cancelled'; }
-  else if (CANCELLED.has(effectiveStatus) || CANCELLED.has(mpStatus)) { paymentStatus = 'cancelled'; orderStatus = 'cancelled'; }
-  else if (['in_process','pending','authorized'].includes(effectiveStatus)) { paymentStatus = effectiveStatus; orderStatus = 'pending'; }
+  if (APPROVED.has(effectiveStatus) || APPROVED.has(mpStatus) || mpDetail === 'accredited') paymentStatus = 'approved';
+  else if (REJECTED.has(effectiveStatus) || REJECTED.has(mpStatus)) paymentStatus = 'rejected';
+  else if (CANCELLED.has(effectiveStatus) || CANCELLED.has(mpStatus)) paymentStatus = 'cancelled';
+  else if (['in_process','pending','authorized'].includes(effectiveStatus)) paymentStatus = effectiveStatus;
 
   const incomingPaymentId = payment?.id ? String(payment.id) : '';
   const statusDetail = String(payment?.status_detail || payment?.order_status_detail || '').trim() || null;
 
-  // Always read the current DB state immediately before writing. A stale
-  // browser poll/webhook must never downgrade an already approved payment.
   const { data: current, error: currentError } = await admin.from('orders').select('status,payment_status,payment_id').eq('id', orderId).maybeSingle();
   if (currentError) throw currentError;
   const currentApproved = String(current?.payment_status || '').toLowerCase() === 'approved' || String(current?.status || '').toLowerCase() === 'confirmed';
   if (currentApproved && paymentStatus !== 'approved') {
-    return { paymentStatus: 'approved', orderStatus: 'confirmed', mpStatus, paymentId: String(current?.payment_id || incomingPaymentId || ''), statusDetail: String(statusDetail || 'accredited') };
+    return { paymentStatus: 'approved', orderStatus: String(current?.status || 'confirmed'), mpStatus, paymentId: String(current?.payment_id || incomingPaymentId || ''), statusDetail: String(statusDetail || 'accredited') };
   }
 
+  // IMPORTANT: payment reconciliation may automatically advance an order to
+  // confirmed only when Mercado Pago approves it. Pending/analysis/authorized
+  // states must NEVER overwrite the order workflow status. After approval, the
+  // Admin is the only actor allowed to move the order to another workflow state.
+  const targetOrderStatus = paymentStatus === 'approved'
+    ? 'confirmed'
+    : String(current?.status || 'pending');
+
   const { data, error } = await admin.rpc('sync_order_payment_state', {
-    p_order_id: orderId, p_payment_id: incomingPaymentId || null, p_payment_status: paymentStatus,
-    p_order_status: orderStatus, p_status_detail: statusDetail,
+    p_order_id: orderId,
+    p_payment_id: incomingPaymentId || null,
+    p_payment_status: paymentStatus,
+    p_order_status: targetOrderStatus,
+    p_status_detail: statusDetail,
   });
 
   if (error) {
     console.error('Payment state RPC error:', error);
-    // Safe fallback with the same no-downgrade rule.
     const { data: latest } = await admin.from('orders').select('status,payment_status,payment_id').eq('id', orderId).maybeSingle();
     const latestApproved = String(latest?.payment_status || '').toLowerCase() === 'approved' || String(latest?.status || '').toLowerCase() === 'confirmed';
-    if (latestApproved && paymentStatus !== 'approved') return { paymentStatus: 'approved', orderStatus: 'confirmed', mpStatus, paymentId: String(latest?.payment_id || incomingPaymentId || ''), statusDetail };
-    const { error: updateError } = await admin.from('orders').update({ payment_id: incomingPaymentId || latest?.payment_id || null, payment_status: paymentStatus, payment_status_detail: statusDetail, payment_updated_at: new Date().toISOString(), status: orderStatus, updated_at: new Date().toISOString() }).eq('id', orderId);
+    if (latestApproved && paymentStatus !== 'approved') return { paymentStatus: 'approved', orderStatus: String(latest?.status || 'confirmed'), mpStatus, paymentId: String(latest?.payment_id || incomingPaymentId || ''), statusDetail };
+    const { error: updateError } = await admin.from('orders').update({
+      payment_id: incomingPaymentId || latest?.payment_id || null,
+      payment_status: paymentStatus,
+      payment_status_detail: statusDetail,
+      payment_updated_at: new Date().toISOString(),
+      ...(paymentStatus === 'approved' ? { status: 'confirmed' } : {}),
+      updated_at: new Date().toISOString(),
+    }).eq('id', orderId);
     if (updateError) throw updateError;
   }
 
   const synced = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
-  return { paymentStatus: String(synced.payment_status || paymentStatus), orderStatus: String(synced.order_status || orderStatus), mpStatus, paymentId: String(synced.payment_id || incomingPaymentId || ''), statusDetail };
+  return { paymentStatus: String(synced.payment_status || paymentStatus), orderStatus: String(synced.order_status || targetOrderStatus), mpStatus, paymentId: String(synced.payment_id || incomingPaymentId || ''), statusDetail };
 }
