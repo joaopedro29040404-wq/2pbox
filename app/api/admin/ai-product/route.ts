@@ -10,9 +10,11 @@ const TWO_P_BOX_ART_DIRECTION = `
 - identidade 2P Box: preto #111111, branco/off-white, amarelo #FFC400 e cinza muito claro;
 - iluminação de estúdio suave, realista, sombras naturais e acabamento fotográfico de alto nível;
 - fundo minimalista, claro e elegante, com profundidade discreta e poucos elementos geométricos;
-- produto é SEMPRE o protagonista, grande, nítido, inteiro e fiel à foto enviada;
-- composição 1:1 com espaço negativo generoso no topo e na parte inferior para uma camada gráfica posterior;
-- produto centralizado levemente abaixo do centro, ocupando aproximadamente 55–70% da altura;
+- o produto é SEMPRE o protagonista, grande, nítido, inteiro e fiel à foto enviada;
+- composição 1:1;
+- produto rigorosamente centralizado no eixo horizontal e no centro visual da composição, sem ficar deslocado para esquerda ou direita;
+- produto alinhado verticalmente no centro da área de fotografia, com margens equilibradas em todos os lados;
+- o produto deve ocupar aproximadamente 55–70% da altura da imagem, sem cortar nenhuma parte importante;
 - estética de campanha própria de varejo premium, não de marketplace genérico.
 `;
 
@@ -73,10 +75,13 @@ Categoria: ${category || 'não informada'}
 
 ENQUADRAMENTO OBRIGATÓRIO:
 - proporção quadrada 1:1;
-- deixe aproximadamente 25% de área visual limpa no topo e 15% na parte inferior;
-- coloque o produto no centro/inferior, com escala generosa e boa separação do fundo;
+- o produto deve ficar EXATAMENTE NO MEIO DA IMAGEM, centralizado horizontalmente e verticalmente;
+- mantenha distância visual semelhante em todos os quatro lados do produto;
+- não deixe o produto encostado nas bordas;
+- não incline ou desloque a composição sem necessidade;
+- mostre o produto inteiro, sem cortes;
 - remova visualmente o ambiente doméstico ou improvisado da foto original;
-- use cenário de estúdio minimalista, com superfície/pedestal muito discreto apenas se ajudar a apresentar o produto;
+- use cenário de estúdio minimalista e elegante, com superfície/pedestal muito discreto apenas se ajudar a apresentar o produto;
 - iluminação lateral suave, reflexos controlados e sombra realista;
 - resultado final deve parecer uma foto feita para uma campanha profissional da 2P Box.
 
@@ -106,19 +111,42 @@ REGRA CRÍTICA: não renderize nenhum texto novo na imagem. A tipografia e os be
       outputBase64 = Buffer.from(await generatedResponse.arrayBuffer()).toString('base64');
     }
 
+    // Segunda etapa: modelo multimodal analisa a foto original para criar o catálogo.
     let copy = { title: productName, shortDescription: '', description: '', features: [] as string[] };
     const textResponse = await fetch(`${POLLINATIONS_URL}/v1/chat/completions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gemini-3-flash',
+        model: 'openai',
         messages: [
-          { role: 'system', content: 'Você é o redator de e-commerce da 2P Box. Escreva em português do Brasil. Analise a foto e os dados do catálogo. Nunca invente especificações, potência, medidas, compatibilidades, certificações ou benefícios não confirmados.' },
-          { role: 'user', content: [
-            { type: 'text', text: `Produto: ${productName || 'não informado'}. Categoria: ${category || 'não informada'}. Retorne SOMENTE JSON válido com title, shortDescription, description e features. features deve ter no máximo 3 itens curtos, objetivos e visualmente bons para uma faixa de benefícios. O título deve ser comercial e claro.` },
-            { type: 'image_url', image_url: { url: sourceDataUrl } },
-          ] },
+          {
+            role: 'system',
+            content: `Você é o assistente de catálogo da 2P Box, com visão de imagem.
+Analise a foto enviada como um humano faria e identifique somente informações visíveis ou fortemente sustentadas pela imagem.
+Escreva em português do Brasil, com linguagem comercial natural de e-commerce.
+Não invente potência, voltagem, capacidade, medidas, compatibilidades, certificações, materiais, quantidade, garantia ou qualquer especificação que não esteja visível ou fornecida nos dados do catálogo.
+Se houver texto legível na embalagem ou no produto, você pode usá-lo para identificar o item.
+O título deve ser curto, específico e comercial, sem palavras genéricas como 'produto incrível'.
+A descrição deve explicar o que é o produto, para que serve e os principais pontos percebidos na foto, sem exageros.
+Retorne SOMENTE um objeto JSON válido com estas chaves: title, shortDescription, description, features.
+features deve ser um array com no máximo 3 benefícios objetivos e seguros.`
+          },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: `Analise esta foto para cadastrar o produto na 2P Box.
+Nome atual do catálogo: ${productName || 'não informado'}
+Categoria: ${category || 'não informada'}
+
+Crie um título melhor se a foto permitir identificar o produto. Gere uma descrição comercial completa, mas fiel à imagem. Não invente informações.`
+              },
+              { type: 'image_url', image_url: { url: sourceDataUrl } },
+            ]
+          },
         ],
+        response_format: { type: 'json_object' },
       }),
     });
 
