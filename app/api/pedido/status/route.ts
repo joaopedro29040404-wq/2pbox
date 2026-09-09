@@ -4,6 +4,8 @@ import { getAdminSupabase, getMercadoPagoAccessToken, syncOrderPayment } from '@
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+const terminalPayment = new Set(['approved','rejected','cancelled']);
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -14,7 +16,7 @@ export async function GET(request: Request) {
     const admin = getAdminSupabase();
     if (!admin) return NextResponse.json({ error: 'Servidor não configurado.' }, { status: 500 });
 
-    let orderQuery = admin.from('orders').select('id,customer_email,payment_id').ilike('customer_email', email);
+    let orderQuery = admin.from('orders').select('id,customer_email,payment_id,status,payment_status,payment_status_detail').ilike('customer_email', email);
     if (requestedOrderId) orderQuery = orderQuery.eq('id', requestedOrderId);
     else orderQuery = orderQuery.order('created_at', { ascending: false }).limit(1);
     const { data: currentOrder, error: currentOrderError } = await orderQuery.maybeSingle();
@@ -22,6 +24,24 @@ export async function GET(request: Request) {
     if (!currentOrder) return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
 
     const orderId = String(currentOrder.id);
+    const localStatus = String(currentOrder.status || '').toLowerCase();
+    const localPaymentStatus = String(currentOrder.payment_status || '').toLowerCase();
+
+    // Neste sistema, confirmed só é alcançado quando o pagamento foi confirmado.
+    // Portanto, se a tabela já diz confirmed, nunca devolvemos pending para a UI.
+    if (localStatus === 'confirmed' || localPaymentStatus === 'approved') {
+      const { data: confirmedOrder, error } = await admin.from('orders')
+        .select('id,customer_name,customer_phone,customer_email,delivery_type,delivery_address,notes,status,payment_status,total,created_at,payment_id,payment_status_detail,payment_updated_at')
+        .eq('id', orderId).ilike('customer_email', email).maybeSingle();
+      if (error || !confirmedOrder) return NextResponse.json({ error: 'Não foi possível consultar o pedido.' }, { status: 500 });
+      const { data: items } = await admin.from('order_items').select('product_id,product_name,quantity,unit_price').eq('order_id', orderId).order('product_name');
+      return NextResponse.json({
+        order: { ...confirmedOrder, status: localStatus === 'confirmed' ? 'confirmed' : confirmedOrder.status, payment_status: 'approved' },
+        items: items || [],
+        payment: confirmedOrder.payment_id ? { id: String(confirmedOrder.payment_id), status: 'approved', statusDetail: confirmedOrder.payment_status_detail || 'accredited' } : null,
+      }, { headers: { 'Cache-Control': 'no-store, max-age=0, s-maxage=0' } });
+    }
+
     const accessToken = getMercadoPagoAccessToken();
     let latestPayment: any = null;
     if (accessToken) {
@@ -49,8 +69,6 @@ export async function GET(request: Request) {
       } catch (error) { console.error('Public payment lookup error:', error); }
     }
 
-    // Re-read the database after reconciliation. The database/RPC is canonical;
-    // never replace an approved payment with a stale pending Mercado Pago response.
     const { data, error } = await admin.from('orders')
       .select('id,customer_name,customer_phone,customer_email,delivery_type,delivery_address,notes,status,payment_status,total,created_at,payment_id,payment_status_detail,payment_updated_at')
       .eq('id', orderId).ilike('customer_email', email).maybeSingle();
@@ -58,19 +76,12 @@ export async function GET(request: Request) {
 
     const canonicalPaymentStatus = String(data.payment_status || 'pending').toLowerCase();
     const canonicalOrderStatus = String(data.status || 'pending').toLowerCase();
-    const paymentPayload = latestPayment ? {
-      id: String(latestPayment.id || data.payment_id || ''),
-      status: String(latestPayment.status || canonicalPaymentStatus).toLowerCase(),
-      statusDetail: latestPayment.status_detail || data.payment_status_detail || null,
-    } : data.payment_id ? { id: String(data.payment_id), status: canonicalPaymentStatus, statusDetail: data.payment_status_detail || null } : null;
+    const paymentPayload = latestPayment ? { id: String(latestPayment.id || data.payment_id || ''), status: String(latestPayment.status || canonicalPaymentStatus).toLowerCase(), statusDetail: latestPayment.status_detail || data.payment_status_detail || null } : data.payment_id ? { id: String(data.payment_id), status: canonicalPaymentStatus, statusDetail: data.payment_status_detail || null } : null;
 
     const { data: items, error: itemsError } = await admin.from('order_items').select('product_id,product_name,quantity,unit_price').eq('order_id', orderId).order('product_name');
     if (itemsError) return NextResponse.json({ error: 'Não foi possível carregar os itens do pedido.' }, { status: 500 });
 
-    return NextResponse.json({
-      order: { ...data, payment_status: canonicalPaymentStatus, status: canonicalOrderStatus },
-      items: items || [], payment: paymentPayload,
-    }, { headers: { 'Cache-Control': 'no-store, max-age=0, s-maxage=0' } });
+    return NextResponse.json({ order: { ...data, payment_status: canonicalPaymentStatus, status: canonicalOrderStatus }, items: items || [], payment: paymentPayload }, { headers: { 'Cache-Control': 'no-store, max-age=0, s-maxage=0' } });
   } catch (error) {
     console.error('Public order status route error:', error);
     return NextResponse.json({ error: 'Não foi possível consultar o pedido.' }, { status: 500 });
