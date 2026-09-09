@@ -1,10 +1,10 @@
 'use client';
-import {useEffect,useMemo,useState} from 'react';
+import {useEffect,useMemo,useRef,useState} from 'react';
 import Link from 'next/link';
 import {ArrowLeft,RefreshCw,Search,ChevronDown,PackageCheck,Store,MessageCircle,Clock3,CheckCircle2,XCircle,CreditCard} from 'lucide-react';
 import {supabase} from '@/lib/supabase';
 
-type Order={id:string;customer_name:string;customer_phone:string;customer_email?:string|null;delivery_type:string;status:string;payment_status?:string|null;total:number;notes?:string|null;created_at:string};
+type Order={id:string;customer_name:string;customer_phone:string;customer_email?:string|null;delivery_type:string;status:string;payment_status?:string|null;payment_id?:string|null;total:number;notes?:string|null;created_at:string};
 type Item={order_id:string;product_name:string;quantity:number;total:number};
 const labels:Record<string,string>={pending:'Pendente',confirmed:'Confirmado',preparing:'Em preparação',ready:'Pronto para retirada',completed:'Concluído',cancelled:'Cancelado'};
 const paymentLabels:Record<string,string>={pending:'Pendente',in_process:'Em análise',authorized:'Autorizado',approved:'Aprovado',rejected:'Recusado',cancelled:'Cancelado'};
@@ -12,7 +12,22 @@ const statusIcon:Record<string,any>={pending:Clock3,confirmed:CheckCircle2,prepa
 
 export default function OrdersPage(){
  const[orders,setOrders]=useState<Order[]>([]),[items,setItems]=useState<Item[]>([]),[loading,setLoading]=useState(true),[message,setMessage]=useState(''),[search,setSearch]=useState(''),[filter,setFilter]=useState('all');
- async function load(silent=false){if(!supabase)return;if(!silent)setLoading(true);const [{data:o,error},{data:i}]=await Promise.all([supabase.from('orders').select('*').order('created_at',{ascending:false}),supabase.from('order_items').select('order_id,product_name,quantity,total')]);if(error)setMessage(error.message);else setOrders((o??[]) as Order[]);setItems((i??[]) as Item[]);if(!silent)setLoading(false)}
+ const lastPaymentReconcile=useRef(0);
+ async function reconcilePayments(currentOrders:Order[]){
+  const now=Date.now();
+  if(now-lastPaymentReconcile.current<10000)return;
+  const candidates=currentOrders.filter(o=>['pending','in_process','authorized'].includes(String(o.payment_status||'pending'))).slice(0,12);
+  if(!candidates.length)return;
+  lastPaymentReconcile.current=now;
+  await Promise.allSettled(candidates.map(async o=>{
+   const params=new URLSearchParams({orderId:o.id});
+   if(o.payment_id)params.set('paymentId',o.payment_id);
+   const response=await fetch(`/api/mercadopago/payment-status?${params.toString()}`,{cache:'no-store'});
+   if(!response.ok)throw new Error(`Payment reconciliation failed: ${response.status}`);
+   return response.json();
+  }));
+ }
+ async function load(silent=false){if(!supabase)return;if(!silent)setLoading(true);const [{data:o,error},{data:i}]=await Promise.all([supabase.from('orders').select('*').order('created_at',{ascending:false}),supabase.from('order_items').select('order_id,product_name,quantity,total')]);if(error)setMessage(error.message);else{const nextOrders=(o??[]) as Order[];setOrders(nextOrders);void reconcilePayments(nextOrders)}setItems((i??[]) as Item[]);if(!silent)setLoading(false)}
  useEffect(()=>{load();if(!supabase)return;const channel=supabase.channel('admin-orders-live').on('postgres_changes',{event:'*',schema:'public',table:'orders'},()=>load(true)).on('postgres_changes',{event:'*',schema:'public',table:'order_items'},()=>load(true)).subscribe();const timer=window.setInterval(()=>load(true),5000);return()=>{window.clearInterval(timer);supabase.removeChannel(channel)}},[]);
  async function change(id:string,status:string){if(!supabase)return;setMessage('Atualizando pedido...');const{error}=await supabase.from('orders').update({status,updated_at:new Date().toISOString()}).eq('id',id);if(error)setMessage(error.message);else{setMessage('Pedido atualizado.');load(true)}}
  const money=(n:number)=>`R$ ${Number(n).toFixed(2).replace('.',',')}`;
