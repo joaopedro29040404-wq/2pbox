@@ -19,10 +19,7 @@ export default function PaymentBrick({ amount, orderId, email, cpf, onResult, on
   const payer = payerCpf.length === 11 ? { identification: { type: 'CPF', number: payerCpf } } : undefined;
 
   const redirectToResult = (paymentResult: PaymentResult) => {
-    const query = new URLSearchParams({
-      payment: paymentResult.status || 'pending',
-      statusDetail: paymentResult.statusDetail || 'Não informado pelo Mercado Pago',
-    });
+    const query = new URLSearchParams({ payment: paymentResult.status || 'pending', statusDetail: paymentResult.statusDetail || 'Não informado pelo Mercado Pago' });
     if (paymentResult.id) query.set('paymentId', String(paymentResult.id));
     if (paymentResult.mercadoPagoOrderId) query.set('mpOrderId', String(paymentResult.mercadoPagoOrderId));
     if (paymentResult.mercadoPagoPaymentId) query.set('mpPaymentId', String(paymentResult.mercadoPagoPaymentId));
@@ -57,9 +54,7 @@ export default function PaymentBrick({ amount, orderId, email, cpf, onResult, on
             return;
           }
 
-          const transactionResult: PaymentResult = { ...result, status: result.status || result.paymentStatus || 'pending', statusDetail: result.statusDetail || result.paymentStatusDetail, httpStatus: response.status };
-          // create-payment is responsible for the first server-side reconciliation.
-          // All following screens read the canonical order from the backend.
+          const transactionResult: PaymentResult = { ...result, status: result.status || result.paymentStatus || 'pending', statusDetail: result.statusDetail || result.paymentStatusDetail || undefined, httpStatus: response.status };
           onResult(transactionResult);
           redirectToResult(transactionResult);
         } catch (error) {
