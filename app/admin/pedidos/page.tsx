@@ -16,16 +16,27 @@ export default function OrdersPage(){
  async function reconcilePayments(currentOrders:Order[]){
   const now=Date.now();
   if(now-lastPaymentReconcile.current<10000)return;
-  const candidates=currentOrders.filter(o=>['pending','in_process','authorized'].includes(String(o.payment_status||'pending'))).slice(0,12);
+  const candidates=currentOrders.filter(o=>['pending','in_process','authorized'].includes(String(o.payment_status||'pending')));
   if(!candidates.length)return;
   lastPaymentReconcile.current=now;
-  await Promise.allSettled(candidates.map(async o=>{
+  const results=await Promise.allSettled(candidates.map(async o=>{
    const params=new URLSearchParams({orderId:o.id});
    if(o.payment_id)params.set('paymentId',o.payment_id);
    const response=await fetch(`/api/mercadopago/payment-status?${params.toString()}`,{cache:'no-store'});
    if(!response.ok)throw new Error(`Payment reconciliation failed: ${response.status}`);
-   return response.json();
+   return {orderId:o.id,data:await response.json()};
   }));
+  const updates=new Map<string,Partial<Order>>();
+  for(const result of results){
+   if(result.status!=='fulfilled')continue;
+   const {orderId,data}=result.value;
+   if(data?.paymentStatus||data?.orderStatus){
+    updates.set(orderId,{payment_status:data.paymentStatus||undefined,status:data.orderStatus||undefined,payment_id:data.paymentId||undefined});
+   }
+  }
+  if(updates.size){
+   setOrders(prev=>prev.map(order=>updates.has(order.id)?{...order,...updates.get(order.id)}:order));
+  }
  }
  async function load(silent=false){if(!supabase)return;if(!silent)setLoading(true);const [{data:o,error},{data:i}]=await Promise.all([supabase.from('orders').select('*').order('created_at',{ascending:false}),supabase.from('order_items').select('order_id,product_name,quantity,total')]);if(error)setMessage(error.message);else{const nextOrders=(o??[]) as Order[];setOrders(nextOrders);void reconcilePayments(nextOrders)}setItems((i??[]) as Item[]);if(!silent)setLoading(false)}
  useEffect(()=>{load();if(!supabase)return;const channel=supabase.channel('admin-orders-live').on('postgres_changes',{event:'*',schema:'public',table:'orders'},()=>load(true)).on('postgres_changes',{event:'*',schema:'public',table:'order_items'},()=>load(true)).subscribe();const timer=window.setInterval(()=>load(true),5000);return()=>{window.clearInterval(timer);supabase.removeChannel(channel)}},[]);
