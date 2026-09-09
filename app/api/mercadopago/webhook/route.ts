@@ -48,6 +48,7 @@ export async function POST(request: Request) {
 
     if (!resourceId) return NextResponse.json({ ok: true, acknowledged: true });
     if (type && !['payment', 'order'].includes(type)) return NextResponse.json({ ok: true, ignored: true });
+
     if (!validateWebhookSignature(request, resourceId)) {
       console.error('Mercado Pago webhook rejected: invalid signature', { type, action, resourceId });
       return NextResponse.json({ error: 'Assinatura do webhook inválida.' }, { status: 401 });
@@ -70,6 +71,7 @@ export async function POST(request: Request) {
     if (!response.ok) return NextResponse.json({ error: 'Não foi possível consultar o recurso no Mercado Pago.' }, { status: 502 });
 
     let synced: SyncedPayment | null = null;
+
     if (type === 'order' || resource?.type === 'online') {
       const orderId = String(resource?.external_reference || '').trim();
       const payment = resource?.transactions?.payments?.[0];
@@ -96,7 +98,12 @@ export async function POST(request: Request) {
       paymentId: synced?.paymentId || null,
     });
 
-    return NextResponse.json({ ok: true, acknowledged: true, resourceFound: true, synced: Boolean(synced) });
+    return NextResponse.json({
+      ok: true,
+      acknowledged: true,
+      resourceFound: true,
+      synced: Boolean(synced),
+    });
   } catch (error) {
     console.error('Mercado Pago webhook error:', error);
     return NextResponse.json({ error: 'Webhook processado com erro.' }, { status: 500 });
