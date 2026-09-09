@@ -5,12 +5,15 @@ import { getMercadoPagoAccessToken, syncOrderPayment } from '@/lib/mercadopago-s
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+type SyncedPayment = {
+  paymentStatus?: string | null;
+  orderStatus?: string | null;
+  paymentId?: string | null;
+  statusDetail?: string | null;
+};
+
 function validateWebhookSignature(request: Request, dataId: string) {
   const secret = String(process.env.MERCADOPAGO_WEBHOOK_SECRET || '').trim();
-
-  // The secret is strongly recommended by Mercado Pago, but a missing secret
-  // must not disable the webhook completely. When a secret is configured,
-  // every notification is validated before it can update an order.
   if (!secret) return true;
 
   const xSignature = request.headers.get('x-signature') || '';
@@ -66,7 +69,7 @@ export async function POST(request: Request) {
     if (response.status === 404) return NextResponse.json({ ok: true, acknowledged: true, resourceFound: false });
     if (!response.ok) return NextResponse.json({ error: 'Não foi possível consultar o recurso no Mercado Pago.' }, { status: 502 });
 
-    let synced = null;
+    let synced: SyncedPayment | null = null;
     if (type === 'order' || resource?.type === 'online') {
       const orderId = String(resource?.external_reference || '').trim();
       const payment = resource?.transactions?.payments?.[0];
