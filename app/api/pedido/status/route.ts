@@ -7,27 +7,38 @@ export const runtime = 'nodejs';
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const orderId = String(url.searchParams.get('orderId') || '').trim();
+    const requestedOrderId = String(url.searchParams.get('orderId') || '').trim();
     const email = String(url.searchParams.get('email') || '').trim().toLowerCase();
 
-    if (!orderId || !email) return NextResponse.json({ error: 'Pedido e e-mail são obrigatórios.' }, { status: 400 });
+    if (!email || !email.includes('@')) {
+      return NextResponse.json({ error: 'E-mail é obrigatório.' }, { status: 400 });
+    }
 
     const admin = getAdminSupabase();
     if (!admin) return NextResponse.json({ error: 'Servidor não configurado.' }, { status: 500 });
 
-    const { data: currentOrder, error: currentOrderError } = await admin
+    // O acompanhamento público é feito pelo e-mail usado na compra.
+    // Se um ID vier da página interna de pedido, ele continua sendo validado junto ao e-mail.
+    let orderQuery = admin
       .from('orders')
       .select('id,customer_email,payment_id')
-      .eq('id', orderId)
-      .ilike('customer_email', email)
-      .maybeSingle();
+      .ilike('customer_email', email);
+
+    if (requestedOrderId) {
+      orderQuery = orderQuery.eq('id', requestedOrderId);
+    } else {
+      orderQuery = orderQuery.order('created_at', { ascending: false }).limit(1);
+    }
+
+    const { data: currentOrder, error: currentOrderError } = await orderQuery.maybeSingle();
 
     if (currentOrderError) {
       console.error('Public order lookup error:', currentOrderError);
       return NextResponse.json({ error: 'Não foi possível consultar o pedido.' }, { status: 500 });
     }
-    if (!currentOrder) return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
+    if (!currentOrder) return NextResponse.json({ error: 'Nenhum pedido encontrado para este e-mail.' }, { status: 404 });
 
+    const orderId = String(currentOrder.id);
     const accessToken = getMercadoPagoAccessToken();
     let latestPayment: any = null;
 
@@ -43,8 +54,6 @@ export async function GET(request: Request) {
           if (paymentResponse.ok) latestPayment = await paymentResponse.json();
         }
 
-        // Fallback: localizar o pagamento pelo vínculo imutável do pedido.
-        // Isso cobre o intervalo entre criação do pagamento e persistência do ID.
         if (!latestPayment) {
           const searchResponse = await fetch(`https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(orderId)}&sort=date_created&criteria=desc&limit=10`, {
             headers: { Authorization: `Bearer ${accessToken}` },
@@ -60,8 +69,6 @@ export async function GET(request: Request) {
           try {
             await syncOrderPayment(orderId, latestPayment);
           } catch (syncError) {
-            // A tela ainda pode refletir o estado oficial retornado pelo Mercado Pago
-            // enquanto a persistência é corrigida pelo webhook/tentativa seguinte.
             console.error('Public order Mercado Pago reconciliation error:', syncError);
           }
         }
@@ -83,9 +90,6 @@ export async function GET(request: Request) {
     }
     if (!data) return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
 
-    // Se a persistência estiver momentaneamente atrasada, nunca mostre um
-    // "Aguardando pagamento" falso quando o Mercado Pago já informou outro estado.
-    // O banco continua sendo atualizado pelo sync/webhook na próxima tentativa.
     const mpStatus = String(latestPayment?.status || '').toLowerCase();
     const validPaymentStatuses = new Set(['pending', 'in_process', 'authorized', 'approved', 'rejected', 'cancelled']);
     const responseOrder = { ...data } as any;
