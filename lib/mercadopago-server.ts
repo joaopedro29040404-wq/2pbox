@@ -6,14 +6,16 @@ export function getMercadoPagoAccessToken() {
 
 export function getAdminSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  // Supabase now also supports project secret keys (sb_secret_...). Keep the
+  // legacy service-role variable for compatibility with existing deployments.
+  const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || '').trim();
   if (!url || !serviceKey) return null;
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 }
 
 export async function syncOrderPayment(orderId: string, payment: any) {
   const admin = getAdminSupabase();
-  if (!admin) throw new Error('SUPABASE_SERVICE_ROLE_KEY não configurada no servidor.');
+  if (!admin) throw new Error('Supabase backend key não configurada. Adicione SUPABASE_SERVICE_ROLE_KEY (ou SUPABASE_SECRET_KEY) na Vercel.');
 
   const externalReference = String(payment?.external_reference || '').trim();
   if (!externalReference || externalReference !== orderId) throw new Error('Pagamento não pertence ao pedido informado.');
@@ -61,7 +63,7 @@ export async function syncOrderPayment(orderId: string, payment: any) {
       return { paymentStatus: String(currentOrder?.payment_status || 'approved'), orderStatus: String(currentOrder?.status || 'confirmed'), mpStatus, paymentId: String(currentOrder?.payment_id || incomingPaymentId || ''), statusDetail };
     }
 
-    const { error: updateError } = await admin.from('orders').update({ payment_id: incomingPaymentId || currentOrder?.payment_id || null, payment_status: paymentStatus, status: orderStatus, updated_at: new Date().toISOString() }).eq('id', orderId);
+    const { error: updateError } = await admin.from('orders').update({ payment_id: incomingPaymentId || currentOrder?.payment_id || null, payment_status: paymentStatus, payment_status_detail: statusDetail, payment_updated_at: new Date().toISOString(), status: orderStatus, updated_at: new Date().toISOString() }).eq('id', orderId);
     if (updateError) throw updateError;
   }
 
