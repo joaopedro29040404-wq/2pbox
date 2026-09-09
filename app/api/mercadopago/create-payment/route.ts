@@ -48,11 +48,6 @@ export async function POST(request: Request) {
     const normalizedDeviceId = String(deviceId || '').trim();
 
     if (isLegacyTestToken) {
-      // TEST-* /v1/payments must stay as close as possible to Mercado Pago's
-      // documented minimal card-payment payload. In particular, do not send
-      // additional_info.payer or other optional payer metadata in this path.
-      // The cardholder name is used by Mercado Pago's test-card rules during
-      // tokenization, so it does not need to be repeated in the API payload.
       const paymentBody = {
         transaction_amount: amount,
         token,
@@ -96,18 +91,11 @@ export async function POST(request: Request) {
         testEnvironment: true,
         testBuyerEmailUsed: payerEmail,
         requestSummary: {
-          endpoint: '/v1/payments',
-          paymentMethodId,
-          installments,
-          amount,
-          issuerId: issuerId ?? null,
-          receivedIssuerId: receivedIssuerId ?? null,
-          issuerIdSent: issuerId !== undefined,
-          hasCardToken: Boolean(token),
-          hasIdentification: Boolean(identification),
-          hasCardholderName: Boolean(cardholderName),
-          hasDeviceSession: Boolean(normalizedDeviceId),
-          hasAdditionalInfo: false,
+          endpoint: '/v1/payments', paymentMethodId, installments, amount,
+          issuerId: issuerId ?? null, receivedIssuerId: receivedIssuerId ?? null,
+          issuerIdSent: issuerId !== undefined, hasCardToken: Boolean(token),
+          hasIdentification: Boolean(identification), hasCardholderName: Boolean(cardholderName),
+          hasDeviceSession: Boolean(normalizedDeviceId), hasAdditionalInfo: false,
         },
       };
 
@@ -129,14 +117,9 @@ export async function POST(request: Request) {
       try { await syncOrderPayment(String(orderId), normalizedResult); } catch (syncError) { console.error('Legacy payment sync error:', syncError); }
 
       return NextResponse.json({
-        id: normalizedResult.id,
-        orderId: null,
-        ...diagnostics,
-        status: normalizedResult.status,
-        statusDetail: normalizedResult.status_detail,
-        paymentMethodId: normalizedResult.payment_method_id,
-        legacyPaymentsApi: true,
-        pix: null,
+        id: normalizedResult.id, orderId: null, ...diagnostics,
+        status: normalizedResult.status, statusDetail: normalizedResult.status_detail,
+        paymentMethodId: normalizedResult.payment_method_id, legacyPaymentsApi: true, pix: null,
       });
     }
 
@@ -197,17 +180,41 @@ export async function POST(request: Request) {
     const payment = result?.transactions?.payments?.[0];
     const mercadoPagoOrderId = result?.id ? String(result.id) : null;
     const mercadoPagoPaymentId = payment?.id ? String(payment.id) : payment?.reference_id ? String(payment.reference_id) : null;
-    const paymentStatus = payment?.status || null;
+    const paymentStatus = String(payment?.status || '').toLowerCase() || null;
     const paymentStatusDetail = payment?.status_detail || null;
-    const orderStatus = result?.status || null;
+    const orderStatus = String(result?.status || '').toLowerCase() || null;
     const orderStatusDetail = result?.status_detail || null;
-    const status = paymentStatus || orderStatus || 'pending';
+
+    // The Orders API is authoritative at the parent order level. A nested
+    // transaction may still say pending while the order is already processed.
+    const effectiveStatus = ['processed', 'approved', 'accredited', 'failed', 'rejected', 'canceled', 'cancelled', 'refunded', 'charged_back'].includes(orderStatus || '')
+      ? orderStatus
+      : paymentStatus || orderStatus || 'pending';
     const statusDetail = paymentStatusDetail || orderStatusDetail || null;
-    const normalizedResult = { ...result, id: mercadoPagoPaymentId || mercadoPagoOrderId, status, status_detail: statusDetail, payment_method_id: payment?.payment_method?.id || paymentMethodId, order_id: mercadoPagoOrderId };
+    const normalizedResult = {
+      ...result,
+      id: mercadoPagoPaymentId || mercadoPagoOrderId,
+      status: effectiveStatus,
+      status_detail: statusDetail,
+      payment_method_id: payment?.payment_method?.id || paymentMethodId,
+      order_id: mercadoPagoOrderId,
+      order_status: orderStatus,
+      order_status_detail: orderStatusDetail,
+      external_reference: String(result?.external_reference || orderId),
+    };
     try { await syncOrderPayment(String(orderId), normalizedResult); } catch (syncError) { console.error('Order payment sync error:', syncError); }
+
     const transactionData = payment?.point_of_interaction?.transaction_data || result?.point_of_interaction?.transaction_data || {};
     const isPix = paymentMethodId === 'pix';
-    return NextResponse.json({ id: mercadoPagoPaymentId || mercadoPagoOrderId, orderId: mercadoPagoOrderId, ...diagnostics, status, statusDetail, paymentMethodId: payment?.payment_method?.id || paymentMethodId, pix: isPix ? { qrCode: transactionData.qr_code || null, qrCodeBase64: transactionData.qr_code_base64 || null, ticketUrl: transactionData.ticket_url || null } : null });
+    return NextResponse.json({
+      id: mercadoPagoPaymentId || mercadoPagoOrderId,
+      orderId: mercadoPagoOrderId,
+      ...diagnostics,
+      status: effectiveStatus,
+      statusDetail,
+      paymentMethodId: payment?.payment_method?.id || paymentMethodId,
+      pix: isPix ? { qrCode: transactionData.qr_code || null, qrCodeBase64: transactionData.qr_code_base64 || null, ticketUrl: transactionData.ticket_url || null } : null,
+    });
   } catch (error) {
     console.error('Mercado Pago payment creation error:', error);
     return NextResponse.json({ error: 'Não foi possível processar o pagamento.', message: error instanceof Error ? error.message : String(error) }, { status: 502 });
