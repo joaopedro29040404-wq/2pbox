@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
-const MODEL = 'gemini-2.5-flash';
+// Gemini Flash com suporte multimodal e Free Tier.
+// Não usamos nenhum modelo de geração de imagem: somente análise da foto + texto.
+const MODEL = 'gemini-3.8-flash';
 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 function parseJson(raw: string) {
@@ -16,7 +18,7 @@ function parseJson(raw: string) {
 }
 
 export async function GET() {
-  return NextResponse.json({ configured: Boolean(process.env.GEMINI_API_KEY), model: MODEL });
+  return NextResponse.json({ configured: Boolean(process.env.GEMINI_API_KEY), model: MODEL, provider: 'Google Gemini Free Tier' });
 }
 
 export async function POST(request: Request) {
