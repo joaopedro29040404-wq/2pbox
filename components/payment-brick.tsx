@@ -19,30 +19,15 @@ export default function PaymentBrick({ amount, orderId, email, cpf, onResult, on
   const payer = payerCpf.length === 11 ? { identification: { type: 'CPF', number: payerCpf } } : undefined;
 
   const redirectToResult = (paymentResult: PaymentResult) => {
-    const diagnostic = {
-      httpStatus: paymentResult.httpStatus ?? null,
-      mercadoPagoOrderId: paymentResult.mercadoPagoOrderId ?? null,
-      mercadoPagoPaymentId: paymentResult.mercadoPagoPaymentId ?? (paymentResult.id ?? null),
-      orderStatus: paymentResult.orderStatus ?? null,
-      orderStatusDetail: paymentResult.orderStatusDetail ?? null,
-      paymentStatus: paymentResult.paymentStatus ?? paymentResult.status ?? null,
-      paymentStatusDetail: paymentResult.paymentStatusDetail ?? paymentResult.statusDetail ?? null,
-      status: paymentResult.status ?? null,
-      statusDetail: paymentResult.statusDetail ?? null,
-      paymentMethodId: paymentResult.paymentMethodId ?? null,
-      message: paymentResult.message ?? null,
-      cause: paymentResult.cause ?? null,
-    };
-    const query = new URLSearchParams({ payment: paymentResult.status || 'pending', statusDetail: paymentResult.statusDetail || 'Não informado pelo Mercado Pago', mpDiagnostics: JSON.stringify(diagnostic) });
+    const query = new URLSearchParams({
+      payment: paymentResult.status || 'pending',
+      statusDetail: paymentResult.statusDetail || 'Não informado pelo Mercado Pago',
+    });
     if (paymentResult.id) query.set('paymentId', String(paymentResult.id));
     if (paymentResult.mercadoPagoOrderId) query.set('mpOrderId', String(paymentResult.mercadoPagoOrderId));
     if (paymentResult.mercadoPagoPaymentId) query.set('mpPaymentId', String(paymentResult.mercadoPagoPaymentId));
-    if (paymentResult.orderStatus) query.set('orderStatus', String(paymentResult.orderStatus));
-    if (paymentResult.orderStatusDetail) query.set('orderStatusDetail', String(paymentResult.orderStatusDetail));
     if (paymentResult.paymentStatus) query.set('paymentStatus', String(paymentResult.paymentStatus));
-    if (paymentResult.paymentStatusDetail) query.set('paymentStatusDetail', String(paymentResult.paymentStatusDetail));
-    if (paymentResult.message) query.set('mpMessage', String(paymentResult.message));
-    if (paymentResult.cause) query.set('mpCause', typeof paymentResult.cause === 'string' ? paymentResult.cause : JSON.stringify(paymentResult.cause));
+    if (paymentResult.orderStatus) query.set('orderStatus', String(paymentResult.orderStatus));
     window.location.replace(`/pagamento/${encodeURIComponent(orderId)}?${query.toString()}`);
   };
 
@@ -61,7 +46,7 @@ export default function PaymentBrick({ amount, orderId, email, cpf, onResult, on
             const deviceId = String(window.MP_DEVICE_SESSION_ID || '').trim();
             response = await fetch('/api/mercadopago/create-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ formData: enrichedFormData, orderId, total: amount, deviceId: deviceId || undefined, additionalData: additionalData || null }), signal: controller.signal, cache: 'no-store' });
           } finally { window.clearTimeout(timeout); }
-          let result: PaymentResult & { error?: string; details?: unknown };
+          let result: PaymentResult & { error?: string };
           try { result = await response.json(); } catch { result = { status: 'rejected', statusDetail: 'Resposta inválida do servidor.' }; }
           try { localStorage.setItem('2p_guest_order_email', payerEmail); localStorage.setItem('2p_last_order_id', orderId); } catch {}
 
@@ -72,9 +57,9 @@ export default function PaymentBrick({ amount, orderId, email, cpf, onResult, on
             return;
           }
 
-          const transactionResult: PaymentResult = { ...result, id: result.id, status: result.status || result.paymentStatus || 'pending', statusDetail: result.statusDetail || result.paymentStatusDetail, paymentMethodId: result.paymentMethodId, httpStatus: response.status };
-          // The server has already synchronized Supabase. This callback is only
-          // for the checkout container; the next screen reads the canonical order state.
+          const transactionResult: PaymentResult = { ...result, status: result.status || result.paymentStatus || 'pending', statusDetail: result.statusDetail || result.paymentStatusDetail, httpStatus: response.status };
+          // create-payment is responsible for the first server-side reconciliation.
+          // All following screens read the canonical order from the backend.
           onResult(transactionResult);
           redirectToResult(transactionResult);
         } catch (error) {
@@ -86,9 +71,7 @@ export default function PaymentBrick({ amount, orderId, email, cpf, onResult, on
       onReady={() => undefined}
       onError={(error) => {
         console.error('Mercado Pago Card Payment Brick:', error);
-        let detail = 'O Mercado Pago encontrou um problema no formulário.';
-        try { const serialized = typeof error === 'string' ? error : JSON.stringify(error); if (serialized && serialized !== '{}') detail += ` Diagnóstico do Brick: ${serialized}`; } catch {}
-        onError(detail);
+        onError('O Mercado Pago encontrou um problema no formulário.');
       }}
     />
     {submitting && <div className="payment-processing" role="status" aria-live="polite">Processando pagamento… não feche esta tela.</div>}
