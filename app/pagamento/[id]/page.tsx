@@ -35,7 +35,14 @@ function PaymentResultPageContent() {
       const response = await fetch(`/api/mercadopago/payment-status?orderId=${encodeURIComponent(orderId)}${paymentId ? `&paymentId=${encodeURIComponent(paymentId)}` : ''}${mpOrderId ? `&mpOrderId=${encodeURIComponent(mpOrderId)}` : ''}`, { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error || 'status');
-      setStatus(normalizePaymentStatus(data.paymentStatus));
+      const nextStatus = normalizePaymentStatus(data.paymentStatus);
+      // Never downgrade a terminal approval because of a transient/stale
+      // response from polling. Mercado Pago's approved state is terminal for
+      // this screen and the backend is responsible for any later refund flow.
+      setStatus((current) => {
+        if (current === 'approved' && !['approved', 'rejected', 'cancelled'].includes(nextStatus)) return current;
+        return nextStatus;
+      });
       setLastUpdate(new Date());
     } catch {} finally { setLoading(false); setChecking(false); }
   }
