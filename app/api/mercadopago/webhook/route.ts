@@ -7,7 +7,11 @@ export const runtime = 'nodejs';
 
 function validateWebhookSignature(request: Request, dataId: string) {
   const secret = String(process.env.MERCADOPAGO_WEBHOOK_SECRET || '').trim();
-  if (!secret) return false;
+
+  // The secret is strongly recommended by Mercado Pago, but a missing secret
+  // must not disable the webhook completely. When a secret is configured,
+  // every notification is validated before it can update an order.
+  if (!secret) return true;
 
   const xSignature = request.headers.get('x-signature') || '';
   const xRequestId = request.headers.get('x-request-id') || '';
@@ -36,11 +40,15 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
     const url = new URL(request.url);
     const type = String(body?.type || body?.topic || url.searchParams.get('type') || '').toLowerCase();
+    const action = String(body?.action || '').toLowerCase();
     const resourceId = String(body?.data?.id || body?.id || url.searchParams.get('data.id') || '').trim();
 
     if (!resourceId) return NextResponse.json({ ok: true, acknowledged: true });
     if (type && !['payment', 'order'].includes(type)) return NextResponse.json({ ok: true, ignored: true });
-    if (!validateWebhookSignature(request, resourceId)) return NextResponse.json({ error: 'Assinatura do webhook inválida.' }, { status: 401 });
+    if (!validateWebhookSignature(request, resourceId)) {
+      console.error('Mercado Pago webhook rejected: invalid signature', { type, action, resourceId });
+      return NextResponse.json({ error: 'Assinatura do webhook inválida.' }, { status: 401 });
+    }
 
     const accessToken = getMercadoPagoAccessToken();
     if (!accessToken) return NextResponse.json({ error: 'Mercado Pago não configurado.' }, { status: 500 });
@@ -58,11 +66,12 @@ export async function POST(request: Request) {
     if (response.status === 404) return NextResponse.json({ ok: true, acknowledged: true, resourceFound: false });
     if (!response.ok) return NextResponse.json({ error: 'Não foi possível consultar o recurso no Mercado Pago.' }, { status: 502 });
 
+    let synced = null;
     if (type === 'order' || resource?.type === 'online') {
       const orderId = String(resource?.external_reference || '').trim();
       const payment = resource?.transactions?.payments?.[0];
       if (orderId && payment) {
-        await syncOrderPayment(orderId, {
+        synced = await syncOrderPayment(orderId, {
           ...payment,
           id: payment?.id || resource?.id,
           external_reference: orderId,
@@ -72,10 +81,19 @@ export async function POST(request: Request) {
       }
     } else {
       const orderId = String(resource?.external_reference || '').trim();
-      if (orderId) await syncOrderPayment(orderId, resource);
+      if (orderId) synced = await syncOrderPayment(orderId, resource);
     }
 
-    return NextResponse.json({ ok: true, acknowledged: true, resourceFound: true });
+    console.info('Mercado Pago webhook synced', {
+      type,
+      action,
+      resourceId,
+      orderStatus: synced?.orderStatus || null,
+      paymentStatus: synced?.paymentStatus || null,
+      paymentId: synced?.paymentId || null,
+    });
+
+    return NextResponse.json({ ok: true, acknowledged: true, resourceFound: true, synced: Boolean(synced) });
   } catch (error) {
     console.error('Mercado Pago webhook error:', error);
     return NextResponse.json({ error: 'Webhook processado com erro.' }, { status: 500 });
