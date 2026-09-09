@@ -11,13 +11,21 @@ export function getAdminSupabase() {
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 }
 
+function getPublicSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
+  if (!url || !anonKey) return null;
+  return createClient(url, anonKey, { auth: { autoRefreshToken: false, persistSession: false } });
+}
+
 const APPROVED = new Set(['approved', 'processed', 'accredited']);
 const REJECTED = new Set(['rejected', 'failed']);
 const CANCELLED = new Set(['cancelled', 'canceled', 'refunded', 'charged_back']);
 
 export async function syncOrderPayment(orderId: string, payment: any) {
   const admin = getAdminSupabase();
-  if (!admin) throw new Error('Supabase backend key não configurada.');
+  const publicClient = getPublicSupabase();
+  if (!admin && !publicClient) throw new Error('Supabase backend key não configurada.');
 
   const externalReference = String(payment?.external_reference || '').trim();
   if (!externalReference || externalReference !== orderId) throw new Error('Pagamento não pertence ao pedido informado.');
@@ -37,7 +45,8 @@ export async function syncOrderPayment(orderId: string, payment: any) {
   const statusDetail = String(payment?.status_detail || payment?.order_status_detail || '').trim() || null;
   const now = new Date().toISOString();
 
-  const { data: current, error: currentError } = await admin
+  const reader = admin || publicClient;
+  const { data: current, error: currentError } = await reader!
     .from('orders')
     .select('status,payment_status,payment_id')
     .eq('id', orderId)
@@ -66,13 +75,29 @@ export async function syncOrderPayment(orderId: string, payment: any) {
   };
   if (paymentStatus === 'approved') updatePayload.status = 'confirmed';
 
-  // One canonical persistence path: every Mercado Pago event, checkout response,
-  // webhook and fallback reconciliation ends here. The service-role client is
-  // used server-side, so this does not depend on browser RLS policies.
-  const { error: updateError } = await admin.from('orders').update(updatePayload).eq('id', orderId);
-  if (updateError) throw updateError;
+  let updateError: any = null;
+  if (admin) {
+    const result = await admin.from('orders').update(updatePayload).eq('id', orderId);
+    updateError = result.error;
+  }
 
-  const { data: persisted, error: persistedError } = await admin
+  // The database already exposes a SECURITY DEFINER reconciliation function.
+  // Use it as a deterministic fallback when the Vercel service-role key is
+  // missing or a direct service-role update is unavailable.
+  if (updateError || !admin) {
+    const rpcClient = publicClient || admin;
+    if (!rpcClient) throw updateError || new Error('Cliente Supabase indisponível.');
+    const { error: rpcError } = await rpcClient.rpc('sync_order_payment_state', {
+      p_order_id: orderId,
+      p_payment_id: incomingPaymentId || current.payment_id || null,
+      p_payment_status: paymentStatus,
+      p_order_status: paymentStatus === 'approved' ? 'confirmed' : targetOrderStatus,
+      p_status_detail: statusDetail,
+    });
+    if (rpcError) throw updateError || rpcError;
+  }
+
+  const { data: persisted, error: persistedError } = await (admin || publicClient)!
     .from('orders')
     .select('status,payment_status,payment_status_detail,payment_id')
     .eq('id', orderId)

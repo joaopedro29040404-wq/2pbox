@@ -8,7 +8,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 const STATUS = {
   approved: { title: 'Pagamento confirmado!', text: 'Obrigado pela sua compra. O Mercado Pago confirmou o pagamento e a 2P Box já pode seguir com o pedido.', icon: CheckCircle2 },
   rejected: { title: 'Pagamento recusado', text: 'O pagamento não foi aprovado. Você pode tentar novamente com outra forma de pagamento.', icon: XCircle },
-  cancelled: { title: 'Pagamento não concluído', text: 'Este pagamento foi cancelado ou não foi concluído. Você pode voltar à loja e tentar novamente.', icon: XCircle },
+  cancelled: { title: 'Pagamento não concluído', text: 'O pagamento foi cancelado ou não foi concluído. Você pode voltar à loja e tentar novamente.', icon: XCircle },
   pending: { title: 'Pagamento pendente', text: 'O pagamento ainda não foi confirmado. Continuaremos consultando automaticamente.', icon: Clock3 },
   in_process: { title: 'Pagamento em análise', text: 'O pagamento foi recebido e ainda está sendo processado. A 2P Box continuará acompanhando automaticamente.', icon: Clock3 },
   authorized: { title: 'Pagamento autorizado', text: 'O pagamento foi autorizado e aguardamos a confirmação final.', icon: Clock3 },
@@ -21,7 +21,9 @@ function PaymentResultPageContent() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const orderId = decodeURIComponent(String(params?.id || ''));
-  const [status, setStatus] = useState<PaymentStatus>(() => normalizePaymentStatus(searchParams.get('payment')));
+  // The URL is not the source of truth. Always start pending and let the
+  // backend reconcile Mercado Pago with the actual order before showing approval.
+  const [status, setStatus] = useState<PaymentStatus>('pending');
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
@@ -35,16 +37,11 @@ function PaymentResultPageContent() {
       const response = await fetch(`/api/mercadopago/payment-status?orderId=${encodeURIComponent(orderId)}${paymentId ? `&paymentId=${encodeURIComponent(paymentId)}` : ''}${mpOrderId ? `&mpOrderId=${encodeURIComponent(mpOrderId)}` : ''}`, { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error || 'status');
-      const nextStatus = normalizePaymentStatus(data.paymentStatus);
-      // Never downgrade a terminal approval because of a transient/stale
-      // response from polling. Mercado Pago's approved state is terminal for
-      // this screen and the backend is responsible for any later refund flow.
-      setStatus((current) => {
-        if (current === 'approved' && !['approved', 'rejected', 'cancelled'].includes(nextStatus)) return current;
-        return nextStatus;
-      });
+      setStatus(normalizePaymentStatus(data.paymentStatus));
       setLastUpdate(new Date());
-    } catch {} finally { setLoading(false); setChecking(false); }
+    } catch {
+      // Keep the current persisted status when the network is temporarily unavailable.
+    } finally { setLoading(false); setChecking(false); }
   }
 
   useEffect(() => {
@@ -63,17 +60,14 @@ function PaymentResultPageContent() {
     <main className="payment-page">
       <div className="payment-topbar"><span>QUALIDADE</span><b>•</b><span>VARIEDADE</span><b>•</b><span>CONFIANÇA</span></div>
       <header className="payment-header"><div className="payment-header-inner"><Link href="/" className="payment-brand"><span className="payment-logo-frame"><img src="/logo.pnh.png" alt="2P Box" /></span><span className="payment-brand-copy"><strong>2P BOX</strong><small>COMPRA SEGURA</small></span></Link></div></header>
-
       <section className={`payment-card ${status}`}>
         <div className="payment-icon"><Icon size={36} /></div>
         <p className="payment-eyebrow">PEDIDO {orderId ? orderId.slice(0, 8).toUpperCase() : '—'}</p>
         <h1>{config.title}</h1>
         <p className="payment-text">{config.text}</p>
-
         {!terminal && <div className="payment-sync"><div><span className={`sync-dot ${checking ? 'active' : ''}`} /><strong>{checking ? 'Consultando pagamento' : 'Acompanhamento automático ativo'}</strong></div><small>Você não precisa atualizar esta página.</small></div>}
         {lastUpdate && !terminal && <small className="payment-updated">Última consulta: {lastUpdate.toLocaleTimeString('pt-BR')}</small>}
         {!terminal && <button className="payment-refresh" type="button" onClick={checkStatus} disabled={checking}><RefreshCw size={14} /> Atualizar agora</button>}
-
         <div className="payment-actions">
           {status === 'approved' && <Link href={`/pedido/${encodeURIComponent(orderId)}`} className="payment-primary"><PackageSearch size={17} /> Acompanhar pedido</Link>}
           {status !== 'approved' && status !== 'pending' && status !== 'in_process' && status !== 'authorized' && <Link href="/loja" className="payment-primary">Tentar novamente</Link>}
@@ -81,9 +75,7 @@ function PaymentResultPageContent() {
           {terminal && <Link href="/loja" className="payment-secondary">Voltar para a loja</Link>}
         </div>
       </section>
-
       <footer className="payment-footer">2P BOX <span>•</span> QUALIDADE • VARIEDADE • CONFIANÇA</footer>
-
       <style jsx>{`
         .payment-page{--yellow:#ffc400;--gold:#9a7200;min-height:100svh;background:#fff;color:#111;display:grid;grid-template-rows:auto auto 1fr auto;font-family:Inter,Arial,sans-serif;overflow-x:hidden}
         .payment-topbar{height:34px;background:#111;color:#fff;display:flex;align-items:center;justify-content:center;gap:14px;font-size:9px;font-weight:800;letter-spacing:.22em}.payment-topbar b{color:var(--yellow);font-size:8px}
