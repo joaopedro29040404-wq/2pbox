@@ -40,12 +40,29 @@ async function fetchOrder(accessToken: string, orderId: string) {
 }
 
 async function findBestOrder(accessToken: string, externalReference: string) {
-  const response = await fetch(`https://api.mercadopago.com/v1/orders/search?external_reference=${encodeURIComponent(externalReference)}&limit=20`, {
+  // Mercado Pago Orders search is GET /v1/orders, not /v1/orders/search.
+  // The API also requires begin_date and end_date and returns the list in `data`.
+  const now = new Date();
+  const begin = new Date(now.getTime() - 1000 * 60 * 60 * 24 * 90);
+  const params = new URLSearchParams({
+    begin_date: begin.toISOString(),
+    end_date: now.toISOString(),
+    external_reference: externalReference,
+    type: 'online',
+    page: '1',
+    page_size: '20',
+    sort_by: 'created_date',
+    sort_order: 'desc',
+  });
+  const response = await fetch(`https://api.mercadopago.com/v1/orders?${params.toString()}`, {
     headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store',
   });
   const result = await response.json().catch(() => null);
-  if (!response.ok) return null;
-  const orders = Array.isArray(result?.results) ? result.results : [];
+  if (!response.ok) {
+    console.error('Mercado Pago order search failed:', { status: response.status, result, externalReference });
+    return null;
+  }
+  const orders = Array.isArray(result?.data) ? result.data : [];
   const matching = orders.filter((order: any) => String(order?.external_reference || '').trim() === externalReference);
   matching.sort((a: any, b: any) => {
     const pa = statusPriority[String(a?.status || '').toLowerCase()] || 0;
