@@ -35,11 +35,22 @@ function getImageDataUrl(image: File, bytes: Buffer) {
   return `data:${image.type};base64,${bytes.toString('base64')}`;
 }
 
+// Diagnóstico seguro: nunca retorna a chave, apenas informa se ela existe no runtime.
+export async function GET() {
+  const key = process.env.POLLINATIONS_API_KEY;
+  return NextResponse.json({
+    configured: Boolean(key),
+    environment: process.env.VERCEL_ENV || 'local',
+    runtime: 'nodejs',
+    message: key ? 'POLLINATIONS_API_KEY está disponível neste runtime.' : 'POLLINATIONS_API_KEY está ausente neste runtime.',
+  });
+}
+
 export async function POST(request: Request) {
   const key = process.env.POLLINATIONS_API_KEY;
   if (!key) {
     return NextResponse.json(
-      { error: 'POLLINATIONS_API_KEY não configurada na Vercel.' },
+      { error: 'POLLINATIONS_API_KEY não configurada no runtime da Vercel.' },
       { status: 500 },
     );
   }
@@ -65,7 +76,6 @@ export async function POST(request: Request) {
     const imageBytes = Buffer.from(await image.arrayBuffer());
     const imageDataUrl = getImageDataUrl(image, imageBytes);
 
-    // Image-to-image: preserva a foto como referência e aplica o template visual fixo da 2P Box.
     const imageForm = new FormData();
     imageForm.append('model', 'kontext');
     imageForm.append('image', new Blob([imageBytes], { type: image.type }), image.name || 'produto.jpg');
@@ -115,7 +125,6 @@ export async function POST(request: Request) {
       outputBase64 = Buffer.from(await generatedResponse.arrayBuffer()).toString('base64');
     }
 
-    // A mesma API é usada para criar o texto, analisando a foto original.
     let copy = {
       title: productName,
       shortDescription: '',
