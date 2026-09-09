@@ -1,0 +1,22 @@
+insert into public.categories (name,slug,description) values
+('Alimentos e Conveniência','alimentos-conveniencia','Alimentos e itens de conveniência'),
+('Áudio','audio','Fones, microfones, caixas de som e acessórios de áudio'),
+('Cabos e Adaptadores','cabos-adaptadores','Cabos, adaptadores, conversores e conectividade'),
+('Carregadores e Energia','carregadores-energia','Carregadores, pilhas, baterias e fontes'),
+('Informática e Periféricos','informatica-perifericos','Periféricos e acessórios para informática'),
+('Celulares e Acessórios','celulares-acessorios','Celulares, acessórios e itens para dispositivos móveis'),
+('Brinquedos e Jogos','brinquedos-jogos','Brinquedos, jogos e entretenimento'),
+('Casa e Cozinha','casa-cozinha','Utensílios para casa e cozinha'),
+('Organização e Limpeza','organizacao-limpeza','Organização, armazenamento e limpeza'),
+('Automotivo','automotivo','Acessórios e utilidades automotivas'),
+('Ferramentas e Utilidades','ferramentas-utilidades','Ferramentas e utilidades gerais'),
+('Beleza e Cuidados Pessoais','beleza-cuidados-pessoais','Beleza, higiene e cuidados pessoais'),
+('Acessórios Pessoais','acessorios-pessoais','Acessórios de uso pessoal'),
+('Esportes e Lazer','esportes-lazer','Esportes, fitness e lazer'),
+('Segurança e Elétrica','seguranca-eletrica','Segurança, elétrica e instalações'),
+('Moda e Costura','moda-costura','Moda, costura e acessórios têxteis'),
+('Artes e Artesanato','artes-artesanato','Materiais para arte e artesanato'),
+('Papelaria e Escritório','papelaria-escritorio','Papelaria, material escolar e escritório'),
+('Presentes e Decoração','presentes-decoracao','Presentes, decoração e itens decorativos'),
+('Diversos e Conveniência','diversos-conveniencia','Itens diversos e de conveniência')
+on conflict (slug) do update set name=excluded.name, description=excluded.description;
