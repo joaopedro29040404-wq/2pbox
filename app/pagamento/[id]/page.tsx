@@ -31,7 +31,8 @@ function PaymentResultPageContent() {
     setChecking(true);
     try {
       const paymentId = searchParams.get('paymentId') || searchParams.get('mpPaymentId') || '';
-      const response = await fetch(`/api/mercadopago/payment-status?orderId=${encodeURIComponent(orderId)}${paymentId ? `&paymentId=${encodeURIComponent(paymentId)}` : ''}`, { cache: 'no-store' });
+      const mpOrderId = searchParams.get('mpOrderId') || '';
+      const response = await fetch(`/api/mercadopago/payment-status?orderId=${encodeURIComponent(orderId)}${paymentId ? `&paymentId=${encodeURIComponent(paymentId)}` : ''}${mpOrderId ? `&mpOrderId=${encodeURIComponent(mpOrderId)}` : ''}`, { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error || 'status');
       setStatus(normalizePaymentStatus(data.paymentStatus));
