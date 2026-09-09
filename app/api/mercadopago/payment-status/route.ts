@@ -40,15 +40,21 @@ async function fetchOrder(accessToken: string, orderId: string) {
 }
 
 async function findBestOrder(accessToken: string, externalReference: string) {
-  // Orders API: a busca por external_reference usa /v1/orders/search.
-  // A Order é a fonte de verdade; não devemos depender somente da Payments API.
+  // Mercado Pago exige begin_date e end_date na busca de Orders.
+  // A Order é a fonte de verdade da integração atual.
+  const now = new Date();
+  const begin = new Date(now.getTime() - 1000 * 60 * 60 * 24 * 90);
   const params = new URLSearchParams({
+    begin_date: begin.toISOString(),
+    end_date: now.toISOString(),
     external_reference: externalReference,
-    limit: '50',
+    type: 'online',
+    page: '1',
+    page_size: '50',
     sort_by: 'created_date',
     sort_order: 'desc',
   });
-  const response = await fetch(`https://api.mercadopago.com/v1/orders/search?${params.toString()}`, {
+  const response = await fetch(`https://api.mercadopago.com/v1/orders?${params.toString()}`, {
     headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store',
   });
   const result = await response.json().catch(() => null);
@@ -56,7 +62,7 @@ async function findBestOrder(accessToken: string, externalReference: string) {
     console.error('Mercado Pago order search failed:', { status: response.status, result, externalReference });
     return null;
   }
-  const orders = Array.isArray(result?.data) ? result.data : Array.isArray(result?.results) ? result.results : [];
+  const orders = Array.isArray(result?.data) ? result.data : [];
   const matching = orders.filter((order: any) => String(order?.external_reference || '').trim() === externalReference);
   matching.sort((a: any, b: any) => {
     const pa = statusPriority[String(a?.status || '').toLowerCase()] || 0;
