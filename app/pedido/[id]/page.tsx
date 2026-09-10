@@ -228,22 +228,13 @@ function OrderPageContent() {
         {lastUpdated && <small>Atualizado às {lastUpdated.toLocaleTimeString('pt-BR')}</small>}
       </div>
 
-      <div className="status-grid">
-        <div className={`payment-card payment-${paymentStatus}`}>
-          <div className="status-icon">
-            {['failed', 'refunded'].includes(paymentStatus) ? <XCircle size={20} /> : paymentStatus === 'paid' ? <CheckCircle2 size={20} /> : <CreditCard size={20} />}
-          </div>
-          <div>
-            <span>Pagamento</span>
-            <strong>{PAYMENT_STATUS_LABELS[paymentStatus] || paymentStatus}</strong>
-          </div>
+      <div className={`order-card-status status-${order.status}`}>
+        <div className="status-icon">
+          {order.status === 'cancelled' ? <XCircle size={20} /> : ['confirmed', 'completed'].includes(order.status) ? <CheckCircle2 size={20} /> : <Package size={20} />}
         </div>
-        <div className={`order-card-status status-${order.status}`}>
-          <Package size={20} />
-          <div>
-            <span>Pedido</span>
-            <strong>{ORDER_STATUS_LABELS[order.status] || order.status}</strong>
-          </div>
+        <div>
+          <span>Pedido</span>
+          <strong>{ORDER_STATUS_LABELS[order.status] || order.status}</strong>
         </div>
       </div>
 
@@ -286,6 +277,13 @@ function OrderPageContent() {
               <h2>Pagamento e faturamento</h2>
             </div>
             <dl className="data-list">
+              <div>
+                <dt>Situação</dt>
+                <dd className={`payment-state payment-${paymentStatus}`}>
+                  {['failed', 'refunded'].includes(paymentStatus) ? <XCircle size={13} /> : paymentStatus === 'paid' ? <CheckCircle2 size={13} /> : <CreditCard size={13} />}
+                  {PAYMENT_STATUS_LABELS[paymentStatus] || paymentStatus}
+                </dd>
+              </div>
               <div>
                 <dt>Forma de pagamento</dt>
                 <dd>{formatPaymentMethod(order.payment_type, order.payment_method)}</dd>
@@ -384,14 +382,13 @@ function Shell({ children }: { children: React.ReactNode }) {
         .live-banner{display:flex;align-items:center;gap:8px;margin-top:18px;padding:11px 14px;background:#fff;border:1px solid #e4e4df;border-radius:10px;font-size:10px}
         .live-banner small{margin-left:auto;color:#999}
         .live-dot{width:8px;height:8px;border-radius:50%;background:#27a45b;box-shadow:0 0 0 4px #e6f6ec;flex:none}
-        .status-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
-        .payment-card,.order-card-status{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e4e4df;border-radius:11px;padding:15px}
+        .order-card-status{display:flex;align-items:center;gap:12px;margin-top:12px;background:#fff;border:1px solid #e4e4df;border-radius:11px;padding:16px}
         .status-icon{width:38px;height:38px;border-radius:9px;background:#fff4bf;display:grid;place-items:center;flex:none}
-        .payment-paid .status-icon{color:#278149;background:#eaf8ee}
-        .payment-failed .status-icon,.payment-refunded .status-icon{color:#a22;background:#fff0f0}
-        .payment-card>div:last-child,.order-card-status>div{display:grid;gap:4px}
-        .payment-card span,.order-card-status span,.data-list dt{font-size:8px;color:#999;text-transform:uppercase;letter-spacing:.12em}
-        .payment-card strong,.order-card-status strong{font-size:11px}
+        .order-card-status.status-confirmed .status-icon,.order-card-status.status-completed .status-icon{color:#278149;background:#eaf8ee}
+        .order-card-status.status-cancelled .status-icon{color:#a22;background:#fff0f0}
+        .order-card-status>div:last-child{display:grid;gap:4px}
+        .order-card-status span,.data-list dt{font-size:8px;color:#999;text-transform:uppercase;letter-spacing:.12em}
+        .order-card-status strong{font-size:13px}
         .order-layout{display:grid;grid-template-columns:1.55fr .9fr;gap:18px;margin-top:26px}
         .order-main,.side{display:grid;align-content:start;gap:18px}
         .card{background:#fff;border:1px solid #e4e4df;border-radius:12px;padding:23px}
@@ -411,6 +408,11 @@ function Shell({ children }: { children: React.ReactNode }) {
         .data-list dt{margin:0;flex:none}
         .data-list dd{margin:0;font:700 12px Inter,Arial,sans-serif;color:#111;text-align:right}
         .data-list .breakable{overflow-wrap:anywhere}
+        .payment-state{display:inline-flex;align-items:center;gap:6px}
+        .payment-state svg{flex:none}
+        .payment-state.payment-paid{color:#278149}
+        .payment-state.payment-failed,.payment-state.payment-refunded{color:#a22}
+        .payment-state.payment-pending{color:#9a7200}
         .send-copy{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;height:44px;margin-top:16px;border:1px solid #ddd;border-radius:9px;background:#fff;color:#111;font:800 11px Inter,Arial,sans-serif;cursor:pointer}
         .send-copy:hover:not(:disabled){border-color:#111}
         .send-copy:disabled{opacity:.6;cursor:wait}
@@ -436,7 +438,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           .order-badge{align-self:flex-start}
           .live-banner{align-items:flex-start;flex-wrap:wrap}
           .live-banner small{width:100%;margin:4px 0 0 16px}
-          .status-grid,.order-layout{grid-template-columns:1fr}
+          .order-layout{grid-template-columns:1fr}
           .card{padding:18px}
           .data-list>div{align-items:flex-start;flex-direction:column;gap:4px}
           .data-list dd{text-align:left}

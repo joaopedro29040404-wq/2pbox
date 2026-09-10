@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   CheckCircle2,
   Clock3,
-  CreditCard,
   ExternalLink,
   Mail,
   MapPin,
@@ -205,17 +204,10 @@ export default function AdminOrderDetail() {
         </div>
 
         <div className="status-grid">
-          <div className={`status-card payment-${paymentStatus}`}>
-            <div className="status-icon">
-              {['failed', 'refunded'].includes(paymentStatus) ? <XCircle size={22} /> : paymentStatus === 'paid' ? <CheckCircle2 size={22} /> : <CreditCard size={22} />}
-            </div>
-            <div>
-              <span>Pagamento</span>
-              <strong>{PAYMENT_STATUS_LABELS[paymentStatus] || paymentStatus}</strong>
-            </div>
-          </div>
           <div className={`status-card status-${order.status}`}>
-            <Package size={22} />
+            <div className="status-icon">
+              {order.status === 'cancelled' ? <XCircle size={22} /> : ['confirmed', 'completed'].includes(order.status) ? <CheckCircle2 size={22} /> : <Package size={22} />}
+            </div>
             <div>
               <span>Pedido</span>
               <strong>{ORDER_STATUS_LABELS[order.status] || order.status}</strong>
@@ -384,11 +376,11 @@ export default function AdminOrderDetail() {
         .refresh:disabled{opacity:.6;cursor:wait}
         .live{display:flex;align-items:center;gap:8px;margin-top:18px;padding:11px 14px;background:#fff;border:1px solid #e4e4df;border-radius:10px;font-size:10px}
         .live-dot{width:8px;height:8px;border-radius:50%;background:#27a45b;box-shadow:0 0 0 4px #e6f6ec;flex:none}
-        .status-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}
+        .status-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
         .status-card{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e4e4df;border-radius:11px;padding:16px}
         .status-icon{width:42px;height:42px;border-radius:10px;background:#fff4bf;display:grid;place-items:center;flex:none}
-        .payment-paid .status-icon{color:#278149;background:#eaf8ee}
-        .payment-failed .status-icon,.payment-refunded .status-icon{color:#a22;background:#fff0f0}
+        .status-card.status-confirmed .status-icon,.status-card.status-completed .status-icon{color:#278149;background:#eaf8ee}
+        .status-card.status-cancelled .status-icon{color:#a22;background:#fff0f0}
         .status-card>div:last-child{display:grid;gap:4px;min-width:0;flex:1}
         .status-card span,.data-list dt{font-size:8px;color:#999;text-transform:uppercase;letter-spacing:.12em}
         .status-card strong{font-size:12px}
