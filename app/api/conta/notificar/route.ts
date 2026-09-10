@@ -3,12 +3,14 @@ import { getSiteUrl } from '@/lib/server/env';
 import { enqueueEmail } from '@/lib/server/notifications';
 import { readOrderWithItems } from '@/lib/server/orders';
 import { markProcessed } from '@/lib/server/redis';
-import { getAdminSupabase } from '@/lib/server/supabase-admin';
+import { findAuthUserByEmail, getAdminSupabase } from '@/lib/server/supabase-admin';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const ACTIONS = new Set(['account_created', 'password_reset', 'order_details']);
+const WELCOME_WINDOW_MS = 30 * 60 * 1000;
+const ACCEPTED = { ok: true } as const;
 
 async function buildRecoveryLink(email: string) {
   const admin = getAdminSupabase();
@@ -35,28 +37,35 @@ export async function POST(request: Request) {
     if (!email.includes('@')) return NextResponse.json({ error: 'E-mail inválido.' }, { status: 400 });
 
     const allowed = await markProcessed(`notify:${action}:${email}`, 60);
-    if (!allowed) return NextResponse.json({ ok: true, throttled: true });
+    if (!allowed) return NextResponse.json(ACCEPTED);
 
     if (action === 'account_created') {
-      await enqueueEmail({
-        template: 'account_created',
-        to: email,
-        data: { name: body?.name || '', email },
-        dedupeKey: `account_created:${email}`,
-      });
-      return NextResponse.json({ ok: true });
+      const user = await findAuthUserByEmail(email);
+      const createdAt = user?.created_at ? new Date(user.created_at).getTime() : 0;
+      const justSignedUp = createdAt > 0 && Date.now() - createdAt <= WELCOME_WINDOW_MS;
+
+      if (justSignedUp) {
+        await enqueueEmail({
+          template: 'account_created',
+          to: email,
+          data: { name: body?.name || '', email },
+          dedupeKey: `account_created:${user!.id}`,
+        });
+      }
+      return NextResponse.json(ACCEPTED);
     }
 
     if (action === 'password_reset') {
       const resetUrl = await buildRecoveryLink(email);
-      if (!resetUrl) return NextResponse.json({ ok: true, delivered: false });
-      await enqueueEmail({
-        template: 'password_reset',
-        to: email,
-        data: { name: body?.name || '', resetUrl },
-        dedupeKey: `password_reset:${email}:${Date.now()}`,
-      });
-      return NextResponse.json({ ok: true });
+      if (resetUrl) {
+        await enqueueEmail({
+          template: 'password_reset',
+          to: email,
+          data: { name: body?.name || '', resetUrl },
+          dedupeKey: `password_reset:${email}:${Date.now()}`,
+        });
+      }
+      return NextResponse.json(ACCEPTED);
     }
 
     const orderId = String(body?.orderId || '').trim();
