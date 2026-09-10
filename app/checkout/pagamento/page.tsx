@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import PaymentBrick from '@/components/payment-brick';
+import { PageLoader } from '@/components/ui/loader';
 
 function PaymentPage() {
   const params = useSearchParams();
@@ -51,4 +52,10 @@ function PaymentPage() {
   );
 }
 
-export default function PaymentPageWrapper() { return <Suspense fallback={<main className="payment-page"><div className="payment-card">Carregando pagamento...</div></main>}><PaymentPage/></Suspense>; }
+export default function PaymentPageWrapper() {
+  return (
+    <Suspense fallback={<PageLoader title="Carregando pagamento" description="Preparando o ambiente seguro do Mercado Pago." />}>
+      <PaymentPage />
+    </Suspense>
+  );
+}

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getMercadoPagoAccessToken, getAdminSupabase } from '@/lib/mercadopago-server';
+import { getMercadoPagoAccessToken } from '@/lib/server/env';
+import { getAdminSupabase } from '@/lib/server/supabase-admin';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';

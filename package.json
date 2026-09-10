@@ -5,24 +5,33 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:worker": "tsc -p tsconfig.worker.json",
     "start": "next start",
-    "lint": "eslint ."
+    "worker": "node dist-worker/worker/index.js",
+    "worker:dev": "tsx worker/index.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@mercadopago/sdk-react": "1.0.7",
-    "@supabase/ssr": "latest",
-    "@supabase/supabase-js": "latest",
-    "lucide-react": "latest",
+    "@supabase/ssr": "0.8.0",
+    "@supabase/supabase-js": "2.76.1",
+    "amqplib": "0.10.9",
+    "ioredis": "5.9.0",
+    "lucide-react": "0.575.0",
     "next": "16.3.3",
-    "react": "latest",
-    "react-dom": "latest"
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "resend": "6.4.1"
   },
   "devDependencies": {
-    "@types/node": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "eslint": "latest",
+    "@types/amqplib": "0.10.7",
+    "@types/node": "22.20.0",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.1",
+    "eslint": "9.39.0",
     "eslint-config-next": "16.3.3",
-    "typescript": "latest"
+    "tsx": "4.20.6",
+    "typescript": "5.9.3"
   }
 }

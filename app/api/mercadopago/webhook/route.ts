@@ -1,19 +1,23 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
-import { getMercadoPagoAccessToken, syncOrderPayment } from '@/lib/mercadopago-server';
+import { getMercadoPagoWebhookSecret } from '@/lib/server/env';
+import {
+  fetchMercadoPagoResource,
+  isMercadoPagoConfigured,
+  normalizeOrderResource,
+  syncOrderPayment,
+} from '@/lib/server/mercadopago';
+import { notifyPaymentChange } from '@/lib/server/orders';
+import { QUEUES, type PaymentWebhookJob } from '@/lib/server/queues';
+import { isQueueConfigured, publishSafe } from '@/lib/server/rabbitmq';
+import { markProcessed } from '@/lib/server/redis';
+import { supabaseRest } from '@/lib/server/supabase-admin';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-type SyncedPayment = {
-  paymentStatus?: string | null;
-  orderStatus?: string | null;
-  paymentId?: string | null;
-  statusDetail?: string | null;
-};
-
-function validateWebhookSignature(request: Request, dataId: string) {
-  const secret = String(process.env.MERCADOPAGO_WEBHOOK_SECRET || '').trim();
+function validateSignature(request: Request, dataId: string) {
+  const secret = getMercadoPagoWebhookSecret();
   if (!secret) return true;
 
   const xSignature = request.headers.get('x-signature') || '';
@@ -24,6 +28,7 @@ function validateWebhookSignature(request: Request, dataId: string) {
       .map((part) => part.split('=').map((value) => value.trim()))
       .filter(([key, value]) => key && value),
   ) as Record<string, string>;
+
   const ts = String(parts.ts || '');
   const v1 = String(parts.v1 || '');
   if (!v1 || !ts) return false;
@@ -38,6 +43,45 @@ function validateWebhookSignature(request: Request, dataId: string) {
   }
 }
 
+async function recordEvent(job: PaymentWebhookJob, payload: unknown, status: string) {
+  try {
+    await supabaseRest('webhook_events', {
+      method: 'POST',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        provider: 'mercadopago',
+        resource_type: job.resourceType,
+        resource_id: job.resourceId,
+        action: job.action || null,
+        payload,
+        status,
+      }),
+    });
+  } catch (error) {
+    console.error('[webhook] não foi possível registrar o evento:', error);
+  }
+}
+
+async function processInline(job: PaymentWebhookJob) {
+  if (!isMercadoPagoConfigured()) throw new Error('Mercado Pago não configurado.');
+
+  const result = await fetchMercadoPagoResource(job.resourceType, job.resourceId);
+  if (result.status === 404) return { handled: false, reason: 'not_found' };
+  if (!result.ok) throw new Error(`Mercado Pago respondeu HTTP ${result.status}.`);
+
+  const resource = result.resource;
+  const isOrder = job.resourceType === 'order' || resource?.type === 'online';
+  const orderId = String(resource?.external_reference || '').trim();
+  if (!orderId) return { handled: false, reason: 'no_external_reference' };
+
+  const payment = isOrder ? normalizeOrderResource(resource, orderId) : resource;
+  if (!payment) return { handled: false, reason: 'no_payment' };
+
+  const synced = await syncOrderPayment(orderId, { ...payment, external_reference: orderId });
+  if (synced.changed) await notifyPaymentChange(orderId, synced);
+  return { handled: true, orderId, paymentStatus: synced.paymentStatus };
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -49,67 +93,43 @@ export async function POST(request: Request) {
     if (!resourceId) return NextResponse.json({ ok: true, acknowledged: true });
     if (type && !['payment', 'order'].includes(type)) return NextResponse.json({ ok: true, ignored: true });
 
-    if (!validateWebhookSignature(request, resourceId)) {
-      console.error('Mercado Pago webhook rejected: invalid signature', { type, action, resourceId });
+    if (!validateSignature(request, resourceId)) {
+      console.error('[webhook] assinatura inválida', { type, action, resourceId });
       return NextResponse.json({ error: 'Assinatura do webhook inválida.' }, { status: 401 });
     }
 
-    const accessToken = getMercadoPagoAccessToken();
-    if (!accessToken) return NextResponse.json({ error: 'Mercado Pago não configurado.' }, { status: 500 });
+    const job: PaymentWebhookJob = {
+      kind: 'payment_webhook',
+      resourceId,
+      resourceType: type === 'order' ? 'order' : 'payment',
+      action,
+      receivedAt: new Date().toISOString(),
+    };
 
-    const endpoint = type === 'order'
-      ? `/v1/orders/${encodeURIComponent(resourceId)}`
-      : `/v1/payments/${encodeURIComponent(resourceId)}`;
+    const fresh = await markProcessed(`webhook:${job.resourceType}:${resourceId}:${action}`, 60);
+    if (!fresh) return NextResponse.json({ ok: true, deduplicated: true });
 
-    const response = await fetch(`https://api.mercadopago.com${endpoint}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      cache: 'no-store',
-    });
-    const resource = await response.json().catch(() => null);
-
-    if (response.status === 404) return NextResponse.json({ ok: true, acknowledged: true, resourceFound: false });
-    if (!response.ok) return NextResponse.json({ error: 'Não foi possível consultar o recurso no Mercado Pago.' }, { status: 502 });
-
-    let synced: SyncedPayment | null = null;
-
-    if (type === 'order' || resource?.type === 'online') {
-      const orderId = String(resource?.external_reference || '').trim();
-      const payment = resource?.transactions?.payments?.[0];
-      if (orderId && payment) {
-        synced = await syncOrderPayment(orderId, {
-          ...payment,
-          id: payment?.id || resource?.id,
-          external_reference: orderId,
-          order_status: resource?.status || null,
-          order_status_detail: resource?.status_detail || null,
-        });
+    if (isQueueConfigured()) {
+      const published = await publishSafe(QUEUES.paymentWebhook, job, { messageId: `${job.resourceType}:${resourceId}` });
+      if (published) {
+        await recordEvent(job, body, 'queued');
+        return NextResponse.json({ ok: true, queued: true });
       }
-    } else {
-      const orderId = String(resource?.external_reference || '').trim();
-      if (orderId) synced = await syncOrderPayment(orderId, resource);
     }
 
-    console.info('Mercado Pago webhook synced', {
-      type,
-      action,
-      resourceId,
-      orderStatus: synced?.orderStatus || null,
-      paymentStatus: synced?.paymentStatus || null,
-      paymentId: synced?.paymentId || null,
-    });
-
-    return NextResponse.json({
-      ok: true,
-      acknowledged: true,
-      resourceFound: true,
-      synced: Boolean(synced),
-    });
+    await recordEvent(job, body, 'inline');
+    const result = await processInline(job);
+    return NextResponse.json({ ok: true, queued: false, ...result });
   } catch (error) {
-    console.error('Mercado Pago webhook error:', error);
+    console.error('[webhook] erro ao processar:', error);
     return NextResponse.json({ error: 'Webhook processado com erro.' }, { status: 500 });
   }
 }
 
 export async function GET() {
-  return NextResponse.json({ ok: true, service: '2P Box Mercado Pago webhook' });
+  return NextResponse.json({
+    ok: true,
+    service: '2P Box Mercado Pago webhook',
+    queue: isQueueConfigured() ? 'rabbitmq' : 'inline',
+  });
 }

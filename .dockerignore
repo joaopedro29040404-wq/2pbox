@@ -1,0 +1,15 @@
+node_modules
+.next
+dist-worker
+.git
+.github
+.env
+.env.*
+!.env.example
+npm-debug.log*
+*.md
+docs
+supabase
+deploy
+.vercel
+.DS_Store

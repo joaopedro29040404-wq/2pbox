@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getMercadoPagoAccessToken, syncOrderPayment } from '@/lib/mercadopago-server';
+import { getMercadoPagoAccessToken } from '@/lib/server/env';
+import { syncOrderPayment } from '@/lib/server/mercadopago';
+import { notifyPaymentChange } from '@/lib/server/orders';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -72,6 +74,7 @@ export async function POST(request: Request) {
       let synced;
       try {
         synced = await syncOrderPayment(String(orderId), normalizedResult);
+        if (synced.changed) await notifyPaymentChange(String(orderId), synced).catch(() => undefined);
       } catch (syncError) {
         console.error('Legacy payment persistence error:', syncError);
         return NextResponse.json({ id: normalizedResult.id, status: 'pending', statusDetail: 'Pagamento recebido. Estamos confirmando o pedido.', paymentMethodId: normalizedResult.payment_method_id, synchronizationPending: true, error: 'Pagamento recebido, mas a confirmação do pedido ainda está sendo sincronizada.' }, { status: 202 });
@@ -117,6 +120,7 @@ export async function POST(request: Request) {
     let synced;
     try {
       synced = await syncOrderPayment(String(orderId), normalizedResult);
+      if (synced.changed) await notifyPaymentChange(String(orderId), synced).catch(() => undefined);
     } catch (syncError) {
       console.error('Order payment persistence error:', syncError);
       return NextResponse.json({ id: mercadoPagoPaymentId || mercadoPagoOrderId, orderId: mercadoPagoOrderId, ...diagnostics, status: 'pending', statusDetail: 'Pagamento recebido. Estamos confirmando o pedido.', paymentStatus: 'pending', orderStatus: 'pending', paymentMethodId: payment?.payment_method?.id || paymentMethodId, synchronizationPending: true, error: 'Pagamento recebido, mas a confirmação do pedido ainda está sendo sincronizada.', pix: null }, { status: 202 });

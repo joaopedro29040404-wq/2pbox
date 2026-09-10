@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getMercadoPagoAccessToken } from '@/lib/mercadopago-server';
+import { getMercadoPagoAccessToken } from '@/lib/server/env';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';

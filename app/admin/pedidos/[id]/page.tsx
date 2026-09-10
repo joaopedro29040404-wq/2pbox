@@ -1,65 +1,437 @@
 'use client';
 
-import {useEffect,useState} from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import {ArrowLeft,CheckCircle2,Clock3,MapPin,Package,RefreshCw,ShoppingBag,CreditCard,XCircle,ExternalLink,Phone,Mail} from 'lucide-react';
-import {useParams} from 'next/navigation';
-import {supabase} from '@/lib/supabase';
+import { useParams } from 'next/navigation';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Clock3,
+  CreditCard,
+  ExternalLink,
+  Mail,
+  MapPin,
+  Package,
+  Phone,
+  ReceiptText,
+  RefreshCw,
+  ShoppingBag,
+  XCircle,
+} from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { SiteHeader } from '@/components/site-header';
+import { OrderTracker, ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS, type OrderHistoryEntry } from '@/components/order-tracker';
+import { SelectField } from '@/components/ui/field';
+import { PageLoader } from '@/components/ui/loader';
+import { useToast } from '@/components/ui/toast';
+import { formatAddress, formatPaymentMethod, money } from '@/lib/order-format';
 
-type Order={id:string;customer_name:string;customer_phone:string;customer_email:string|null;delivery_type:string;delivery_address:string|null;notes:string|null;status:string;payment_status:string|null;total:number;created_at:string;payment_id?:string|null};
-type Item={product_id:string;product_name:string;quantity:number;unit_price:number};
-type Payment={id:string;status:string;statusDetail:string|null}|null;
+type Order = {
+  id: string;
+  customer_name: string;
+  customer_phone: string;
+  customer_email: string | null;
+  delivery_type: string;
+  delivery_address: Record<string, string> | string | null;
+  notes: string | null;
+  status: string;
+  payment_status: string | null;
+  payment_status_detail?: string | null;
+  payment_id?: string | null;
+  payment_method?: string | null;
+  payment_type?: string | null;
+  payment_installments?: number | null;
+  payment_amount?: number | null;
+  paid_at?: string | null;
+  total: number;
+  created_at: string;
+};
+type Item = { product_id: string; product_name: string; quantity: number; unit_price: number };
 
-const orderLabels:Record<string,string>={pending:'Pedido recebido',confirmed:'Pagamento confirmado',preparing:'Em preparação',ready:'Pronto para retirada',completed:'Pedido concluído',cancelled:'Pedido cancelado'};
-const paymentLabels:Record<string,string>={pending:'Aguardando pagamento',in_process:'Pagamento em análise',authorized:'Pagamento autorizado',approved:'Pagamento aprovado',rejected:'Pagamento recusado',cancelled:'Pagamento cancelado'};
-const steps=['pending','confirmed','preparing','ready','completed'];
+const STATUS_OPTIONS = Object.entries(ORDER_STATUS_LABELS).map(([value, label]) => ({ value, label }));
 
-export default function AdminOrderDetail(){
- const{id}=useParams<{id:string}>();
- const[order,setOrder]=useState<Order|null>(null),[items,setItems]=useState<Item[]>([]),[payment,setPayment]=useState<Payment>(null),[loading,setLoading]=useState(true),[error,setError]=useState(''),[refreshing,setRefreshing]=useState(false);
- const money=(n:number)=>`R$ ${Number(n).toFixed(2).replace('.',',')}`;
- async function load(silent=false){
-  if(!id||!supabase)return;
-  if(silent)setRefreshing(true);else setLoading(true);setError('');
-  try{
-   const{data:o,error:oError}=await supabase.from('orders').select('*').eq('id',id).maybeSingle();
-   if(oError)throw oError;if(!o){setError('Pedido não encontrado.');return}
-   let nextOrder=o as Order;
-   const email=String(nextOrder.customer_email||'').trim();
-   if(email){
-    try{
-     const response=await fetch(`/api/pedido/status?orderId=${encodeURIComponent(id)}&email=${encodeURIComponent(email)}`,{cache:'no-store'});
-     if(response.ok){const data=await response.json();if(data?.order){nextOrder=data.order as Order;setPayment((data.payment||null) as Payment)}}
-    }catch{}
-   }
-   setOrder(nextOrder);
-   const{data:i,error:iError}=await supabase.from('order_items').select('product_id,product_name,quantity,unit_price').eq('order_id',id).order('product_name');
-   if(iError)throw iError;setItems((i||[]) as Item[]);
-   if(!payment&&nextOrder.payment_id){
-    try{
-     const response=await fetch(`/api/mercadopago/payment-status?orderId=${encodeURIComponent(id)}&paymentId=${encodeURIComponent(nextOrder.payment_id)}`,{cache:'no-store'});
-     if(response.ok){const data=await response.json();setPayment({id:String(data.paymentId||nextOrder.payment_id),status:String(data.paymentStatus||nextOrder.payment_status||'pending'),statusDetail:data.statusDetail||null})}
-    }catch{}
-   }
-  }catch(e){setError(e instanceof Error?e.message:'Não foi possível carregar o pedido.')}finally{setLoading(false);setRefreshing(false)}
- }
- useEffect(()=>{load();if(!id)return;const channel=supabase?.channel(`admin-order-${id}`).on('postgres_changes',{event:'*',schema:'public',table:'orders',filter:`id=eq.${id}`},()=>load(true)).subscribe();const timer=window.setInterval(()=>load(true),5000);return()=>{window.clearInterval(timer);if(channel)supabase?.removeChannel(channel)}},[id]);
- const current=order?steps.indexOf(order.status):-1;
- const paymentStatus=payment?.status||order?.payment_status||'pending';
- if(loading)return <main className="admin-detail"><div className="detail-loading"><RefreshCw className="spin"/> Carregando pedido...</div></main>;
- if(error||!order)return <main className="admin-detail"><div className="detail-error"><Package size={34}/><h1>{error||'Pedido não encontrado.'}</h1><Link href="/admin/pedidos">Voltar para pedidos</Link></div></main>;
- return <main className="admin-detail">
-  <header className="detail-header"><div className="detail-header-inner"><Link href="/admin/pedidos" className="back-link"><ArrowLeft size={17}/> Pedidos</Link><div className="detail-header-title"><span>2P BOX</span><small>ADMINISTRAÇÃO • DETALHES DO PEDIDO</small></div><button onClick={()=>load()} disabled={refreshing} className="refresh"><RefreshCw size={15} className={refreshing?'spin':''}/> Atualizar</button></div></header>
-  <section className="detail-shell">
-   <div className="detail-top"><div><p className="eyebrow">DETALHES DO PEDIDO</p><h1>Pedido #{order.id.slice(0,8).toUpperCase()}</h1><p className="date">Realizado em {new Date(order.created_at).toLocaleString('pt-BR')}</p></div><span className={`order-badge status-${order.status}`}><Clock3 size={15}/>{orderLabels[order.status]||order.status}</span></div>
-   <div className="live"><span className="live-dot"/><strong>Sincronização ativa</strong><span>O status de pagamento é reconciliado automaticamente.</span></div>
-   <div className="status-grid"><div className={`status-card payment-${paymentStatus}`}><div className="status-icon">{['rejected','cancelled'].includes(paymentStatus)?<XCircle size={22}/>:paymentStatus==='approved'?<CheckCircle2 size={22}/>:<CreditCard size={22}/>}</div><div><span>Pagamento</span><strong>{paymentLabels[paymentStatus]||paymentStatus}</strong></div></div><div className={`status-card status-${order.status}`}><Package size={22}/><div><span>Pedido</span><strong>{orderLabels[order.status]||order.status}</strong></div></div></div>
-   <div className="payment-details"><div><span>Status Mercado Pago</span><strong>{payment?.status||paymentStatus}</strong></div><div><span>ID do pagamento</span><strong>{payment?.id||order.payment_id||'Não informado'}</strong></div><div><span>Detalhe</span><strong>{payment?.statusDetail||'—'}</strong></div></div>
-   {order.status!=='cancelled'&&<section className="timeline"><div className="timeline-line"/>{steps.map((s,i)=><div className={`step ${i<=current?'done':''}`} key={s}><div className="step-dot">{i<=current?<CheckCircle2 size={17}/>:<span>{i+1}</span>}</div><strong>{orderLabels[s]}</strong></div>)}</section>}
-   <div className="actions"><Link href={`/pedido/${order.id}${order.customer_email?`?email=${encodeURIComponent(order.customer_email)}`:''}`} target="_blank" className="customer-link"><ExternalLink size={15}/> Abrir página do cliente</Link><Link href="/admin/pedidos" className="back-orders">Voltar para pedidos</Link></div>
-   <div className="detail-layout"><div className="main-column"><section className="card"><div className="card-title"><Package size={19}/><h2>Produtos</h2></div>{items.length?items.map(item=><div className="item" key={item.product_id}><div className="item-icon"><ShoppingBag size={18}/></div><div className="item-info"><strong>{item.product_name}</strong><span>{item.quantity} × {money(item.unit_price)}</span></div><strong>{money(item.quantity*item.unit_price)}</strong></div>):<p className="muted">Nenhum item encontrado.</p>}<div className="total"><span>Total do pedido</span><strong>{money(order.total)}</strong></div></section>{order.notes&&<section className="card"><div className="card-title"><h2>Observações</h2></div><p className="muted">{order.notes}</p></section>}</div>
-   <aside className="side-column"><section className="card"><div className="card-title"><MapPin size={19}/><h2>Recebimento</h2></div><strong>{order.delivery_type==='pickup'?'Retirada na loja':'Frete pelo WhatsApp'}</strong>{order.delivery_address&&<p className="address">{order.delivery_address}</p>}<p className="muted">{order.delivery_type==='pickup'?'Pedido para retirada na loja.':'Entrega/frete combinado pelo WhatsApp.'}</p></section><section className="card"><div className="card-title"><h2>Dados do cliente</h2></div><div className="customer-data"><span>Nome</span><strong>{order.customer_name}</strong><span><Phone size={11}/> Telefone</span><strong>{order.customer_phone}</strong><span><Mail size={11}/> E-mail</span><strong>{order.customer_email||'Não informado'}</strong></div></section></aside></div>
-  </section>
-  <style jsx global>{`.admin-detail{min-height:100vh;background:#f7f7f5;color:#111;font-family:Inter,Arial,sans-serif}.detail-header{background:#111;color:#fff}.detail-header-inner{width:min(1180px,calc(100% - 40px));min-height:70px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:15px}.back-link{display:inline-flex;align-items:center;gap:7px;color:#fff;text-decoration:none;font-size:11px;font-weight:900}.detail-header-title{display:grid;justify-items:center;gap:3px}.detail-header-title span{font-size:14px;font-weight:900;letter-spacing:.16em}.detail-header-title small{font-size:7px;color:#aaa;letter-spacing:.14em}.refresh{border:1px solid #333;background:#fff;color:#111;border-radius:9px;height:38px;padding:0 12px;display:inline-flex;align-items:center;gap:7px;font:800 10px Inter,Arial,sans-serif;cursor:pointer}.refresh:disabled{opacity:.6}.detail-shell{width:min(1080px,calc(100% - 40px));margin:auto;padding:36px 0 70px}.detail-top{display:flex;justify-content:space-between;align-items:end;gap:20px}.eyebrow{margin:0 0 7px;color:#b68c00;font-size:9px;font-weight:900;letter-spacing:.18em}.detail-top h1{margin:0;font-size:32px}.date{margin:7px 0 0;color:#888;font-size:11px}.order-badge{display:flex;align-items:center;gap:6px;padding:10px 13px;border-radius:22px;background:#eee;font-size:10px;font-weight:900}.status-confirmed,.status-completed{background:#e8f7eb;color:#27733b}.status-cancelled{background:#ffeaea;color:#a22}.live{display:flex;align-items:center;gap:8px;margin-top:18px;padding:11px 14px;background:#fff;border:1px solid #e4e4df;border-radius:10px;font-size:10px}.live-dot{width:8px;height:8px;border-radius:50%;background:#27a45b;box-shadow:0 0 0 4px #e6f6ec}.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.status-card{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e4e4df;border-radius:11px;padding:16px}.status-icon{width:42px;height:42px;border-radius:10px;background:#fff4bf;display:grid;place-items:center}.payment-approved .status-icon{color:#278149;background:#eaf8ee}.payment-rejected .status-icon,.payment-cancelled .status-icon{color:#a22;background:#fff0f0}.status-card>div:last-child{display:grid;gap:4px}.status-card span,.payment-details span{font-size:8px;color:#999;text-transform:uppercase;letter-spacing:.12em}.status-card strong{font-size:12px}.status-pending,.payment-pending{background:#fff5cc}.payment-in_process{background:#fff4d4;color:#8b6a00}.payment-authorized{background:#e9f1ff;color:#2e5f96}.payment-rejected,.payment-cancelled{color:#a22;background:#ffeaea}.payment-details{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}.payment-details>div{background:#fff;border:1px solid #e4e4df;border-radius:10px;padding:12px 14px;display:grid;gap:5px}.payment-details strong{font-size:11px;word-break:break-all}.timeline{position:relative;display:flex;justify-content:space-between;margin:38px 0 25px}.timeline-line{position:absolute;left:7%;right:7%;top:14px;height:2px;background:#ddd}.step{position:relative;z-index:1;display:grid;justify-items:center;gap:7px;width:20%;font-size:9px;color:#999;text-align:center}.step.done{color:#111}.step-dot{width:28px;height:28px;border-radius:50%;background:#eee;display:grid;place-items:center}.step.done .step-dot{background:#ffc400;color:#111}.actions{display:flex;gap:9px;margin:20px 0}.customer-link,.back-orders{height:42px;padding:0 14px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;gap:7px;text-decoration:none;font-size:10px;font-weight:900}.customer-link{background:#ffc400;color:#111}.back-orders{background:#fff;border:1px solid #ddd;color:#111}.detail-layout{display:grid;grid-template-columns:1.55fr .9fr;gap:18px}.main-column,.side-column{display:grid;align-content:start;gap:18px}.card{background:#fff;border:1px solid #e4e4df;border-radius:12px;padding:23px}.card-title{display:flex;align-items:center;gap:9px;border-bottom:1px solid #eee;padding-bottom:15px;margin-bottom:8px}.card-title h2{margin:0;font-size:15px}.item{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid #f0f0ee}.item-icon{width:40px;height:40px;border-radius:8px;background:#f5f5f2;display:grid;place-items:center}.item-info{flex:1;display:grid;gap:4px}.item-info strong{font-size:11px}.item-info span,.muted{font-size:10px;color:#888;line-height:1.5}.item>strong{font-size:11px}.total{display:flex;justify-content:space-between;padding-top:18px;font-size:11px}.total strong{font-size:18px}.address{font-size:11px;line-height:1.6;background:#f7f7f5;border-radius:7px;padding:10px;margin:10px 0}.customer-data{display:grid;gap:5px}.customer-data span{font-size:8px;color:#999;text-transform:uppercase;letter-spacing:.1em;margin-top:5px;display:flex;align-items:center;gap:4px}.customer-data strong{font-size:11px;word-break:break-word}.detail-loading,.detail-error{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;color:#777}.detail-error h1{font-size:20px;color:#111}.detail-error a{color:#111;font-size:11px;font-weight:900}.spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}@media(max-width:700px){.detail-header-inner,.detail-shell{width:min(100% - 28px,1080px)}.detail-header-title{display:none}.detail-top{align-items:flex-start;flex-direction:column}.detail-top h1{font-size:29px}.status-grid,.payment-details,.detail-layout{grid-template-columns:1fr}.actions{flex-direction:column}.customer-link,.back-orders{width:100%}.timeline{margin-top:30px}.step{font-size:8px}.detail-layout{gap:14px}.card{padding:18px}}`}</style>
- </main>;
+export default function AdminOrderDetail() {
+  const { id } = useParams<{ id: string }>();
+  const [order, setOrder] = useState<Order | null>(null);
+  const [items, setItems] = useState<Item[]>([]);
+  const [history, setHistory] = useState<OrderHistoryEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [error, setError] = useState('');
+  const toast = useToast();
+
+  const load = useCallback(
+    async (silent = false) => {
+      if (!id || !supabase) return;
+      if (silent) setRefreshing(true);
+      else setLoading(true);
+
+      try {
+        const { data, error: orderError } = await supabase.from('orders').select('*').eq('id', id).maybeSingle();
+        if (orderError) throw orderError;
+        if (!data) {
+          setError('Pedido não encontrado.');
+          return;
+        }
+
+        let current = data as Order;
+        setError('');
+
+        const email = String(current.customer_email || '').trim();
+        if (email) {
+          try {
+            const response = await fetch(`/api/pedido/status?orderId=${encodeURIComponent(id)}&email=${encodeURIComponent(email)}`, { cache: 'no-store' });
+            if (response.ok) {
+              const payload = await response.json();
+              if (payload?.order) current = payload.order as Order;
+              setItems((payload?.items ?? []) as Item[]);
+              setHistory((payload?.history ?? []) as OrderHistoryEntry[]);
+            }
+          } catch {}
+        }
+
+        setOrder(current);
+
+        if (!email) {
+          const { data: itemRows } = await supabase
+            .from('order_items')
+            .select('product_id,product_name,quantity,unit_price')
+            .eq('order_id', id)
+            .order('product_name');
+          setItems((itemRows || []) as Item[]);
+        }
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : 'Não foi possível carregar o pedido.');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [id],
+  );
+
+  useEffect(() => {
+    void load();
+    if (!id || !supabase) return;
+
+    const channel = supabase
+      .channel(`admin-order-${id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `id=eq.${id}` }, () => void load(true))
+      .subscribe();
+    const timer = window.setInterval(() => void load(true), 10000);
+
+    return () => {
+      window.clearInterval(timer);
+      supabase?.removeChannel(channel);
+    };
+  }, [id, load]);
+
+  async function changeStatus(status: string) {
+    if (!order || updating || status === order.status) return;
+    setUpdating(true);
+    try {
+      const response = await fetch('/api/admin/pedidos/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: order.id, status }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'Falha ao atualizar o pedido.');
+      toast.success('Status atualizado', `${ORDER_STATUS_LABELS[status] || status} · o cliente foi notificado por e-mail.`);
+      void load(true);
+    } catch (caught) {
+      toast.error('Não foi possível atualizar', caught instanceof Error ? caught.message : undefined);
+    } finally {
+      setUpdating(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <main className="admin-detail">
+        <SiteHeader variant="admin" subtitle="DETALHES DO PEDIDO" />
+        <PageLoader title="Carregando pedido" description="Buscando os dados e a movimentação deste pedido." />
+      </main>
+    );
+  }
+
+  if (error || !order) {
+    return (
+      <main className="admin-detail">
+        <SiteHeader variant="admin" subtitle="DETALHES DO PEDIDO" />
+        <div className="detail-error">
+          <Package size={34} />
+          <h1>{error || 'Pedido não encontrado.'}</h1>
+          <Link href="/admin/pedidos">Voltar para pedidos</Link>
+        </div>
+      </main>
+    );
+  }
+
+  const paymentStatus = String(order.payment_status || 'pending').toLowerCase();
+  const address = formatAddress(order.delivery_address);
+  const billedAmount = order.payment_amount ?? order.total;
+
+  return (
+    <main className="admin-detail">
+      <SiteHeader variant="admin" subtitle="DETALHES DO PEDIDO" />
+      <section className="detail-shell">
+        <Link href="/admin/pedidos" className="detail-back">
+          <ArrowLeft size={16} /> Pedidos
+        </Link>
+
+        <div className="detail-top">
+          <div>
+            <p className="eyebrow">DETALHES DO PEDIDO</p>
+            <h1>Pedido #{order.id.slice(0, 8).toUpperCase()}</h1>
+            <p className="date">Realizado em {new Date(order.created_at).toLocaleString('pt-BR')}</p>
+          </div>
+          <div className="detail-top-actions">
+            <span className={`order-badge status-${order.status}`}>
+              <Clock3 size={15} />
+              {ORDER_STATUS_LABELS[order.status] || order.status}
+            </span>
+            <button type="button" className="refresh" onClick={() => void load(true)} disabled={refreshing}>
+              <RefreshCw size={15} className={refreshing ? 'spin' : ''} /> Atualizar
+            </button>
+          </div>
+        </div>
+
+        <div className="live">
+          <span className="live-dot" />
+          <strong>Sincronização ativa</strong>
+          <span>O pagamento é reconciliado pelo worker e o cliente é notificado a cada mudança.</span>
+        </div>
+
+        <div className="status-grid">
+          <div className={`status-card payment-${paymentStatus}`}>
+            <div className="status-icon">
+              {['rejected', 'cancelled'].includes(paymentStatus) ? <XCircle size={22} /> : paymentStatus === 'approved' ? <CheckCircle2 size={22} /> : <CreditCard size={22} />}
+            </div>
+            <div>
+              <span>Pagamento</span>
+              <strong>{PAYMENT_STATUS_LABELS[paymentStatus] || paymentStatus}</strong>
+            </div>
+          </div>
+          <div className={`status-card status-${order.status}`}>
+            <Package size={22} />
+            <div>
+              <span>Pedido</span>
+              <strong>{ORDER_STATUS_LABELS[order.status] || order.status}</strong>
+            </div>
+          </div>
+          <div className="status-card status-action">
+            <div className="status-icon">
+              <ReceiptText size={22} />
+            </div>
+            <div className="status-select">
+              <span>Alterar status</span>
+              <SelectField
+                aria-label="Alterar status do pedido"
+                value={order.status}
+                options={STATUS_OPTIONS}
+                disabled={updating}
+                onValueChange={changeStatus}
+              />
+            </div>
+          </div>
+        </div>
+
+        <OrderTracker status={order.status} history={history} />
+
+        <div className="detail-layout">
+          <div className="main-column">
+            <section className="card">
+              <div className="card-title">
+                <Package size={19} />
+                <h2>Produtos</h2>
+              </div>
+              {items.length ? (
+                items.map((item) => (
+                  <div className="item" key={item.product_id}>
+                    <div className="item-icon">
+                      <ShoppingBag size={18} />
+                    </div>
+                    <div className="item-info">
+                      <strong>{item.product_name}</strong>
+                      <span>
+                        {item.quantity} × {money(item.unit_price)}
+                      </span>
+                    </div>
+                    <strong>{money(item.quantity * item.unit_price)}</strong>
+                  </div>
+                ))
+              ) : (
+                <p className="muted">Nenhum item encontrado.</p>
+              )}
+              <div className="total">
+                <span>Total do pedido</span>
+                <strong>{money(order.total)}</strong>
+              </div>
+            </section>
+
+            <section className="card">
+              <div className="card-title">
+                <ReceiptText size={19} />
+                <h2>Faturamento</h2>
+              </div>
+              <dl className="data-list">
+                <div>
+                  <dt>Forma de pagamento</dt>
+                  <dd>{formatPaymentMethod(order.payment_type, order.payment_method)}</dd>
+                </div>
+                <div>
+                  <dt>Parcelamento</dt>
+                  <dd>{order.payment_installments && order.payment_installments > 1 ? `${order.payment_installments}x` : 'À vista'}</dd>
+                </div>
+                <div>
+                  <dt>Valor cobrado</dt>
+                  <dd>{money(billedAmount)}</dd>
+                </div>
+                <div>
+                  <dt>Status do pagamento</dt>
+                  <dd>{PAYMENT_STATUS_LABELS[paymentStatus] || paymentStatus}</dd>
+                </div>
+                <div>
+                  <dt>Detalhe do gateway</dt>
+                  <dd>{order.payment_status_detail || '—'}</dd>
+                </div>
+                <div>
+                  <dt>ID do pagamento</dt>
+                  <dd className="breakable">{order.payment_id || 'Não informado'}</dd>
+                </div>
+                <div>
+                  <dt>Pago em</dt>
+                  <dd>{order.paid_at ? new Date(order.paid_at).toLocaleString('pt-BR') : '—'}</dd>
+                </div>
+              </dl>
+            </section>
+
+            {order.notes && (
+              <section className="card">
+                <div className="card-title">
+                  <h2>Observações</h2>
+                </div>
+                <p className="muted">{order.notes}</p>
+              </section>
+            )}
+          </div>
+
+          <aside className="side-column">
+            <section className="card">
+              <div className="card-title">
+                <MapPin size={19} />
+                <h2>Endereço e recebimento</h2>
+              </div>
+              <strong className="delivery-label">{order.delivery_type === 'pickup' ? 'Retirada na loja' : 'Entrega — frete pelo WhatsApp'}</strong>
+              {address ? (
+                <address className="address">{address}</address>
+              ) : (
+                <p className="muted">{order.delivery_type === 'pickup' ? 'Pedido para retirada na loja, sem endereço de entrega.' : 'Endereço não informado no checkout.'}</p>
+              )}
+            </section>
+
+            <section className="card">
+              <div className="card-title">
+                <h2>Dados do cliente</h2>
+              </div>
+              <dl className="data-list">
+                <div>
+                  <dt>Nome</dt>
+                  <dd>{order.customer_name}</dd>
+                </div>
+                <div>
+                  <dt>
+                    <Phone size={11} /> Telefone
+                  </dt>
+                  <dd>{order.customer_phone}</dd>
+                </div>
+                <div>
+                  <dt>
+                    <Mail size={11} /> E-mail
+                  </dt>
+                  <dd className="breakable">{order.customer_email || 'Não informado'}</dd>
+                </div>
+              </dl>
+              {order.customer_email && (
+                <Link
+                  href={`/pedido/${order.id}?email=${encodeURIComponent(order.customer_email)}`}
+                  target="_blank"
+                  className="customer-link"
+                >
+                  <ExternalLink size={15} /> Abrir página do cliente
+                </Link>
+              )}
+            </section>
+          </aside>
+        </div>
+      </section>
+
+      <style jsx global>{`
+        .admin-detail{min-height:100vh;background:#f7f7f5;color:#111;font-family:Inter,Arial,sans-serif}
+        .detail-shell{width:min(1080px,calc(100% - 40px));margin:auto;padding:32px 0 70px}
+        .detail-back{display:inline-flex;align-items:center;gap:7px;margin-bottom:20px;color:#666;text-decoration:none;font:800 11px Inter,Arial,sans-serif}
+        .detail-top{display:flex;justify-content:space-between;align-items:flex-end;gap:20px}
+        .detail-top .eyebrow{margin:0 0 7px;color:#b68c00;font-size:9px;font-weight:900;letter-spacing:.18em}
+        .detail-top h1{margin:0;font-size:32px}
+        .detail-top .date{margin:7px 0 0;color:#888;font-size:11px}
+        .detail-top-actions{display:flex;align-items:center;gap:9px;flex:none}
+        .order-badge{display:flex;align-items:center;gap:6px;padding:10px 13px;border-radius:22px;background:#eee;font-size:10px;font-weight:900}
+        .status-confirmed,.status-completed{background:#e8f7eb;color:#27733b}
+        .status-cancelled{background:#ffeaea;color:#a22}
+        .refresh{border:1px solid #ddd;background:#fff;color:#111;border-radius:9px;height:40px;padding:0 13px;display:inline-flex;align-items:center;gap:7px;font:800 10px Inter,Arial,sans-serif;cursor:pointer}
+        .refresh:disabled{opacity:.6;cursor:wait}
+        .live{display:flex;align-items:center;gap:8px;margin-top:18px;padding:11px 14px;background:#fff;border:1px solid #e4e4df;border-radius:10px;font-size:10px}
+        .live-dot{width:8px;height:8px;border-radius:50%;background:#27a45b;box-shadow:0 0 0 4px #e6f6ec;flex:none}
+        .status-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}
+        .status-card{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e4e4df;border-radius:11px;padding:16px}
+        .status-icon{width:42px;height:42px;border-radius:10px;background:#fff4bf;display:grid;place-items:center;flex:none}
+        .payment-approved .status-icon{color:#278149;background:#eaf8ee}
+        .payment-rejected .status-icon,.payment-cancelled .status-icon{color:#a22;background:#fff0f0}
+        .status-card>div:last-child{display:grid;gap:4px;min-width:0;flex:1}
+        .status-card span,.data-list dt{font-size:8px;color:#999;text-transform:uppercase;letter-spacing:.12em}
+        .status-card strong{font-size:12px}
+        .status-select span{margin-bottom:2px}
+        .status-select .ui-input input,.status-select .ui-input select{height:38px;font-size:12px}
+        .detail-layout{display:grid;grid-template-columns:1.55fr .9fr;gap:18px;margin-top:26px}
+        .main-column,.side-column{display:grid;align-content:start;gap:18px}
+        .card{background:#fff;border:1px solid #e4e4df;border-radius:12px;padding:23px}
+        .card-title{display:flex;align-items:center;gap:9px;border-bottom:1px solid #eee;padding-bottom:15px;margin-bottom:14px}
+        .card-title h2{margin:0;font-size:15px}
+        .item{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid #f0f0ee}
+        .item-icon{width:40px;height:40px;border-radius:8px;background:#f5f5f2;display:grid;place-items:center;flex:none}
+        .item-info{flex:1;display:grid;gap:4px;min-width:0}
+        .item-info strong{font-size:11px}
+        .item-info span,.muted{font-size:10px;color:#888;line-height:1.5}
+        .item>strong{font-size:11px;white-space:nowrap}
+        .total{display:flex;justify-content:space-between;align-items:center;padding-top:18px;font-size:11px}
+        .total strong{font-size:20px}
+        .data-list{display:grid;gap:0;margin:0}
+        .data-list>div{display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid #f2f2ef}
+        .data-list>div:last-child{border-bottom:0}
+        .data-list dt{display:flex;align-items:center;gap:4px;margin:0;flex:none}
+        .data-list dd{margin:0;font:700 12px Inter,Arial,sans-serif;color:#111;text-align:right}
+        .data-list .breakable{overflow-wrap:anywhere;text-align:right}
+        .delivery-label{display:block;font-size:13px;margin-bottom:10px}
+        .address{white-space:pre-line;font:400 12px/1.7 Inter,Arial,sans-serif;font-style:normal;background:#f7f7f5;border-radius:8px;padding:12px;color:#4d4d4d}
+        .customer-link{display:inline-flex;align-items:center;justify-content:center;gap:7px;width:100%;height:42px;margin-top:16px;border-radius:9px;background:#ffc400;color:#111;text-decoration:none;font:900 10px Inter,Arial,sans-serif}
+        .detail-error{min-height:60vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;color:#777}
+        .detail-error h1{font-size:20px;color:#111}
+        .detail-error a{color:#111;font-size:11px;font-weight:900}
+        .spin{animation:ui-spin .8s linear infinite}
+        @media(max-width:900px){.status-grid{grid-template-columns:1fr}.detail-layout{grid-template-columns:1fr}}
+        @media(max-width:700px){
+          .detail-shell{width:min(100% - 28px,1080px);padding-top:24px}
+          .detail-top{align-items:flex-start;flex-direction:column}
+          .detail-top h1{font-size:27px}
+          .detail-top-actions{width:100%}
+          .refresh{margin-left:auto}
+          .card{padding:18px}
+          .data-list>div{align-items:flex-start;flex-direction:column;gap:4px}
+          .data-list dd{text-align:left}
+        }
+      `}</style>
+    </main>
+  );
 }

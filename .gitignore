@@ -1,8 +1,13 @@
 node_modules
 .next
-out
-.env*
-!.env.example
+dist-worker
+.env
+.env.local
+.env*.local
 .vercel
+next-env.d.ts
+*.tsbuildinfo
 .DS_Store
 npm-debug.log*
+deploy/generated-secrets.txt
+docs/DEPLOY.md

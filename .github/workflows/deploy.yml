@@ -1,0 +1,172 @@
+name: Deploy 2P Box
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-2pbox-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: blitzcorvinato/2pbox
+  WEB_CONTAINER: 2pbox-web
+  WORKER_CONTAINER: 2pbox-worker
+  NETWORK: 2pbox-net
+  WEB_PORT: 5710
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Verificar imagem no DockerHub
+        id: docker_image
+        run: |
+          if docker manifest inspect ${{ env.IMAGE_NAME }}:${{ github.sha }} >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build e push DockerHub
+        if: steps.docker_image.outputs.exists != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+          build-args: |
+            NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+            NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY=${{ secrets.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY }}
+            NEXT_PUBLIC_SITE_URL=${{ secrets.NEXT_PUBLIC_SITE_URL }}
+            NEXT_PUBLIC_STORE_WHATSAPP=${{ secrets.NEXT_PUBLIC_STORE_WHATSAPP }}
+
+      - name: Enviar script de infraestrutura
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          source: deploy/setup-vps.sh
+          target: /opt/2pbox
+          strip_components: 1
+          overwrite: true
+
+      - name: Deploy na VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          timeout: 60s
+          command_timeout: 30m
+          script: |
+            set -euo pipefail
+
+            docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+
+            mkdir -p /opt/2pbox
+            chmod +x /opt/2pbox/setup-vps.sh
+
+            DOMAIN='${{ secrets.APP_DOMAIN }}' \
+            CERTBOT_EMAIL='${{ secrets.CERTBOT_EMAIL }}' \
+            WEB_PORT='${{ env.WEB_PORT }}' \
+            RABBITMQ_USER='${{ secrets.RABBITMQ_USER }}' \
+            RABBITMQ_PASS='${{ secrets.RABBITMQ_PASS }}' \
+            REDIS_PASS='${{ secrets.REDIS_PASS }}' \
+            bash /opt/2pbox/setup-vps.sh
+
+            cat > /opt/2pbox/.env <<'EOF'
+            NODE_ENV=production
+            PORT=3000
+            NEXT_PUBLIC_SITE_URL=${{ secrets.NEXT_PUBLIC_SITE_URL }}
+            NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+            NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY=${{ secrets.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY }}
+            NEXT_PUBLIC_STORE_WHATSAPP=${{ secrets.NEXT_PUBLIC_STORE_WHATSAPP }}
+            SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+            SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+            SUPABASE_SECRET_KEY=${{ secrets.SUPABASE_SECRET_KEY }}
+            MERCADOPAGO_ACCESS_TOKEN=${{ secrets.MERCADOPAGO_ACCESS_TOKEN }}
+            MERCADOPAGO_WEBHOOK_SECRET=${{ secrets.MERCADOPAGO_WEBHOOK_SECRET }}
+            PAGARME_API_KEY=${{ secrets.PAGARME_API_KEY }}
+            PAGARME_WEBHOOK_SECRET=${{ secrets.PAGARME_WEBHOOK_SECRET }}
+            OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            RESEND_KEY=${{ secrets.RESEND_KEY }}
+            EMAIL_FROM=${{ secrets.EMAIL_FROM }}
+            EMAIL_REPLY_TO=${{ secrets.EMAIL_REPLY_TO }}
+            RABBITMQ_URL=amqp://${{ secrets.RABBITMQ_USER }}:${{ secrets.RABBITMQ_PASS }}@2pbox-rabbitmq:5672
+            REDIS_URL=redis://:${{ secrets.REDIS_PASS }}@2pbox-redis:6379/0
+            WORKER_PREFETCH=8
+            WORKER_RECONCILE_INTERVAL_MS=60000
+            WORKER_CART_INTERVAL_MS=900000
+            CART_REMINDER_AFTER_MS=10800000
+            EOF
+            chmod 600 /opt/2pbox/.env
+
+            docker pull ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+            docker rm -f ${{ env.WEB_CONTAINER }} 2>/dev/null || true
+            docker rm -f ${{ env.WORKER_CONTAINER }} 2>/dev/null || true
+
+            docker run -d \
+              --name ${{ env.WEB_CONTAINER }} \
+              --network ${{ env.NETWORK }} \
+              -p 127.0.0.1:${{ env.WEB_PORT }}:3000 \
+              --restart unless-stopped \
+              --env-file /opt/2pbox/.env \
+              --health-cmd="wget --spider -q http://127.0.0.1:3000/api/mercadopago/webhook || exit 1" \
+              --health-interval=30s \
+              --health-timeout=10s \
+              --health-retries=3 \
+              ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+            docker run -d \
+              --name ${{ env.WORKER_CONTAINER }} \
+              --network ${{ env.NETWORK }} \
+              --restart unless-stopped \
+              --env-file /opt/2pbox/.env \
+              -e WORKER_HEALTH_PORT=3001 \
+              --health-cmd="wget --spider -q http://127.0.0.1:3001/health || exit 1" \
+              --health-interval=30s \
+              --health-timeout=10s \
+              --health-retries=3 \
+              ${{ env.IMAGE_NAME }}:${{ github.sha }} \
+              node dist-worker/worker/index.js
+
+            docker image prune -f --filter "label=org.opencontainers.image.ref.name=2pbox" || true
+
+            echo "Aguardando health do web..."
+            for i in $(seq 1 20); do
+              if wget --spider -q http://127.0.0.1:${{ env.WEB_PORT }}/api/mercadopago/webhook; then
+                echo "2P Box online"
+                exit 0
+              fi
+              sleep 5
+            done
+            echo "Web não respondeu a tempo"
+            docker logs --tail 80 ${{ env.WEB_CONTAINER }}
+            exit 1
