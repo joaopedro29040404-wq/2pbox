@@ -196,8 +196,6 @@ function CheckoutForm() {
         }
       }
 
-      toast.success('Pedido registrado');
-
       if (type === 'pickup') {
         setStatus('Preparando pagamento seguro...');
         const payment = await fetch('/api/mercadopago/create-preference', {

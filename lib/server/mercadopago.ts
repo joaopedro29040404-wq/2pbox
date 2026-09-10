@@ -1,5 +1,6 @@
 import { getMercadoPagoAccessToken } from './env';
 import { fetchJson } from './http';
+import { cacheGet, cacheSet } from './redis';
 import { supabaseRest, supabaseRpc } from './supabase-admin';
 
 const API = 'https://api.mercadopago.com';
@@ -193,6 +194,53 @@ function extractPaymentMethod(payment: any) {
 const EXTENDED_ORDER_COLUMNS =
   'status,payment_status,payment_status_detail,payment_id,payment_method,payment_type,payment_installments,payment_amount,paid_at,payment_updated_at,updated_at';
 const BASE_ORDER_COLUMNS = 'status,payment_status,payment_status_detail,payment_id,payment_updated_at,updated_at';
+
+export type PaymentBilling = {
+  paymentMethod: string | null;
+  paymentType: string | null;
+  installments: number | null;
+  paymentAmount: number | null;
+  paidAt: string | null;
+};
+
+const billingMemo = new Map<string, { value: PaymentBilling; expiresAt: number }>();
+const BILLING_MEMO_MS = 60_000;
+const BILLING_CACHE_SECONDS = 60 * 30;
+
+/**
+ * Dados de faturamento a partir do proprio Mercado Pago. Serve enquanto as
+ * colunas payment_method/payment_type/paid_at nao existirem em orders.
+ */
+export async function fetchPaymentBilling(paymentId: string): Promise<PaymentBilling | null> {
+  const id = String(paymentId || '').trim();
+  if (!id || !isMercadoPagoConfigured()) return null;
+
+  const memo = billingMemo.get(id);
+  if (memo && memo.expiresAt > Date.now()) return memo.value;
+
+  const cached = await cacheGet<PaymentBilling>(`billing:${id}`);
+  if (cached) {
+    billingMemo.set(id, { value: cached, expiresAt: Date.now() + BILLING_MEMO_MS });
+    return cached;
+  }
+
+  const result = await fetchMercadoPagoResource('payment', id).catch(() => null);
+  if (!result?.ok) return null;
+
+  const payment = result.resource as any;
+  const method = extractPaymentMethod(payment);
+  const value: PaymentBilling = {
+    paymentMethod: method.id,
+    paymentType: method.type,
+    installments: method.installments,
+    paymentAmount: method.amount,
+    paidAt: payment?.date_approved || payment?.money_release_date || null,
+  };
+
+  billingMemo.set(id, { value, expiresAt: Date.now() + BILLING_MEMO_MS });
+  await cacheSet(`billing:${id}`, value, BILLING_CACHE_SECONDS);
+  return value;
+}
 
 async function readPersistedOrder(orderId: string) {
   const read = async (select: string) => {

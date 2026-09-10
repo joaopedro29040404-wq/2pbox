@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { isMercadoPagoConfigured, resolveMercadoPagoPayment, syncOrderPayment } from '@/lib/server/mercadopago';
+import { fetchPaymentBilling, isMercadoPagoConfigured, resolveMercadoPagoPayment, syncOrderPayment } from '@/lib/server/mercadopago';
 import { notifyPaymentChange, queryOrders, readOrderHistory, readOrderItems } from '@/lib/server/orders';
 
 export const dynamic = 'force-dynamic';
@@ -41,6 +41,22 @@ export async function GET(request: Request) {
         }
       } catch (error) {
         console.error('[pedido/status] reconciliação falhou:', error);
+      }
+    }
+
+    // Enquanto orders nao tiver as colunas de faturamento, completamos a
+    // resposta com os dados do proprio pagamento no Mercado Pago.
+    if (order.payment_id && (!order.payment_method || !order.paid_at)) {
+      const billing = await fetchPaymentBilling(String(order.payment_id)).catch(() => null);
+      if (billing) {
+        order = {
+          ...order,
+          payment_method: order.payment_method || billing.paymentMethod,
+          payment_type: order.payment_type || billing.paymentType,
+          payment_installments: order.payment_installments ?? billing.installments,
+          payment_amount: order.payment_amount ?? billing.paymentAmount,
+          paid_at: order.paid_at || billing.paidAt,
+        };
       }
     }
 
