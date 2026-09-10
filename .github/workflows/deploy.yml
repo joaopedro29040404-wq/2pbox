@@ -157,16 +157,22 @@ jobs:
               ${{ env.IMAGE_NAME }}:${{ github.sha }} \
               node dist-worker/worker/index.js
 
-            docker image prune -f --filter "label=org.opencontainers.image.ref.name=2pbox" || true
-
             echo "Aguardando health do web..."
-            for i in $(seq 1 20); do
-              if wget --spider -q http://127.0.0.1:${{ env.WEB_PORT }}/api/mercadopago/webhook; then
-                echo "2P Box online"
+            probe() {
+              if command -v curl >/dev/null 2>&1; then
+                curl -fsS -o /dev/null --max-time 5 "$1"
+              else
+                wget --spider -q -T 5 "$1"
+              fi
+            }
+            for i in $(seq 1 24); do
+              if probe "http://127.0.0.1:${{ env.WEB_PORT }}/api/mercadopago/webhook"; then
+                echo "2P Box online em 127.0.0.1:${{ env.WEB_PORT }}"
                 exit 0
               fi
               sleep 5
             done
-            echo "Web não respondeu a tempo"
-            docker logs --tail 80 ${{ env.WEB_CONTAINER }}
+            echo "Web nao respondeu a tempo"
+            docker logs --tail 80 ${{ env.WEB_CONTAINER }} || true
+            docker logs --tail 40 ${{ env.WORKER_CONTAINER }} || true
             exit 1

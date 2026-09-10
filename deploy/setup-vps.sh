@@ -93,8 +93,10 @@ setup_https() {
 
   local available="/etc/nginx/sites-available/${DOMAIN}"
   local enabled="/etc/nginx/sites-enabled/${DOMAIN}"
+  local changed=0
 
   if [ ! -f "$available" ]; then
+    changed=1
     log "Criando vhost nginx para ${DOMAIN}"
     cat > "$available" <<NGINX
 server {
@@ -125,26 +127,39 @@ NGINX
   fi
 
   mkdir -p /var/www/html
-  nginx -t && systemctl reload nginx
 
-  if [ -d "/etc/letsencrypt/live/${DOMAIN}" ]; then
-    log "Certificado já existe para ${DOMAIN}, renovando se necessário"
-    certbot renew --quiet --nginx || true
+  if ! nginx -t 2>/dev/null; then
+    log "AVISO: nginx -t falhou. Nada foi recarregado."
+    nginx -t || true
+    return
+  fi
+
+  if [ "$changed" = "1" ]; then
+    systemctl reload nginx || log "AVISO: reload do nginx falhou."
+  fi
+
+  if grep -q "listen 443" "$available" 2>/dev/null; then
+    log "HTTPS ja configurado para ${DOMAIN}"
     return
   fi
 
   if [ -z "$CERTBOT_EMAIL" ]; then
-    log "AVISO: CERTBOT_EMAIL não informado, pulando emissão do certificado."
+    log "AVISO: CERTBOT_EMAIL nao informado, pulando o certificado."
     return
   fi
 
-  log "Emitindo certificado Let's Encrypt para ${DOMAIN}"
-  certbot --nginx \
-    -d "$DOMAIN" -d "$WWW_DOMAIN" \
-    --non-interactive --agree-tos --redirect \
-    -m "$CERTBOT_EMAIL" || log "AVISO: emissão do certificado falhou. Verifique o DNS e rode novamente."
-
-  systemctl reload nginx || true
+  log "Configurando HTTPS apenas para ${DOMAIN}"
+  if timeout 240 certbot --nginx \
+      --cert-name "$DOMAIN" \
+      -d "$DOMAIN" -d "$WWW_DOMAIN" \
+      --keep-until-expiring \
+      --non-interactive --agree-tos --redirect \
+      -m "$CERTBOT_EMAIL" </dev/null; then
+    log "HTTPS ativo em ${DOMAIN}"
+  else
+    log "AVISO: certbot nao concluiu (timeout ou falha). O site segue no HTTP; rode manualmente:"
+    log "  certbot --nginx --cert-name ${DOMAIN} -d ${DOMAIN} -d ${WWW_DOMAIN} --keep-until-expiring --redirect -m ${CERTBOT_EMAIL}"
+  fi
 }
 
 setup_https
