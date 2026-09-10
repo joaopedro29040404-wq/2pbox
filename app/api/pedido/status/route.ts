@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     const orderId = String(order.id);
     const paymentStatus = String(order.payment_status || '').toLowerCase();
     const orderStatus = String(order.status || '').toLowerCase();
-    const settled = paymentStatus === 'approved' || orderStatus === 'confirmed' || orderStatus === 'cancelled';
+    const settled = paymentStatus === 'paid' || orderStatus === 'cancelled';
 
     if (!settled && isMercadoPagoConfigured()) {
       try {

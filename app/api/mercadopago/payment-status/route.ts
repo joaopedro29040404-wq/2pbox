@@ -41,9 +41,9 @@ export async function GET(request: Request) {
     const localPaymentStatus = String(local?.payment_status || '').toLowerCase();
     const localOrderStatus = String(local?.status || '').toLowerCase();
 
-    if (localPaymentStatus === 'approved' || localOrderStatus === 'confirmed') {
+    if (localPaymentStatus === 'paid') {
       return respond({
-        paymentStatus: 'approved',
+        paymentStatus: 'paid',
         orderStatus: localOrderStatus || 'confirmed',
         paymentId: String(local?.payment_id || paymentId || '') || null,
         statusDetail: local?.payment_status_detail || 'accredited',

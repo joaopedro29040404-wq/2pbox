@@ -182,7 +182,6 @@ export default function LojaPage() {
             value={search}
             icon={<Search size={17} />}
             onValueChange={setSearch}
-            fullWidth
           />
           <SelectField aria-label="Ordenar produtos" value={sort} options={SORTS} onValueChange={setSort} />
         </div>
@@ -301,13 +300,15 @@ export default function LojaPage() {
 
       <style jsx global>{`
         .loja-shell{background:#fff;color:#111;min-height:100vh;display:flex;flex-direction:column}
-        .loja-page{max-width:1240px;flex:1}
-        .shop-breadcrumb{display:flex;align-items:center;gap:5px;margin-bottom:26px;color:#888;font-size:12px}
+        .loja-page{max-width:1240px;flex:1;padding-top:26px}
+        .shop-breadcrumb{display:flex;align-items:center;gap:5px;margin-bottom:20px;color:#888;font-size:12px}
         .shop-breadcrumb a{color:#555!important;text-decoration:none!important}
         .loja-heading{margin-bottom:26px}
         .loja-heading h1{font-family:'Barlow Condensed';font-size:52px;line-height:.95;letter-spacing:-1.8px;font-style:italic;text-transform:uppercase;margin:5px 0 12px}
         .loja-subtitle{color:#686868;margin:0;max-width:590px;font-size:15px;line-height:1.6}
-        .catalog-controls{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:12px;align-items:end;margin-bottom:18px}
+        .catalog-controls{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px;align-items:end;margin-bottom:18px}
+        .catalog-controls>*:first-child{grid-column:span 8}
+        .catalog-controls>*:last-child{grid-column:span 4}
         .catalog-toolbar{border-top:1px solid #e8e8e8;border-bottom:1px solid #e8e8e8;padding:14px 0;display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:22px}
         .category-filters{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}
         .category-filters::-webkit-scrollbar{display:none}
@@ -324,10 +325,10 @@ export default function LojaPage() {
         .product-image-link{text-decoration:none!important;display:block;width:100%}
         .product-image{position:relative;aspect-ratio:1/1;width:100%;background:#f7f7f7;overflow:hidden}
         .low-stock{position:absolute;left:12px;top:12px;z-index:2;padding:6px 9px;background:#111;color:#fff;border-radius:5px;font-size:9px;font-weight:900}
-        .product-favorite{position:absolute;right:10px;top:10px;width:30px;height:30px;padding:0;border:1px solid rgba(17,17,17,.08);border-radius:9px;background:rgba(255,255,255,.72);color:rgba(17,17,17,.68);box-shadow:0 2px 8px rgba(0,0,0,.06);backdrop-filter:blur(6px);display:grid;place-items:center;cursor:pointer;z-index:5;transition:transform .18s,background .18s,color .18s}
-        .product-favorite:hover{background:#fff;color:#111;transform:scale(1.04)}
-        .product-favorite.is-favorite{background:rgba(255,196,0,.86);color:#111;border-color:rgba(255,196,0,.45)}
-        .product-favorite:focus-visible{outline:2px solid #111;outline-offset:2px}
+        .product .product-favorite{position:absolute;right:10px;top:10px;width:32px;height:32px;min-width:32px;max-width:32px;flex:none;margin:0;padding:0;box-sizing:border-box;border:1px solid rgba(17,17,17,.08);border-radius:9px;background:rgba(255,255,255,.72);color:rgba(17,17,17,.68);box-shadow:0 2px 8px rgba(0,0,0,.06);backdrop-filter:blur(6px);display:grid;place-items:center;cursor:pointer;z-index:5;transition:transform .18s,background .18s,color .18s}
+        .product .product-favorite:hover{background:#fff;color:#111;transform:scale(1.04)}
+        .product .product-favorite.is-favorite{background:rgba(255,196,0,.86);color:#111;border-color:rgba(255,196,0,.45)}
+        .product .product-favorite:focus-visible{outline:2px solid #111;outline-offset:2px}
         .product-body{padding:16px;display:flex;flex-direction:column;flex:1;min-width:0}
         .product-info-link{color:inherit!important;text-decoration:none!important;display:block}
         .product-info-link small{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#a37b00;font-weight:900}
@@ -335,9 +336,9 @@ export default function LojaPage() {
         .product-info-link p{color:#777;font-size:11px;line-height:1.45;margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
         .product-buy{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:auto;padding-top:16px}
         .product-buy strong{font-size:18px;white-space:nowrap}
-        .catalog-add-button{border:0;background:#ffc400;color:#111;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:0 12px;border-radius:7px;font:900 11px Inter,Arial,sans-serif;cursor:pointer;white-space:nowrap}
-        .catalog-add-button.added{background:#111;color:#fff}
-        .catalog-add-button:disabled{background:#eee;color:#999;cursor:not-allowed}
+        .product .catalog-add-button{border:0;margin:0;background:#ffc400;color:#111;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:0 12px;border-radius:7px;font:900 11px Inter,Arial,sans-serif;cursor:pointer;white-space:nowrap}
+        .product .catalog-add-button.added{background:#111;color:#fff}
+        .product .catalog-add-button:disabled{background:#eee;color:#999;cursor:not-allowed}
         .empty-catalog{border:1px solid #e5e5e5;border-radius:12px;text-align:center;padding:70px 20px}
         .empty-catalog .empty-icon{width:52px;height:52px;margin:0 auto 16px;border-radius:14px;background:#fff4bf;display:grid;place-items:center}
         .empty-catalog h3{margin:0 0 6px;font-size:19px}
@@ -359,7 +360,7 @@ export default function LojaPage() {
           .product-info-link p{font-size:10px}
           .product-buy{display:block;padding-top:12px}
           .product-buy strong{display:block;font-size:16px;margin-bottom:9px}
-          .catalog-add-button{width:100%}
+          .product .catalog-add-button{width:100%}
           .shop-footer .container{flex-direction:column;text-align:center}
         }
         @media(max-width:360px){.product-grid{gap:8px}.product-body{padding:9px}.product-info-link h2{font-size:13px}}

@@ -196,7 +196,7 @@ function CheckoutForm() {
         }
       }
 
-      toast.success('Pedido registrado', `#${id.slice(0, 8).toUpperCase()}`);
+      toast.success('Pedido registrado');
 
       if (type === 'pickup') {
         setStatus('Preparando pagamento seguro...');

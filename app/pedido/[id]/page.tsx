@@ -96,7 +96,7 @@ function OrderPageContent() {
 
   useEffect(() => {
     if (!id || !email || askingEmail) return;
-    const settled = order && ['approved', 'rejected', 'cancelled'].includes(String(order.payment_status || '').toLowerCase());
+    const settled = order && ['paid', 'failed', 'refunded'].includes(String(order.payment_status || '').toLowerCase());
     const interval = settled ? 15000 : 4000;
     const timer = window.setInterval(() => void loadOrder(email, true), interval);
     return () => window.clearInterval(timer);
@@ -231,7 +231,7 @@ function OrderPageContent() {
       <div className="status-grid">
         <div className={`payment-card payment-${paymentStatus}`}>
           <div className="status-icon">
-            {['rejected', 'cancelled'].includes(paymentStatus) ? <XCircle size={20} /> : paymentStatus === 'approved' ? <CheckCircle2 size={20} /> : <CreditCard size={20} />}
+            {['failed', 'refunded'].includes(paymentStatus) ? <XCircle size={20} /> : paymentStatus === 'paid' ? <CheckCircle2 size={20} /> : <CreditCard size={20} />}
           </div>
           <div>
             <span>Pagamento</span>
@@ -387,8 +387,8 @@ function Shell({ children }: { children: React.ReactNode }) {
         .status-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
         .payment-card,.order-card-status{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e4e4df;border-radius:11px;padding:15px}
         .status-icon{width:38px;height:38px;border-radius:9px;background:#fff4bf;display:grid;place-items:center;flex:none}
-        .payment-approved .status-icon{color:#278149;background:#eaf8ee}
-        .payment-rejected .status-icon,.payment-cancelled .status-icon{color:#a22;background:#fff0f0}
+        .payment-paid .status-icon{color:#278149;background:#eaf8ee}
+        .payment-failed .status-icon,.payment-refunded .status-icon{color:#a22;background:#fff0f0}
         .payment-card>div:last-child,.order-card-status>div{display:grid;gap:4px}
         .payment-card span,.order-card-status span,.data-list dt{font-size:8px;color:#999;text-transform:uppercase;letter-spacing:.12em}
         .payment-card strong,.order-card-status strong{font-size:11px}

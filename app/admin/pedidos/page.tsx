@@ -50,7 +50,7 @@ const STATUS_ICONS: Record<string, typeof Clock3> = {
 
 const STATUS_OPTIONS = Object.entries(ORDER_STATUS_LABELS).map(([value, label]) => ({ value, label }));
 const FILTER_OPTIONS = [{ value: 'all', label: 'Todos os status' }, ...STATUS_OPTIONS];
-const TERMINAL_PAYMENTS = new Set(['approved', 'rejected', 'cancelled']);
+const TERMINAL_PAYMENTS = new Set(['paid', 'failed', 'refunded']);
 const PAGE_SIZE = 8;
 
 export default function OrdersPage() {
@@ -345,14 +345,12 @@ export default function OrdersPage() {
         .order-status{width:220px;display:grid;gap:7px;align-content:start;flex:none}
         .status-badge,.payment-badge{display:inline-flex;align-items:center;justify-content:center;gap:7px;border-radius:999px;padding:8px 10px;font-size:10px;font-weight:800;background:#f3f3f0}
         .status-pending,.payment-pending{background:#fff5cc}
-        .status-confirmed,.payment-approved{background:#eaf7df;color:#27733b}
+        .status-confirmed,.payment-paid{background:#eaf7df;color:#27733b}
         .status-preparing{background:#e9f1ff}
         .status-ready{background:#fff0c2}
         .status-completed{background:#e3f6e9}
-        .status-cancelled,.payment-rejected,.payment-cancelled{background:#ffe7e7;color:#a22}
-        .payment-in_process{background:#fff4d4;color:#8b6a00}
-        .payment-authorized{background:#e9f1ff;color:#2e5f96}
-        .order-divider{height:1px;background:#ededeb;margin:17px 0}
+        .status-cancelled,.payment-failed,.payment-refunded{background:#ffe7e7;color:#a22}
+                .order-divider{height:1px;background:#ededeb;margin:17px 0}
         .order-details{display:grid;grid-template-columns:1.5fr 1fr;gap:24px}
         .order-item{display:flex;justify-content:space-between;gap:12px;padding:6px 0;font-size:12px}
         .order-item b{color:#555}

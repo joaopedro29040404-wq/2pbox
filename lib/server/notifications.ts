@@ -32,13 +32,14 @@ export async function enqueueEmail({ template, to, data = {}, dedupeKey }: Enque
   return true;
 }
 
-export function paymentEmailTemplate(paymentStatus: string): EmailTemplateId | null {
-  switch (String(paymentStatus || '').toLowerCase()) {
+export function paymentEmailTemplate(mercadoPagoStatus: string): EmailTemplateId | null {
+  switch (String(mercadoPagoStatus || '').toLowerCase()) {
     case 'approved':
       return 'payment_confirmed';
     case 'rejected':
       return 'payment_rejected';
     case 'cancelled':
+    case 'refunded':
       return 'payment_cancelled';
     case 'pending':
     case 'in_process':

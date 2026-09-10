@@ -539,9 +539,9 @@ const styles = `
 .status-confirmed,.status-completed{background:#e9f7ec;color:#27733b}
 .status-cancelled{background:#ffecec;color:#a22}
 .payment-status{display:block;width:100%;text-align:right;font-size:8px;color:#888}
-.payment-approved{color:#27733b}
-.payment-rejected,.payment-cancelled{color:#a22}
-.payment-pending,.payment-in_process{color:#9a7200}
+.payment-paid{color:#27733b}
+.payment-failed,.payment-refunded{color:#a22}
+.payment-pending{color:#9a7200}
 .address-empty{display:flex;align-items:center;gap:14px;border:1px dashed #ddd;border-radius:10px;padding:20px}
 .address-empty>svg{color:#111;flex:none}
 .address-empty h3{font-size:13px;margin:0 0 4px}

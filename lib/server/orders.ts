@@ -55,7 +55,7 @@ export async function readOrderHistory(orderId: string) {
 }
 
 export async function notifyPaymentChange(orderId: string, synced: SyncedPayment) {
-  const template = paymentEmailTemplate(synced.paymentStatus);
+  const template = paymentEmailTemplate(synced.normalizedStatus);
   if (!template) return;
 
   const context = await readOrderWithItems(orderId);
@@ -66,7 +66,7 @@ export async function notifyPaymentChange(orderId: string, synced: SyncedPayment
     template,
     to: String(context.order.customer_email),
     data: { order: context.order, items: context.items, statusDetail: synced.statusDetail },
-    dedupeKey: `payment:${orderId}:${synced.paymentStatus}:${synced.paymentId || 'none'}:${stamp}`,
+    dedupeKey: `payment:${orderId}:${synced.normalizedStatus}:${synced.paymentId || 'none'}:${stamp}`,
   });
 }
 

@@ -6,10 +6,27 @@ const API = 'https://api.mercadopago.com';
 
 const APPROVED = new Set(['approved', 'processed', 'accredited']);
 const REJECTED = new Set(['rejected', 'failed']);
-const CANCELLED = new Set(['cancelled', 'canceled', 'refunded', 'charged_back']);
+const CANCELLED = new Set(['cancelled', 'canceled']);
+const REFUNDED = new Set(['refunded', 'charged_back']);
 const IN_PROGRESS = new Set(['pending', 'in_process', 'authorized', 'processing', 'action_required', 'created']);
 
-export const TERMINAL_PAYMENT_STATUSES = new Set(['approved', 'rejected', 'cancelled']);
+export const TERMINAL_PAYMENT_STATUSES = new Set(['paid', 'failed', 'refunded']);
+
+export type StorePaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded';
+
+export function toStorePaymentStatus(mercadoPagoStatus: string): StorePaymentStatus {
+  switch (String(mercadoPagoStatus || '').toLowerCase()) {
+    case 'approved':
+      return 'paid';
+    case 'rejected':
+    case 'cancelled':
+      return 'failed';
+    case 'refunded':
+      return 'refunded';
+    default:
+      return 'pending';
+  }
+}
 
 export const STATUS_PRIORITY: Record<string, number> = {
   processed: 100,
@@ -27,7 +44,8 @@ export const STATUS_PRIORITY: Record<string, number> = {
 };
 
 export type SyncedPayment = {
-  paymentStatus: string;
+  paymentStatus: StorePaymentStatus | string;
+  normalizedStatus: string;
   orderStatus: string;
   mpStatus: string;
   paymentId: string;
@@ -49,6 +67,7 @@ export function normalizePaymentStatus(payment: any) {
   const effective = mpOrderStatus || mpStatus;
 
   if (APPROVED.has(effective) || APPROVED.has(mpStatus) || mpDetail === 'accredited') return 'approved';
+  if (REFUNDED.has(effective) || REFUNDED.has(mpStatus)) return 'refunded';
   if (REJECTED.has(effective) || REJECTED.has(mpStatus)) return 'rejected';
   if (CANCELLED.has(effective) || CANCELLED.has(mpStatus)) return 'cancelled';
   if (IN_PROGRESS.has(effective)) {
@@ -188,18 +207,77 @@ async function readPersistedOrder(orderId: string) {
   return persisted;
 }
 
-async function callSyncRpc(
+function isMissingFunction(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /could not find|does not exist|schema cache|PGRST202|404/i.test(message);
+}
+
+async function patchOrderPayment(
   orderId: string,
-  paymentStatus: string,
+  storeStatus: StorePaymentStatus,
   paymentId: string,
   statusDetail: string | null,
   method: ReturnType<typeof extractPaymentMethod>,
+  current: any,
+) {
+  const currentPayment = String(current?.payment_status || 'pending').toLowerCase();
+  const currentOrder = String(current?.status || 'pending').toLowerCase();
+
+  if (currentPayment === 'paid' && storeStatus !== 'paid') {
+    return { payment_status: currentPayment, order_status: currentOrder, changed: false };
+  }
+
+  const now = new Date().toISOString();
+  const base: Record<string, unknown> = {
+    payment_status: storeStatus,
+    payment_status_detail: statusDetail,
+    payment_updated_at: now,
+    updated_at: now,
+  };
+  if (paymentId) base.payment_id = paymentId;
+  if (storeStatus === 'paid' && currentOrder === 'pending') base.status = 'confirmed';
+
+  const extended: Record<string, unknown> = { ...base };
+  if (method.id) extended.payment_method = method.id;
+  if (method.type) extended.payment_type = method.type;
+  if (method.installments) extended.payment_installments = method.installments;
+  if (method.amount) extended.payment_amount = method.amount;
+  if (storeStatus === 'paid') extended.paid_at = current?.paid_at || now;
+
+  const write = (payload: Record<string, unknown>) =>
+    supabaseRest(`orders?id=eq.${orderId}`, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify(payload),
+    });
+
+  try {
+    await write(extended);
+  } catch (error) {
+    if (!/column|schema cache|PGRST204/i.test(error instanceof Error ? error.message : String(error))) throw error;
+    await write(base);
+  }
+
+  return {
+    payment_status: storeStatus,
+    order_status: base.status || currentOrder,
+    changed: currentPayment !== storeStatus,
+  };
+}
+
+async function callSyncRpc(
+  orderId: string,
+  storeStatus: StorePaymentStatus,
+  paymentId: string,
+  statusDetail: string | null,
+  method: ReturnType<typeof extractPaymentMethod>,
+  current: any,
 ) {
   try {
     return await supabaseRpc('sync_order_payment_state_v2', {
       p_order_id: orderId,
       p_payment_id: paymentId || null,
-      p_payment_status: paymentStatus,
+      p_payment_status: storeStatus,
       p_status_detail: statusDetail,
       p_payment_method: method.id,
       p_payment_type: method.type,
@@ -207,17 +285,9 @@ async function callSyncRpc(
       p_payment_amount: method.amount,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (!/could not find|does not exist|schema cache|PGRST202|404/i.test(message)) throw error;
-
-    console.warn('[mercadopago] sync_order_payment_state_v2 indisponível, usando a função anterior.');
-    return supabaseRpc('sync_order_payment_state', {
-      p_order_id: orderId,
-      p_payment_id: paymentId || null,
-      p_payment_status: paymentStatus,
-      p_order_status: paymentStatus === 'approved' ? 'confirmed' : 'pending',
-      p_status_detail: statusDetail,
-    });
+    if (!isMissingFunction(error)) throw error;
+    console.warn('[mercadopago] sync_order_payment_state_v2 ausente, aplicando escrita direta.');
+    return patchOrderPayment(orderId, storeStatus, paymentId, statusDetail, method, current);
   }
 }
 
@@ -230,25 +300,27 @@ export async function syncOrderPayment(orderId: string, payment: any): Promise<S
     throw new Error('Pagamento não pertence ao pedido informado.');
   }
 
-  const paymentStatus = normalizePaymentStatus(payment);
+  const normalizedStatus = normalizePaymentStatus(payment);
+  const storeStatus = toStorePaymentStatus(normalizedStatus);
   const paymentId = payment?.id ? String(payment.id) : '';
   const statusDetail = String(payment?.status_detail || payment?.order_status_detail || '').trim() || null;
   const method = extractPaymentMethod(payment);
 
   const previous = await readPersistedOrder(normalizedOrderId).catch(() => null);
-  const rpcResult = await callSyncRpc(normalizedOrderId, paymentStatus, paymentId, statusDetail, method);
+  const rpcResult = await callSyncRpc(normalizedOrderId, storeStatus, paymentId, statusDetail, method, previous);
 
   const persisted = await readPersistedOrder(normalizedOrderId);
   const persistedPaymentStatus = String(persisted.payment_status || 'pending').toLowerCase();
   const persistedOrderStatus = String(persisted.status || 'pending').toLowerCase();
   const previousPaymentStatus = String(previous?.payment_status || '').toLowerCase();
 
-  if (paymentStatus === 'approved' && (persistedPaymentStatus !== 'approved' || persistedOrderStatus !== 'confirmed')) {
+  if (storeStatus === 'paid' && persistedPaymentStatus !== 'paid') {
     throw new Error(`Sincronização incompleta: payment_status=${persistedPaymentStatus}, status=${persistedOrderStatus}.`);
   }
 
   return {
     paymentStatus: persistedPaymentStatus,
+    normalizedStatus,
     orderStatus: persistedOrderStatus,
     mpStatus: String(payment?.status || '').toLowerCase(),
     paymentId: String(persisted.payment_id || paymentId || ''),

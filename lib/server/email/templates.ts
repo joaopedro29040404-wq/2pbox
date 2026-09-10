@@ -29,11 +29,9 @@ const ORDER_STATUS_LABELS: Record<string, string> = {
 
 const PAYMENT_STATUS_LABELS: Record<string, string> = {
   pending: 'Aguardando pagamento',
-  in_process: 'Pagamento em análise',
-  authorized: 'Pagamento autorizado',
-  approved: 'Pagamento aprovado',
-  rejected: 'Pagamento recusado',
-  cancelled: 'Pagamento cancelado',
+  paid: 'Pagamento aprovado',
+  failed: 'Pagamento não aprovado',
+  refunded: 'Pagamento estornado',
 };
 
 const PAYMENT_TYPE_LABELS: Record<string, string> = {

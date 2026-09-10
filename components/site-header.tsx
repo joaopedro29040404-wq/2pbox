@@ -44,22 +44,17 @@ export function SiteHeader({
   const [menuOpen, setMenuOpen] = useState(false);
   const [name, setName] = useState<string | null>(null);
   const [signedIn, setSignedIn] = useState(false);
-  const [ready, setReady] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
     const client = supabase;
-    if (!client) {
-      setReady(true);
-      return;
-    }
+    if (!client) return;
     let active = true;
 
     client.auth.getUser().then(({ data }) => {
       if (!active) return;
       setSignedIn(Boolean(data.user));
       setName(data.user?.user_metadata?.full_name?.trim()?.split(/\s+/)[0] || null);
-      setReady(true);
     });
 
     const { data: listener } = client.auth.onAuthStateChange((_event, session) => {
@@ -81,7 +76,7 @@ export function SiteHeader({
     window.location.assign(isAdmin ? '/admin/login' : '/');
   }
 
-  const accountLabel = !ready ? 'Conta' : signedIn ? name || 'Minha conta' : 'Entrar';
+  const accountLabel = name || 'Minha conta';
 
   return (
     <>
@@ -131,25 +126,23 @@ export function SiteHeader({
           </nav>
 
           <div className="sh-actions">
-            {!isAdmin && (
+            {!isAdmin && signedIn && (
               <Link href="/conta" className="sh-account">
                 <UserRound size={16} />
                 <span>{accountLabel}</span>
               </Link>
             )}
             {!isAdmin && showCart && <CartButton />}
-            {ready && signedIn ? (
+            {signedIn ? (
               <button type="button" className="sh-signout" onClick={signOut}>
                 <LogOut size={15} />
                 <span>Sair</span>
               </button>
             ) : (
-              ready && (
-                <Link href={isAdmin ? '/admin/login' : '/conta'} className="sh-signin">
-                  <LogIn size={15} />
-                  <span>Login</span>
-                </Link>
-              )
+              <Link href={isAdmin ? '/admin/login' : '/conta'} className="sh-signin">
+                <LogIn size={15} />
+                <span>Entrar</span>
+              </Link>
             )}
             <button type="button" className="sh-burger" onClick={() => setMenuOpen((value) => !value)} aria-label="Abrir menu" aria-expanded={menuOpen}>
               {menuOpen ? <X size={20} /> : <Menu size={20} />}

@@ -9,19 +9,19 @@ import { PageLoader } from '@/components/ui/loader';
 import { useToast } from '@/components/ui/toast';
 
 const STATUS = {
-  approved: {
+  paid: {
     title: 'Pagamento confirmado!',
     text: 'Obrigado pela sua compra. O Mercado Pago confirmou o pagamento e a 2P Box já pode seguir com o pedido.',
     icon: CheckCircle2,
   },
-  rejected: {
-    title: 'Pagamento recusado',
+  failed: {
+    title: 'Pagamento não aprovado',
     text: 'O pagamento não foi aprovado. Você pode tentar novamente com outra forma de pagamento.',
     icon: XCircle,
   },
-  cancelled: {
-    title: 'Pagamento não concluído',
-    text: 'O pagamento foi cancelado ou não foi concluído. Você pode voltar à loja e tentar novamente.',
+  refunded: {
+    title: 'Pagamento estornado',
+    text: 'O valor deste pedido foi estornado. O prazo de devolução segue a sua instituição financeira.',
     icon: XCircle,
   },
   pending: {
@@ -29,20 +29,10 @@ const STATUS = {
     text: 'O pagamento ainda não foi confirmado. Continuaremos consultando automaticamente.',
     icon: Clock3,
   },
-  in_process: {
-    title: 'Pagamento em análise',
-    text: 'O pagamento foi recebido e ainda está sendo processado. A 2P Box continuará acompanhando automaticamente.',
-    icon: Clock3,
-  },
-  authorized: {
-    title: 'Pagamento autorizado',
-    text: 'O pagamento foi autorizado e aguardamos a confirmação final.',
-    icon: Clock3,
-  },
 } as const;
 
 type PaymentStatus = keyof typeof STATUS;
-const TERMINAL: PaymentStatus[] = ['approved', 'rejected', 'cancelled'];
+const TERMINAL: PaymentStatus[] = ['paid', 'failed', 'refunded'];
 
 function normalize(value: string | null): PaymentStatus {
   const status = String(value || '').toLowerCase();
@@ -98,9 +88,9 @@ function PaymentResultContent() {
   useEffect(() => {
     if (loading || notified.current || !TERMINAL.includes(status)) return;
     notified.current = true;
-    if (status === 'approved') toast.success('Pagamento confirmado!', 'Seu pedido já está em preparação.');
-    else if (status === 'rejected') toast.error('Pagamento recusado', 'Tente outra forma de pagamento.');
-    else toast.warning('Pagamento cancelado', 'O pedido não seguirá para separação.');
+    if (status === 'paid') toast.success('Pagamento confirmado!', 'Seu pedido já está em preparação.');
+    else if (status === 'failed') toast.error('Pagamento não aprovado', 'Tente outra forma de pagamento.');
+    else toast.warning('Pagamento estornado', 'O valor deste pedido foi devolvido.');
   }, [status, loading, toast]);
 
   if (loading) {
@@ -147,7 +137,7 @@ function PaymentResultContent() {
         )}
 
         <div className="payment-actions">
-          {status === 'approved' ? (
+          {status === 'paid' ? (
             <Link href={`/pedido/${encodeURIComponent(orderId)}`} className="payment-primary">
               <PackageSearch size={17} /> Acompanhar pedido
             </Link>
@@ -174,8 +164,8 @@ function PaymentResultContent() {
         .payment-page{--yellow:#ffc400;--gold:#9a7200;min-height:100svh;background:#fff;color:#111;display:flex;flex-direction:column;font-family:Inter,Arial,sans-serif;overflow-x:hidden}
         .payment-card{width:min(680px,calc(100% - 40px));margin:44px auto;padding:42px 44px 38px;background:#fff;border:1px solid #e7e7e7;border-radius:18px;box-shadow:0 18px 50px rgba(0,0,0,.06);text-align:center;flex:1;align-self:center;height:max-content}
         .payment-icon{width:68px;height:68px;margin:0 auto 19px;border-radius:50%;display:grid;place-items:center;background:#fff7d5}
-        .approved .payment-icon{color:#218b53;background:#eaf8ee}
-        .rejected .payment-icon,.cancelled .payment-icon{background:#fff0f0;color:#c62828}
+        .paid .payment-icon{color:#218b53;background:#eaf8ee}
+        .failed .payment-icon,.refunded .payment-icon{background:#fff0f0;color:#c62828}
         .payment-eyebrow{margin:0 0 8px;color:var(--gold);font:900 8px Inter,Arial,sans-serif;letter-spacing:.22em}
         .payment-card h1{margin:0;font-size:clamp(30px,5vw,44px);line-height:1.02;letter-spacing:-.035em}
         .payment-text{max-width:540px;margin:16px auto 0;color:#707070;font-size:13px;line-height:1.6}

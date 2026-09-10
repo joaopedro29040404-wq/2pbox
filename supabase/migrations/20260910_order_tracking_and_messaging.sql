@@ -162,70 +162,52 @@ declare
   v_order public.orders%rowtype;
   v_incoming text := lower(coalesce(p_payment_status, 'pending'));
   v_current text;
-  v_final_payment text;
   v_final_order text;
   v_changed boolean;
 begin
   select * into v_order from public.orders where id = p_order_id for update;
-  if not found then raise exception 'Pedido não encontrado'; end if;
+  if not found then raise exception 'Pedido nao encontrado'; end if;
 
-  if v_incoming in ('processed', 'accredited') then
-    v_incoming := 'approved';
-  elsif v_incoming = 'canceled' then
-    v_incoming := 'cancelled';
-  elsif v_incoming = 'failed' then
-    v_incoming := 'rejected';
+  -- O dominio de orders.payment_status e o da loja: pending | paid | failed | refunded.
+  if v_incoming in ('approved', 'processed', 'accredited') then
+    v_incoming := 'paid';
+  elsif v_incoming in ('rejected', 'cancelled', 'canceled') then
+    v_incoming := 'failed';
   elsif v_incoming in ('refunded', 'charged_back') then
-    v_incoming := 'cancelled';
-  elsif v_incoming not in ('approved','pending','in_process','authorized','rejected','cancelled') then
+    v_incoming := 'refunded';
+  elsif v_incoming not in ('pending', 'paid', 'failed', 'refunded') then
     v_incoming := 'pending';
   end if;
 
-  v_current := lower(coalesce(v_order.payment_status, ''));
+  v_current := lower(coalesce(v_order.payment_status, 'pending'));
 
-  if v_current = 'approved' or lower(coalesce(v_order.status, '')) = 'confirmed' then
-    update public.orders set
-      payment_id = coalesce(nullif(trim(p_payment_id), ''), payment_id),
-      payment_status = 'approved',
-      payment_status_detail = coalesce(nullif(trim(coalesce(p_status_detail, '')), ''), payment_status_detail),
-      payment_method = coalesce(nullif(trim(coalesce(p_payment_method, '')), ''), payment_method),
-      payment_type = coalesce(nullif(trim(coalesce(p_payment_type, '')), ''), payment_type),
-      payment_installments = coalesce(p_installments, payment_installments),
-      payment_amount = coalesce(p_payment_amount, payment_amount),
-      paid_at = coalesce(paid_at, now()),
-      status = case when lower(coalesce(status, '')) = 'pending' then 'confirmed' else status end,
-      updated_at = now()
-    where id = p_order_id;
-
-    return jsonb_build_object('payment_status','approved','order_status',
-      (select status from public.orders where id = p_order_id),'changed', v_current <> 'approved');
+  -- Um pagamento confirmado nunca regride por evento atrasado.
+  if v_current = 'paid' and v_incoming <> 'paid' then
+    return jsonb_build_object('payment_status', v_current, 'order_status', v_order.status, 'changed', false);
   end if;
 
-  if v_incoming = 'approved' then
-    v_final_payment := 'approved';
-    v_final_order := 'confirmed';
-  else
-    v_final_payment := v_incoming;
-    v_final_order := coalesce(v_order.status, 'pending');
-  end if;
+  v_final_order := case
+    when v_incoming = 'paid' and lower(coalesce(v_order.status, 'pending')) = 'pending' then 'confirmed'
+    else coalesce(v_order.status, 'pending')
+  end;
 
-  v_changed := v_current is distinct from v_final_payment;
+  v_changed := v_current is distinct from v_incoming;
 
   update public.orders set
     payment_id = coalesce(nullif(trim(p_payment_id), ''), payment_id),
-    payment_status = v_final_payment,
-    payment_status_detail = nullif(trim(coalesce(p_status_detail, '')), ''),
+    payment_status = v_incoming,
+    payment_status_detail = coalesce(nullif(trim(coalesce(p_status_detail, '')), ''), payment_status_detail),
     payment_method = coalesce(nullif(trim(coalesce(p_payment_method, '')), ''), payment_method),
     payment_type = coalesce(nullif(trim(coalesce(p_payment_type, '')), ''), payment_type),
     payment_installments = coalesce(p_installments, payment_installments),
     payment_amount = coalesce(p_payment_amount, payment_amount),
-    paid_at = case when v_final_payment = 'approved' then coalesce(paid_at, now()) else paid_at end,
+    paid_at = case when v_incoming = 'paid' then coalesce(paid_at, now()) else paid_at end,
     payment_updated_at = now(),
     status = v_final_order,
     updated_at = now()
   where id = p_order_id;
 
-  return jsonb_build_object('payment_status', v_final_payment, 'order_status', v_final_order, 'changed', v_changed);
+  return jsonb_build_object('payment_status', v_incoming, 'order_status', v_final_order, 'changed', v_changed);
 end;
 $$;
 

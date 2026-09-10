@@ -45,10 +45,10 @@ export default function AdminPage() {
       const monthSales = list
         .filter((order) => {
           const date = new Date(order.created_at);
-          return date.getMonth() === month && date.getFullYear() === year && String(order.payment_status || '').toLowerCase() === 'approved';
+          return date.getMonth() === month && date.getFullYear() === year && String(order.payment_status || '').toLowerCase() === 'paid';
         })
         .reduce((sum, order) => sum + Number(order.total), 0);
-      const awaiting = list.filter((order) => ['pending', 'in_process', 'authorized'].includes(String(order.payment_status || 'pending').toLowerCase())).length;
+      const awaiting = list.filter((order) => String(order.payment_status || 'pending').toLowerCase() === 'pending').length;
 
       setStats([
         { label: 'Pedidos hoje', value: String(todayCount), hint: 'Hoje', icon: ShoppingCart },

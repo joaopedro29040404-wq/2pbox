@@ -207,7 +207,7 @@ export default function AdminOrderDetail() {
         <div className="status-grid">
           <div className={`status-card payment-${paymentStatus}`}>
             <div className="status-icon">
-              {['rejected', 'cancelled'].includes(paymentStatus) ? <XCircle size={22} /> : paymentStatus === 'approved' ? <CheckCircle2 size={22} /> : <CreditCard size={22} />}
+              {['failed', 'refunded'].includes(paymentStatus) ? <XCircle size={22} /> : paymentStatus === 'paid' ? <CheckCircle2 size={22} /> : <CreditCard size={22} />}
             </div>
             <div>
               <span>Pagamento</span>
@@ -387,8 +387,8 @@ export default function AdminOrderDetail() {
         .status-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}
         .status-card{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e4e4df;border-radius:11px;padding:16px}
         .status-icon{width:42px;height:42px;border-radius:10px;background:#fff4bf;display:grid;place-items:center;flex:none}
-        .payment-approved .status-icon{color:#278149;background:#eaf8ee}
-        .payment-rejected .status-icon,.payment-cancelled .status-icon{color:#a22;background:#fff0f0}
+        .payment-paid .status-icon{color:#278149;background:#eaf8ee}
+        .payment-failed .status-icon,.payment-refunded .status-icon{color:#a22;background:#fff0f0}
         .status-card>div:last-child{display:grid;gap:4px;min-width:0;flex:1}
         .status-card span,.data-list dt{font-size:8px;color:#999;text-transform:uppercase;letter-spacing:.12em}
         .status-card strong{font-size:12px}
