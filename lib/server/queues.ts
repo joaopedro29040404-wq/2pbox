@@ -22,6 +22,9 @@ export type PaymentReconcileJob = {
   orderId: string;
   paymentId?: string | null;
   reason: string;
+  /** Varredura de backlog reconcilia em silencio: o cliente nao deve receber
+   *  "pagamento confirmado" de uma compra antiga. */
+  notify?: boolean;
   attempt?: number;
 };
 

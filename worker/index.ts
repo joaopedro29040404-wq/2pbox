@@ -23,6 +23,7 @@ const RECONCILE_INTERVAL_MS = Number(process.env.WORKER_RECONCILE_INTERVAL_MS ||
 const CART_INTERVAL_MS = Number(process.env.WORKER_CART_INTERVAL_MS || 15 * 60_000);
 const CART_REMINDER_AFTER_MS = Number(process.env.CART_REMINDER_AFTER_MS || 3 * 60 * 60_000);
 const HEALTH_PORT = Number(process.env.WORKER_HEALTH_PORT || 3001);
+const NOTIFY_MAX_AGE_MS = Number(process.env.RECONCILE_NOTIFY_MAX_AGE_MS || 48 * 60 * 60_000);
 
 let shuttingDown = false;
 const timers: NodeJS.Timeout[] = [];
@@ -100,8 +101,14 @@ async function handlePaymentReconcile(job: PaymentReconcileJob) {
       return;
     }
     const synced = await syncOrderPayment(job.orderId, payment);
-    if (synced.changed) await notifyPaymentChange(job.orderId, synced);
-    log('info', 'reconciliação concluída', { orderId: job.orderId, paymentStatus: synced.paymentStatus, changed: synced.changed });
+    const shouldNotify = job.notify !== false;
+    if (synced.changed && shouldNotify) await notifyPaymentChange(job.orderId, synced);
+    log('info', 'reconciliação concluída', {
+      orderId: job.orderId,
+      paymentStatus: synced.paymentStatus,
+      changed: synced.changed,
+      notified: synced.changed && shouldNotify,
+    });
   } finally {
     await releaseLock(lockKey);
   }
@@ -169,6 +176,7 @@ async function reconcilePendingOrders() {
   if (shuttingDown || !isMercadoPagoConfigured()) return;
   try {
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const notifyAfter = Date.now() - NOTIFY_MAX_AGE_MS;
     const query = new URLSearchParams({
       select: 'id,payment_id,payment_status,created_at',
       payment_status: 'in.(pending,in_process,authorized)',
@@ -187,6 +195,7 @@ async function reconcilePendingOrders() {
         orderId: String(row.id),
         paymentId: row.payment_id ? String(row.payment_id) : null,
         reason: 'scheduled',
+        notify: new Date(row.created_at).getTime() >= notifyAfter,
       };
       if (isQueueConfigured()) await publishSafe(QUEUES.paymentReconcile, job);
       else await handlePaymentReconcile(job).catch((error) => log('error', 'reconciliação direta falhou', error));
