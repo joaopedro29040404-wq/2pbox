@@ -6,6 +6,7 @@ import {
   Bike,
   Check,
   Clock3,
+  CopyPlus,
   CreditCard,
   Link2,
   MapPin,
@@ -26,21 +27,23 @@ import { CheckboxField, SelectField, TextField } from '@/components/ui/field';
 import { InlineLoader, PageLoader } from '@/components/ui/loader';
 import { useToast } from '@/components/ui/toast';
 import {
+  DEFAULT_DAY_HOURS,
   DEFAULT_PRICE_TABLE,
   PICKUP_MODES,
   SHIPPING_MODES,
   WEEK_DAYS,
   describeHours,
+  type BusinessHours,
   type DeliveryTier,
+  type WeekDay,
 } from '@/lib/store-operations';
 
 type Operations = {
   id: string | null;
   name: string;
   whatsapp: string;
+  businessHours: BusinessHours;
   businessDays: string[];
-  opensAt: string;
-  closesAt: string;
   shippingMode: string;
   pickupMode: string;
   serviceFeePercent: number;
@@ -162,10 +165,29 @@ export default function SettingsPage() {
     setData((current) => (current ? { ...current, ...changes } : current));
   }
 
-  function toggleDay(day: string) {
+  function toggleDay(day: WeekDay) {
     if (!data) return;
-    const active = data.businessDays.includes(day);
-    patch({ businessDays: active ? data.businessDays.filter((item) => item !== day) : [...data.businessDays, day] });
+    const hours = { ...data.businessHours };
+    if (hours[day]) delete hours[day];
+    else hours[day] = { ...(firstOpenRange(data.businessHours) || DEFAULT_DAY_HOURS) };
+    patch({ businessHours: hours, businessDays: Object.keys(hours) });
+  }
+
+  function setDayTime(day: WeekDay, field: 'open' | 'close', value: string) {
+    if (!data) return;
+    const current = data.businessHours[day] || DEFAULT_DAY_HOURS;
+    patch({ businessHours: { ...data.businessHours, [day]: { ...current, [field]: value } } });
+  }
+
+  /** Repetir o intervalo do primeiro dia evita preencher sete vezes o mesmo horario. */
+  function applyToAllDays() {
+    if (!data) return;
+    const reference = firstOpenRange(data.businessHours);
+    if (!reference) return;
+    const hours: BusinessHours = {};
+    for (const day of Object.keys(data.businessHours) as WeekDay[]) hours[day] = { ...reference };
+    patch({ businessHours: hours });
+    toast.info('Horário replicado', `Todos os dias ativos ficaram das ${reference.open} às ${reference.close}.`);
   }
 
   function updateTier(index: number, changes: Partial<DeliveryTier>) {
@@ -269,6 +291,7 @@ export default function SettingsPage() {
     );
   }
 
+  const openCount = Object.keys(data.businessHours).length;
   const active = SECTIONS.find((item) => item.key === section) || SECTIONS[0];
   const ActiveIcon = active.icon;
 
@@ -396,7 +419,7 @@ export default function SettingsPage() {
                   value={data.whatsapp}
                   onValueChange={(value) => patch({ whatsapp: value })}
                 />
-                <TextField label="Resumo do atendimento" value={describeHours(data.businessDays, data.opensAt, data.closesAt)} hint="Gerado a partir da aba Horário." readOnly />
+                <TextField label="Resumo do atendimento" value={describeHours(data.businessHours)} hint="Gerado a partir da aba Horário." readOnly />
               </div>
             )}
 
@@ -420,22 +443,44 @@ export default function SettingsPage() {
 
             {section === 'hours' && (
               <div className="settings-grid">
-                <div className="settings-days">
-                  <span className="settings-block-label">Dias de atendimento</span>
-                  <div className="settings-days-grid">
-                    {WEEK_DAYS.map((day) => (
-                      <CheckboxField
-                        key={day.value}
-                        label={day.label}
-                        checked={data.businessDays.includes(day.value)}
-                        onCheckedChange={() => toggleDay(day.value)}
-                      />
-                    ))}
+                <div className="hours-block">
+                  <div className="hours-head">
+                    <span className="settings-block-label">Dias e horários de atendimento</span>
+                    <button type="button" onClick={applyToAllDays} disabled={!openCount}>
+                      <CopyPlus size={14} /> Repetir o primeiro horário em todos
+                    </button>
                   </div>
+
+                  <ul className="hours-list">
+                    {WEEK_DAYS.map((day) => {
+                      const range = data.businessHours[day.value];
+                      const open = Boolean(range);
+                      const invalid = open && range!.close <= range!.open;
+                      return (
+                        <li key={day.value} className={open ? 'is-open' : ''}>
+                          <CheckboxField label={day.label} checked={open} onCheckedChange={() => toggleDay(day.value)} />
+                          {open ? (
+                            <div className="hours-times">
+                              <label>
+                                <span>Abre</span>
+                                <input type="time" value={range!.open} onChange={(event) => setDayTime(day.value, 'open', event.target.value)} />
+                              </label>
+                              <label>
+                                <span>Fecha</span>
+                                <input type="time" value={range!.close} onChange={(event) => setDayTime(day.value, 'close', event.target.value)} />
+                              </label>
+                              {invalid && <small className="hours-invalid">O fechamento precisa ser depois da abertura.</small>}
+                            </div>
+                          ) : (
+                            <span className="hours-closed">Fechado</span>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
-                <TextField label="Abre às" type="time" value={data.opensAt} onValueChange={(value) => patch({ opensAt: value })} />
-                <TextField label="Fecha às" type="time" value={data.closesAt} onValueChange={(value) => patch({ closesAt: value })} />
-                <TextField label="Como aparece na loja" value={describeHours(data.businessDays, data.opensAt, data.closesAt)} readOnly fullWidth />
+
+                <TextField label="Como aparece na loja" value={describeHours(data.businessHours)} readOnly fullWidth />
               </div>
             )}
 
@@ -564,8 +609,24 @@ export default function SettingsPage() {
         .settings-card-head h2{margin:0;font-family:'Barlow Condensed',Inter,sans-serif;font-size:31px;line-height:1;text-transform:uppercase}
         .settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;padding:30px}
         .settings-block-label{display:block;margin-bottom:11px;font:800 10px Inter,Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#555}
-        .settings-days,.settings-toggles{grid-column:1/-1}
+        .settings-days,.settings-toggles,.hours-block{grid-column:1/-1}
         .settings-days-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+        .hours-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:1rem}
+        .hours-head .settings-block-label{margin-bottom:0}
+        .hours-head button{display:inline-flex;align-items:center;gap:7px;min-height:40px;padding:0 14px;border:1px solid #dcdcd6;border-radius:9px;background:#fff;font:800 11px Inter,Arial,sans-serif;cursor:pointer;white-space:nowrap}
+        .hours-head button:hover:not(:disabled){border-color:#111}
+        .hours-head button:disabled{opacity:.45;cursor:not-allowed}
+        .hours-list{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+        .hours-list li{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:13px 16px;background:#fafaf7;border:1px solid #ecece4;border-radius:12px}
+        .hours-list li.is-open{background:#fff;border-color:#e2e2d8}
+        .hours-list li>.ui-field{flex:1 1 160px}
+        .hours-times{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+        .hours-times label{display:grid;gap:6px}
+        .hours-times span{font:800 9px Inter,Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a8a86}
+        .hours-times input{height:42px;padding:0 12px;border:1px solid #dcdcd6;border-radius:9px;background:#fff;color:#111;font:600 13px Inter,Arial,sans-serif}
+        .hours-times input:focus{outline:0;border-color:#111;box-shadow:0 0 0 3px rgba(255,196,0,.2)}
+        .hours-invalid{flex-basis:100%;color:#c62828;font:700 10.5px Inter,Arial,sans-serif}
+        .hours-closed{font:800 10px Inter,Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#a5a5a0}
         .settings-toggles{display:grid;gap:13px}
         .settings-note{grid-column:1/-1;padding:13px 15px;background:#fafaf7;border:1px solid #e8e8df;border-radius:10px;color:#5d5d5d;font-size:12px;line-height:1.55}
         .tier-block{grid-column:1/-1}
@@ -615,6 +676,10 @@ export default function SettingsPage() {
           .settings-card-head,.settings-grid,.settings-card-foot{padding-left:20px;padding-right:20px}
           .settings-grid{grid-template-columns:1fr;gap:18px}
           .settings-days-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+          .hours-head{align-items:stretch;flex-direction:column;gap:10px}
+          .hours-head button{width:100%}
+          .hours-list li{align-items:stretch;flex-direction:column;gap:12px}
+          .hours-times input{width:100%}
           .tier-list li{grid-template-columns:repeat(2,minmax(0,1fr))}
           .tier-list li>button{width:100%}
         }
@@ -631,6 +696,11 @@ export default function SettingsPage() {
       `}</style>
     </main>
   );
+}
+
+function firstOpenRange(hours: BusinessHours) {
+  const day = WEEK_DAYS.find((item) => hours[item.value]);
+  return day ? hours[day.value]! : null;
 }
 
 function sectionTitle(section: SectionKey) {

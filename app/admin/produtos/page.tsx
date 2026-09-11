@@ -22,7 +22,7 @@ import { SiteHeader } from '@/components/site-header';
 import { SelectField, TextAreaField, TextField } from '@/components/ui/field';
 import { Modal } from '@/components/ui/modal';
 import { Pagination, usePagination } from '@/components/ui/pagination';
-import { ProductImage } from '@/components/ui/product-image';
+import { ProductImage, productCover } from '@/components/ui/product-image';
 import { InlineLoader, SkeletonGrid } from '@/components/ui/loader';
 import { useToast } from '@/components/ui/toast';
 
@@ -602,7 +602,7 @@ export default function ProductsAdminPage() {
                 <article className="admin-product-card" key={product.id}>
                   <div className="card-image">
                     <span className={`status-pill ${product.active ? 'active' : 'inactive'}`}>{product.active ? 'Ativo' : 'Inativo'}</span>
-                    <ProductImage src={product.image_url} alt={product.name} sizes="(max-width:950px) 50vw, 320px" />
+                    <ProductImage src={productCover(product)} alt={product.name} sizes="(max-width:950px) 50vw, 320px" />
                   </div>
                   <div className="card-content">
                     <div className="card-category">{categories.find((category) => category.id === product.category_id)?.name || 'Sem categoria'}</div>

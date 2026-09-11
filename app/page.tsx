@@ -8,12 +8,12 @@ import { supabase } from '@/lib/supabase';
 import { getStoreSettings, StoreSettings } from '@/lib/store-settings';
 import { SiteHeader } from '@/components/site-header';
 import { Pagination, usePagination } from '@/components/ui/pagination';
-import { ProductImage } from '@/components/ui/product-image';
+import { ProductImage, productCover } from '@/components/ui/product-image';
 import { SkeletonGrid } from '@/components/ui/loader';
 import { money } from '@/lib/order-format';
 
 type Category = { id?: string; name: string; description?: string | null };
-type Product = { id: string; name: string; slug: string; price: number; image_url?: string | null };
+type Product = { id: string; name: string; slug: string; price: number; image_url?: string | null; images?: string[] | null };
 
 const CATEGORIES_PER_PAGE = 8;
 
@@ -49,7 +49,7 @@ export default function Home() {
     (async () => {
       const [{ data: categoryRows }, { data: productRows }, settings] = await Promise.all([
         client.from('categories').select('id,name,description').eq('active', true).order('name'),
-        client.from('products').select('id,name,slug,price,image_url').eq('active', true).order('created_at', { ascending: false }).limit(8),
+        client.from('products').select('id,name,slug,price,image_url,images').eq('active', true).order('created_at', { ascending: false }).limit(8),
         getStoreSettings(),
       ]);
       if (!mounted) return;
@@ -152,7 +152,7 @@ export default function Home() {
               {products.map((product) => (
                 <Link href={`/produto/${product.slug}`} key={product.id} className="home-product-card">
                   <div className="home-product-image">
-                    <ProductImage src={product.image_url} alt={product.name} sizes="(max-width:900px) 50vw, 270px" />
+                    <ProductImage src={productCover(product)} alt={product.name} sizes="(max-width:900px) 50vw, 270px" />
                   </div>
                   <div className="home-product-info">
                     <small>2P BOX</small>

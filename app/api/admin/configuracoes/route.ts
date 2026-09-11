@@ -3,12 +3,10 @@ import { requireAdminUser } from '@/lib/server/auth';
 import { isGoogleMapsConfigured } from '@/lib/server/env';
 import { supabaseRest } from '@/lib/server/supabase-admin';
 import { invalidateStoreOperations, readStoreOperations } from '@/lib/server/store-settings';
-import { WEEK_DAYS, describeHours, normalizePriceTable } from '@/lib/store-operations';
+import { describeHours, normalizeBusinessHours, normalizePriceTable, openDays } from '@/lib/store-operations';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-
-const VALID_DAYS = new Set(WEEK_DAYS.map((day) => day.value));
 
 export async function GET() {
   const admin = await requireAdminUser();
@@ -26,23 +24,25 @@ export async function PUT(request: Request) {
   if (!body) return NextResponse.json({ error: 'Dados inválidos.' }, { status: 400 });
 
   const current = await readStoreOperations({ fresh: true });
-  const days = Array.isArray(body.businessDays) ? body.businessDays.filter((day: unknown) => VALID_DAYS.has(String(day) as never)) : current.businessDays;
-  const opensAt = time(body.opensAt, current.opensAt);
-  const closesAt = time(body.closesAt, current.closesAt);
+  const hours = body.businessHours === undefined ? current.businessHours : normalizeBusinessHours(body.businessHours);
+  const days = openDays(hours);
+  const firstDay = days.length ? hours[days[0]]! : null;
 
   const legacy = {
     name: text(body.name, current.name) || '2P Box',
     whatsapp: text(body.whatsapp, current.whatsapp),
-    hours: describeHours(days, opensAt, closesAt),
+    hours: describeHours(hours),
     pickup: text(body.pickupLabel, '') || 'Retirada na loja',
     shipping: text(body.shippingLabel, '') || 'Frete via WhatsApp',
     updated_at: new Date().toISOString(),
   };
 
   const operations = {
+    business_hours: hours,
+    // As colunas antigas seguem preenchidas para nada que ainda as le quebrar.
     business_days: days,
-    opens_at: opensAt,
-    closes_at: closesAt,
+    opens_at: firstDay?.open ?? null,
+    closes_at: firstDay?.close ?? null,
     shipping_mode: text(body.shippingMode, current.shippingMode),
     pickup_mode: text(body.pickupMode, current.pickupMode),
     service_fee_percent: bounded(body.serviceFeePercent, 0, 100, current.serviceFeePercent),
@@ -119,11 +119,6 @@ async function hasOperationsSchema() {
   } catch {
     return false;
   }
-}
-
-function time(value: unknown, fallback: string) {
-  const raw = String(value ?? '').trim();
-  return /^([01]\d|2[0-3]):[0-5]\d$/.test(raw) ? raw : fallback;
 }
 
 function text(value: unknown, fallback: string) {

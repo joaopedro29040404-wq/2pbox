@@ -7,12 +7,12 @@ import { supabase } from '@/lib/supabase';
 import { useCart } from '@/components/cart-provider';
 import { SiteHeader } from '@/components/site-header';
 import { Pagination, usePagination } from '@/components/ui/pagination';
-import { ProductImage } from '@/components/ui/product-image';
+import { ProductImage, productCover } from '@/components/ui/product-image';
 import { SkeletonGrid } from '@/components/ui/loader';
 import { useToast } from '@/components/ui/toast';
 import { money } from '@/lib/order-format';
 
-type Product = { id: string; name: string; slug: string; description: string | null; price: number; stock: number; image_url: string | null };
+type Product = { id: string; name: string; slug: string; description: string | null; price: number; stock: number; image_url: string | null; images?: string[] | null };
 type AuthUser = { id: string; user_metadata?: { full_name?: string } };
 
 const PAGE_SIZE = 8;
@@ -50,7 +50,7 @@ export default function FavoritesPage() {
         return;
       }
 
-      const { data } = await client.from('products').select('id,name,slug,description,price,stock,image_url').in('id', ids).eq('active', true);
+      const { data } = await client.from('products').select('id,name,slug,description,price,stock,image_url,images').in('id', ids).eq('active', true);
       if (mounted) {
         setProducts((data ?? []) as Product[]);
         setLoading(false);
@@ -73,7 +73,7 @@ export default function FavoritesPage() {
   }
 
   function buy(product: Product) {
-    add({ id: product.id, name: product.name, price: Number(product.price), stock: product.stock, image_url: product.image_url ?? undefined });
+    add({ id: product.id, name: product.name, price: Number(product.price), stock: product.stock, image_url: productCover(product) ?? undefined });
   }
 
   if (!loading && !user) {
@@ -136,7 +136,7 @@ export default function FavoritesPage() {
               {pageItems.map((product) => (
                 <article className="favorite-card" key={product.id}>
                   <Link href={`/produto/${product.slug}`} className="fav-image">
-                    <ProductImage src={product.image_url} alt={product.name} sizes="(max-width:650px) 50vw, 260px" />
+                    <ProductImage src={productCover(product)} alt={product.name} sizes="(max-width:650px) 50vw, 260px" />
                   </Link>
                   <div className="fav-body">
                     <Link href={`/produto/${product.slug}`}>

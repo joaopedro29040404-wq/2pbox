@@ -1,13 +1,12 @@
 import { supabaseRest } from './supabase-admin';
-import { DEFAULT_PRICE_TABLE, normalizePriceTable, type DeliveryTier } from '../store-operations';
+import { DEFAULT_PRICE_TABLE, businessHoursFromLegacy, normalizeBusinessHours, normalizePriceTable, openDays, type BusinessHours, type DeliveryTier } from '../store-operations';
 
 export type StoreOperations = {
   id: string | null;
   name: string;
   whatsapp: string;
+  businessHours: BusinessHours;
   businessDays: string[];
-  opensAt: string;
-  closesAt: string;
   shippingMode: string;
   pickupMode: string;
   serviceFeePercent: number;
@@ -36,7 +35,7 @@ export type StoreOperations = {
 };
 
 const OPERATIONS_FIELDS =
-  'id,name,whatsapp,business_days,opens_at,closes_at,shipping_mode,pickup_mode,service_fee_percent,service_fee_fixed,min_order_total,free_shipping_from,address_line,address_number,address_complement,address_district,address_city,address_state,address_zip,address_place_id,address_lat,address_lng,delivery_pickup_enabled,delivery_own_enabled,delivery_app_enabled,delivery_subsidy_percent,delivery_max_km,delivery_price_table,delivery_cycle_hour';
+  'id,name,whatsapp,business_hours,business_days,opens_at,closes_at,shipping_mode,pickup_mode,service_fee_percent,service_fee_fixed,min_order_total,free_shipping_from,address_line,address_number,address_complement,address_district,address_city,address_state,address_zip,address_place_id,address_lat,address_lng,delivery_pickup_enabled,delivery_own_enabled,delivery_app_enabled,delivery_subsidy_percent,delivery_max_km,delivery_price_table,delivery_cycle_hour';
 
 const FALLBACK_FIELDS = 'id,name,whatsapp,hours,pickup,shipping';
 
@@ -70,14 +69,23 @@ async function fetchRow() {
 function mapRow(row: any): StoreOperations {
   const data = row || {};
   const table = normalizePriceTable(data.delivery_price_table);
+  // Antes da migration so existe o intervalo unico: ele vira o mesmo horario
+  // em todos os dias marcados.
+  const stored = normalizeBusinessHours(data.business_hours);
+  const hours = Object.keys(stored).length
+    ? stored
+    : businessHoursFromLegacy(
+        Array.isArray(data.business_days) && data.business_days.length ? data.business_days : ['mon', 'tue', 'wed', 'thu', 'fri'],
+        data.opens_at,
+        data.closes_at,
+      );
 
   return {
     id: data.id ? String(data.id) : null,
     name: String(data.name || '2P Box'),
     whatsapp: String(data.whatsapp || ''),
-    businessDays: Array.isArray(data.business_days) && data.business_days.length ? data.business_days.map(String) : ['mon', 'tue', 'wed', 'thu', 'fri'],
-    opensAt: String(data.opens_at || '09:00'),
-    closesAt: String(data.closes_at || '18:00'),
+    businessHours: hours,
+    businessDays: openDays(hours),
     shippingMode: String(data.shipping_mode || 'whatsapp'),
     pickupMode: String(data.pickup_mode || 'store'),
     serviceFeePercent: num(data.service_fee_percent, 0),

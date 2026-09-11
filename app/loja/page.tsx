@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useCart } from '@/components/cart-provider';
 import { SiteHeader } from '@/components/site-header';
 import { Pagination, usePagination } from '@/components/ui/pagination';
-import { ProductImage } from '@/components/ui/product-image';
+import { ProductImage, productCover } from '@/components/ui/product-image';
 import { SkeletonGrid } from '@/components/ui/loader';
 import { SelectField, TextField } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast';
@@ -21,6 +21,7 @@ type Product = {
   price: number;
   stock: number;
   image_url: string | null;
+  images?: string[] | null;
   category_id: string | null;
   categories?: Category | null;
 };
@@ -63,7 +64,7 @@ export default function LojaPage() {
       const [{ data, error }, { data: auth }] = await Promise.all([
         client
           .from('products')
-          .select('id,name,slug,description,price,stock,image_url,category_id,categories(id,name)')
+          .select('id,name,slug,description,price,stock,image_url,images,category_id,categories(id,name)')
           .eq('active', true)
           .order('created_at', { ascending: false }),
         client.auth.getUser(),
@@ -133,7 +134,7 @@ export default function LojaPage() {
   }
 
   function addProduct(product: Product) {
-    add({ id: product.id, name: product.name, price: Number(product.price), stock: product.stock, image_url: product.image_url ?? undefined });
+    add({ id: product.id, name: product.name, price: Number(product.price), stock: product.stock, image_url: productCover(product) ?? undefined });
     setAdded(product.id);
     window.setTimeout(() => setAdded(null), 1400);
   }
@@ -244,7 +245,7 @@ export default function LojaPage() {
                   <div className="product-image-wrap">
                     <Link href={`/produto/${product.slug}`} className="product-image-link">
                       <div className="product-image">
-                        <ProductImage src={product.image_url} alt={product.name} sizes="(max-width:700px) 50vw, 280px" />
+                        <ProductImage src={productCover(product)} alt={product.name} sizes="(max-width:700px) 50vw, 280px" />
                         {product.stock > 0 && product.stock <= 5 && <span className="low-stock">Últimas unidades</span>}
                       </div>
                     </Link>

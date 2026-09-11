@@ -35,6 +35,8 @@
   .sh-actions{margin-left:auto;gap:6px}
   .sh-account span,.sh-cart span,.sh-signin span,.sh-signout span{display:none}
   .sh-account,.sh-cart,.sh-signin,.sh-signout{width:42px;padding:0}
+  /* Sem o rotulo, o contador nao cabe ao lado do icone: sai para a quina. */
+  .sh-cart b{position:absolute;top:-7px;right:-7px;min-width:19px;height:19px;padding:0 4px;border:2px solid #fff;border-radius:10px;font-size:9.5px;line-height:1}
   .sh-burger{display:grid}
 }
 

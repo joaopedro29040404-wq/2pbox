@@ -68,19 +68,60 @@ export function quoteOwnDelivery(distanceKm: number, table: DeliveryTier[], subs
   return { tierKm: tier.upToKm, listPrice: tier.price, subsidy: discount, customerFee };
 }
 
-export function isStoreOpen(days: string[] | null | undefined, opensAt?: string | null, closesAt?: string | null, now = new Date()) {
-  const active = Array.isArray(days) ? days : [];
-  if (!active.length) return false;
+export type DayHours = { open: string; close: string };
+export type BusinessHours = Partial<Record<WeekDay, DayHours>>;
 
+export const DEFAULT_DAY_HOURS: DayHours = { open: '09:00', close: '18:00' };
+
+export function isValidTime(value: unknown) {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value ?? '').trim());
+}
+
+/**
+ * Cada dia guarda o proprio intervalo, para a loja poder abrir sabado num
+ * horario diferente do resto da semana. Dia ausente significa fechado.
+ */
+export function normalizeBusinessHours(value: unknown): BusinessHours {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, any>) : {};
+  const hours: BusinessHours = {};
+
+  for (const day of WEEK_DAYS) {
+    const entry = source[day.value];
+    if (!entry) continue;
+
+    const open = isValidTime(entry.open) ? String(entry.open) : DEFAULT_DAY_HOURS.open;
+    const close = isValidTime(entry.close) ? String(entry.close) : DEFAULT_DAY_HOURS.close;
+    if (toMinutes(close)! <= toMinutes(open)!) continue;
+
+    hours[day.value] = { open, close };
+  }
+  return hours;
+}
+
+/** Converte a configuracao antiga (dias + um unico intervalo) para o formato por dia. */
+export function businessHoursFromLegacy(days: unknown, opensAt: unknown, closesAt: unknown): BusinessHours {
+  const list = Array.isArray(days) ? days.map(String) : [];
+  const open = isValidTime(opensAt) ? String(opensAt) : DEFAULT_DAY_HOURS.open;
+  const close = isValidTime(closesAt) ? String(closesAt) : DEFAULT_DAY_HOURS.close;
+
+  const hours: BusinessHours = {};
+  for (const day of WEEK_DAYS) if (list.includes(day.value)) hours[day.value] = { open, close };
+  return hours;
+}
+
+export function openDays(hours: BusinessHours) {
+  return WEEK_DAYS.filter((day) => hours[day.value]).map((day) => day.value);
+}
+
+export function isStoreOpen(hours: BusinessHours, now = new Date()) {
   const weekday = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' }).format(now).toLowerCase().slice(0, 3);
   const today = WEEK_DAYS.find((day) => day.value === weekday);
-  if (!today || !active.includes(today.value)) return false;
+  const range = today ? hours[today.value] : undefined;
+  if (!range) return false;
 
   const parts = zonedParts(now);
   const minutes = parts.hour * 60 + parts.minute;
-  const open = toMinutes(opensAt) ?? 0;
-  const close = toMinutes(closesAt) ?? 24 * 60;
-  return minutes >= open && minutes < close;
+  return minutes >= toMinutes(range.open)! && minutes < toMinutes(range.close)!;
 }
 
 function toMinutes(value?: string | null) {
@@ -92,15 +133,29 @@ function toMinutes(value?: string | null) {
   return hours * 60 + mins;
 }
 
-export function describeHours(days: string[] | null | undefined, opensAt?: string | null, closesAt?: string | null) {
-  const active = WEEK_DAYS.filter((day) => (days || []).includes(day.value));
-  if (!active.length) return '';
+/** Agrupa dias seguidos com o mesmo intervalo: "Seg-Sex 09:00 as 18:00 - Sab 09:00 as 15:00". */
+export function describeHours(hours: BusinessHours) {
+  const active = WEEK_DAYS.filter((day) => hours[day.value]);
+  if (!active.length) return 'Fechado';
 
-  const indexes = active.map((day) => DAY_INDEX[day.value]).sort((a, b) => a - b);
-  const sequential = indexes.every((value, position) => position === 0 || value === indexes[position - 1] + 1);
-  const label = sequential && active.length > 2 ? `${active[0].short}–${active[active.length - 1].short}` : active.map((day) => day.short).join(', ');
-  const hours = opensAt && closesAt ? `${opensAt} às ${closesAt}` : '';
-  return hours ? `${label} • ${hours}` : label;
+  const blocks: Array<{ from: (typeof WEEK_DAYS)[number]; to: (typeof WEEK_DAYS)[number]; range: DayHours }> = [];
+  for (const day of active) {
+    const range = hours[day.value]!;
+    const last = blocks[blocks.length - 1];
+    const sequential = last && DAY_INDEX[day.value] === DAY_INDEX[last.to.value] + 1;
+    if (last && sequential && last.range.open === range.open && last.range.close === range.close) {
+      last.to = day;
+      continue;
+    }
+    blocks.push({ from: day, to: day, range });
+  }
+
+  return blocks
+    .map((block) => {
+      const span = block.from === block.to ? block.from.short : `${block.from.short}–${block.to.short}`;
+      return `${span} ${block.range.open} às ${block.range.close}`;
+    })
+    .join(' · ');
 }
 
 const TZ = 'America/Sao_Paulo';

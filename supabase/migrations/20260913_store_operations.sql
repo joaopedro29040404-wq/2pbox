@@ -46,9 +46,7 @@ alter table public.orders
   add column if not exists delivery_provider text,
   add column if not exists delivery_cycle_start timestamptz,
   add column if not exists delivery_notes text;
-
--- O painel de Entregas agrupa por ciclo operacional (16h de um dia ate 16h do
--- seguinte), por isso o ciclo precisa ser indexado.
+  
 create index if not exists orders_delivery_cycle_idx
   on public.orders (delivery_cycle_start desc)
   where delivery_cycle_start is not null;
@@ -56,3 +54,13 @@ create index if not exists orders_delivery_cycle_idx
 create index if not exists orders_delivery_provider_idx
   on public.orders (delivery_provider)
   where delivery_provider is not null;
+
+alter table public.store_settings
+  add column if not exists business_hours jsonb;
+
+update public.store_settings
+set business_hours = (
+  select coalesce(jsonb_object_agg(day, jsonb_build_object('open', coalesce(opens_at, '09:00'), 'close', coalesce(closes_at, '18:00'))), '{}'::jsonb)
+  from unnest(coalesce(business_days, array['mon','tue','wed','thu','fri']::text[])) as day
+)
+where business_hours is null;

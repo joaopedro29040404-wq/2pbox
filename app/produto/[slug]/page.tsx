@@ -7,7 +7,7 @@ import { ArrowLeft, Check, ChevronLeft, ChevronRight, Heart, MessageCircle, Minu
 import { supabase } from '@/lib/supabase';
 import { useCart } from '@/components/cart-provider';
 import { SiteHeader } from '@/components/site-header';
-import { ProductImage } from '@/components/ui/product-image';
+import { ProductImage, productGallery } from '@/components/ui/product-image';
 import { PageLoader } from '@/components/ui/loader';
 import { useToast } from '@/components/ui/toast';
 import { money } from '@/lib/order-format';
@@ -94,7 +94,7 @@ export default function ProductPage() {
     );
   }
 
-  const gallery = Array.from(new Set([product.image_url, ...(Array.isArray(product.images) ? product.images : [])].filter(Boolean))) as string[];
+  const gallery = productGallery(product);
   const image = gallery[selected] || gallery[0] || null;
 
   function addProduct() {
