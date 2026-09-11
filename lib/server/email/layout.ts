@@ -88,14 +88,24 @@ export function itemsTable(items: Array<{ product_name?: string; quantity?: numb
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0 0;">${rows}${totalRow}</table>`;
 }
 
-export function stepper(current: string) {
-  const steps: Array<[string, string]> = [
-    ['pending', 'Recebido'],
-    ['confirmed', 'Pago'],
-    ['preparing', 'Preparando'],
-    ['ready', 'Pronto'],
-    ['completed', 'Concluído'],
-  ];
+/** O fluxo do e-mail acompanha a forma de recebimento, como na loja. */
+export function stepper(current: string, deliveryType?: string) {
+  const steps: Array<[string, string]> =
+    deliveryType === 'pickup'
+      ? [
+          ['pending', 'Recebido'],
+          ['confirmed', 'Pago'],
+          ['preparing', 'Preparando'],
+          ['ready', 'Pronto'],
+          ['completed', 'Concluído'],
+        ]
+      : [
+          ['pending', 'Recebido'],
+          ['confirmed', 'Pago'],
+          ['preparing', 'Preparando'],
+          ['out_for_delivery', 'Em transporte'],
+          ['delivered', 'Entregue'],
+        ];
   const index = steps.findIndex(([key]) => key === current);
   const cells = steps
     .map(([, label], position) => {

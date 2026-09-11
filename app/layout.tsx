@@ -5,6 +5,7 @@ import './twop-home.css';
 import './twop-home-carousel.css';
 import { CartProvider } from '@/components/cart-provider';
 import { ToastProvider } from '@/components/ui/toast';
+import { WhatsAppFloat } from '@/components/whatsapp-float';
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://2pbox.com.br'),
@@ -31,7 +32,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="pt-BR">
       <body>
         <ToastProvider>
-          <CartProvider>{children}</CartProvider>
+          <CartProvider>
+            {children}
+            <WhatsAppFloat />
+          </CartProvider>
         </ToastProvider>
       </body>
     </html>

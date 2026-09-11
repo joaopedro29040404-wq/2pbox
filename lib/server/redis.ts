@@ -26,6 +26,37 @@ export function getRedis(): Redis | null {
   return client;
 }
 
+/**
+ * Redis obrigatorio. Usado pelos fluxos onde degradar silenciosamente seria
+ * falha de seguranca (codigo de acesso, rate limit): sem Redis, a operacao
+ * precisa falhar, nunca liberar.
+ */
+export function requireRedis(): Redis {
+  const redis = getRedis();
+  if (!redis) throw new Error('Redis nao configurado.');
+  return redis;
+}
+
+export async function strictSet(key: string, value: string, ttlSeconds: number) {
+  await requireRedis().set(key, value, 'EX', ttlSeconds);
+}
+
+export async function strictGet(key: string) {
+  return requireRedis().get(key);
+}
+
+export async function strictDel(key: string) {
+  await requireRedis().del(key);
+}
+
+/** Contador com expiracao: devolve o total apos incrementar. */
+export async function strictIncr(key: string, ttlSeconds: number) {
+  const redis = requireRedis();
+  const total = await redis.incr(key);
+  if (total === 1) await redis.expire(key, ttlSeconds);
+  return total;
+}
+
 export async function acquireLock(key: string, ttlSeconds = 30): Promise<boolean> {
   const redis = getRedis();
   if (!redis) return true;

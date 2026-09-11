@@ -200,16 +200,20 @@ export default function OrdersPage() {
           </div>
         </div>
 
-        <div className="orders-toolbar">
-          <TextField
-            aria-label="Buscar pedido"
-            placeholder="Buscar por cliente, telefone, e-mail ou pedido..."
-            value={search}
-            icon={<Search size={17} />}
-            onValueChange={setSearch}
-            fullWidth
-          />
-          <SelectField aria-label="Filtrar por status" value={filter} options={FILTER_OPTIONS} onValueChange={setFilter} />
+        <div className="admin-filters">
+          <div className="span-8">
+            <TextField
+              aria-label="Buscar pedido"
+              placeholder="Buscar por cliente, telefone, e-mail ou pedido..."
+              value={search}
+              icon={<Search size={17} />}
+              onValueChange={setSearch}
+              fullWidth
+            />
+          </div>
+          <div className="span-4">
+            <SelectField aria-label="Filtrar por status" value={filter} options={FILTER_OPTIONS} onValueChange={setFilter} fullWidth />
+          </div>
         </div>
 
         {loading ? (
@@ -331,8 +335,7 @@ export default function OrdersPage() {
         .orders-count span{font-size:10px;color:#777}
         .refresh-button{height:48px;padding:0 15px;border:1px solid #111;border-radius:11px;background:#111;color:#fff;display:inline-flex;align-items:center;justify-content:center;gap:8px;font:800 11px Inter,Arial,sans-serif;cursor:pointer}
         .refresh-button:disabled{opacity:.6;cursor:wait}
-        .orders-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 210px;gap:10px;align-items:end;margin-bottom:20px}
-        .orders-list{display:grid;gap:12px}
+                .orders-list{display:grid;gap:12px}
         .order-card{background:#fff;border:1px solid #e1e1dc;border-radius:16px;padding:20px;box-shadow:0 4px 16px rgba(0,0,0,.025)}
         .order-card-top{display:flex;justify-content:space-between;gap:20px}
         .order-number{font-size:9px;letter-spacing:.14em;color:#888;text-transform:uppercase}
@@ -374,7 +377,6 @@ export default function OrdersPage() {
           .orders-heading h1{font-size:52px}
           .orders-side{width:100%}
           .orders-count{flex:1;justify-content:center}
-          .orders-toolbar{grid-template-columns:1fr}
           .order-card{padding:16px}
           .order-card-top{flex-direction:column}
           .order-status{width:100%}

@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, CircleDot, CreditCard, PackageCheck, Store, Truck, XCircle } from 'lucide-react';
+import { Bike, Check, CircleDot, CreditCard, PackageCheck, Store, Truck, XCircle } from 'lucide-react';
 
 export type OrderHistoryEntry = {
   status: string;
@@ -10,19 +10,40 @@ export type OrderHistoryEntry = {
   created_at: string;
 };
 
-export const ORDER_STEPS = [
+export type DeliveryType = 'pickup' | 'whatsapp_shipping' | string;
+
+type Step = { key: string; label: string; hint: string; icon: typeof CircleDot };
+
+const PICKUP_STEPS: Step[] = [
   { key: 'pending', label: 'Pedido recebido', hint: 'Recebemos seu pedido', icon: CircleDot },
   { key: 'confirmed', label: 'Pagamento confirmado', hint: 'Pagamento aprovado', icon: CreditCard },
   { key: 'preparing', label: 'Em preparação', hint: 'Separando os produtos', icon: PackageCheck },
   { key: 'ready', label: 'Pronto para retirada', hint: 'Disponível na loja', icon: Store },
-  { key: 'completed', label: 'Pedido concluído', hint: 'Entregue ao cliente', icon: Truck },
-] as const;
+  { key: 'completed', label: 'Pedido concluído', hint: 'Retirada concluída', icon: Check },
+];
+
+const DELIVERY_STEPS: Step[] = [
+  { key: 'pending', label: 'Pedido recebido', hint: 'Recebemos seu pedido', icon: CircleDot },
+  { key: 'confirmed', label: 'Pagamento confirmado', hint: 'Pagamento aprovado', icon: CreditCard },
+  { key: 'preparing', label: 'Em preparação', hint: 'Separando os produtos', icon: PackageCheck },
+  { key: 'out_for_delivery', label: 'Em transporte', hint: 'Saiu para entrega', icon: Bike },
+  { key: 'delivered', label: 'Entregue', hint: 'Entrega concluída', icon: Truck },
+];
+
+/** O fluxo depende da forma de recebimento: retirada termina na loja, entrega no cliente. */
+export function stepsFor(deliveryType?: DeliveryType) {
+  return deliveryType === 'pickup' ? PICKUP_STEPS : DELIVERY_STEPS;
+}
+
+export const ORDER_STEPS = PICKUP_STEPS;
 
 export const ORDER_STATUS_LABELS: Record<string, string> = {
   pending: 'Pedido recebido',
   confirmed: 'Pagamento confirmado',
   preparing: 'Em preparação',
   ready: 'Pronto para retirada',
+  out_for_delivery: 'Em transporte',
+  delivered: 'Entregue',
   completed: 'Pedido concluído',
   cancelled: 'Pedido cancelado',
 };
@@ -37,7 +58,7 @@ export const PAYMENT_STATUS_LABELS: Record<string, string> = {
 const SOURCE_LABELS: Record<string, string> = {
   checkout: 'Checkout',
   mercadopago: 'Mercado Pago',
-  admin: 'Equipe 2P Box',
+  admin: 'Equipe da loja',
   system: 'Automático',
   backfill: 'Histórico',
 };
@@ -51,22 +72,24 @@ function formatDateTime(value: string) {
 export function OrderTracker({
   status,
   history = [],
+  deliveryType,
   compact = false,
 }: {
   status: string;
   history?: OrderHistoryEntry[];
+  deliveryType?: DeliveryType;
   compact?: boolean;
 }) {
   const current = String(status || 'pending').toLowerCase();
-  const cancelled = current === 'cancelled';
-  const currentIndex = ORDER_STEPS.findIndex((step) => step.key === current);
+  const steps = stepsFor(deliveryType);
+
   const reachedAt = new Map<string, string>();
   history.forEach((entry) => {
     const key = String(entry.status || '').toLowerCase();
     if (!reachedAt.has(key)) reachedAt.set(key, entry.created_at);
   });
 
-  if (cancelled) {
+  if (current === 'cancelled') {
     const cancelledAt = reachedAt.get('cancelled');
     return (
       <section className="ot-cancelled" aria-label="Situação do pedido">
@@ -75,21 +98,25 @@ export function OrderTracker({
         </span>
         <div>
           <strong>Pedido cancelado</strong>
-          <span>Este pedido não seguirá para as próximas etapas.{cancelledAt ? ` Cancelado em ${formatDateTime(cancelledAt)}.` : ''}</span>
+          <span>
+            Este pedido não seguirá para as próximas etapas.
+            {cancelledAt ? ` Cancelado em ${formatDateTime(cancelledAt)}.` : ''}
+          </span>
         </div>
       </section>
     );
   }
 
-  const progress = currentIndex < 0 ? 0 : (currentIndex / (ORDER_STEPS.length - 1)) * 100;
+  const currentIndex = steps.findIndex((step) => step.key === current);
+  const progress = currentIndex < 0 ? 0 : (currentIndex / (steps.length - 1)) * 100;
 
   return (
     <section className="ot" aria-label="Acompanhamento do pedido">
-      <ol className="ot-steps">
+      <ol className="ot-steps" data-steps={steps.length}>
         <span className="ot-rail" aria-hidden="true" style={{ '--ot-progress': `${progress}%` } as React.CSSProperties}>
           <i />
         </span>
-        {ORDER_STEPS.map((step, index) => {
+        {steps.map((step, index) => {
           const done = currentIndex >= 0 && index < currentIndex;
           const active = index === currentIndex;
           const Icon = step.icon;
@@ -114,7 +141,9 @@ export function OrderTracker({
                 <div>
                   <strong>{ORDER_STATUS_LABELS[String(entry.status).toLowerCase()] || entry.status}</strong>
                   <span>
-                    {entry.payment_status ? `${PAYMENT_STATUS_LABELS[String(entry.payment_status).toLowerCase()] || entry.payment_status} · ` : ''}
+                    {entry.payment_status
+                      ? `${PAYMENT_STATUS_LABELS[String(entry.payment_status).toLowerCase()] || entry.payment_status} · `
+                      : ''}
                     {SOURCE_LABELS[String(entry.source || '').toLowerCase()] || 'Automático'}
                   </span>
                   {entry.note && <em>{entry.note}</em>}

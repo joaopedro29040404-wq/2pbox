@@ -238,7 +238,7 @@ function OrderPageContent() {
         </div>
       </div>
 
-      <OrderTracker status={order.status} history={history} />
+      <OrderTracker status={order.status} history={history} deliveryType={order.delivery_type} />
 
       <div className="order-layout">
         <div className="order-main">

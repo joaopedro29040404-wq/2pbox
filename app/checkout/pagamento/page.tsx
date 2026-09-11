@@ -12,7 +12,6 @@ function PaymentPage() {
   const orderId = params.get('orderId') || '';
   const amount = Number(params.get('total') || 0);
   const email = params.get('email') || '';
-  const preferenceId = params.get('preferenceId') || undefined;
   const [error, setError] = useState('');
 
   if (!orderId || !amount) return <main className="payment-page"><div className="payment-card"><h1>Pagamento indisponível</h1><p>Não foi possível carregar os dados do pagamento.</p><Link href="/carrinho">Voltar ao carrinho</Link></div></main>;
@@ -34,7 +33,7 @@ function PaymentPage() {
         <div className="payment-heading"><p>PEDIDO {orderId}</p><h1>Finalize seu pagamento</h1><span>Você está em um ambiente seguro. Escolha a forma de pagamento abaixo.</span></div>
         <div className="payment-card">
           <div className="payment-total"><span>Total do pedido</span><strong>R$ {amount.toFixed(2).replace('.', ',')}</strong></div>
-          <PaymentBrick amount={amount} orderId={orderId} email={email} preferenceId={preferenceId} onResult={handlePaymentResult} onError={setError}/>
+          <PaymentBrick amount={amount} orderId={orderId} email={email} onResult={handlePaymentResult} onError={setError}/>
           {error && <div className="payment-error">{error}</div>}
         </div>
         <p className="payment-note">Seus dados de pagamento são processados pelo Mercado Pago. A 2P Box não recebe nem armazena os dados do seu cartão.</p>

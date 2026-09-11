@@ -12,6 +12,10 @@ export function money(value: unknown) {
   return `R$ ${(Number.isFinite(amount) ? amount : 0).toFixed(2).replace('.', ',')}`;
 }
 
+export function shortId(orderId: unknown) {
+  return `#${String(orderId || '').slice(0, 8).toUpperCase()}`;
+}
+
 export function formatPaymentMethod(type: unknown, method: unknown) {
   const key = String(type || '').toLowerCase();
   const label = PAYMENT_TYPE_LABELS[key];

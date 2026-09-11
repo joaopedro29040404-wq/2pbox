@@ -38,6 +38,7 @@ export type EmailTemplateId =
   | 'payment_pending'
   | 'order_status_updated'
   | 'order_details'
+  | 'order_access_code'
   | 'cart_reminder';
 
 export type EmailJob = {

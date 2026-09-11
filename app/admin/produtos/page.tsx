@@ -6,7 +6,6 @@ import {
   Check,
   Edit3,
   Eye,
-  History,
   Image as ImageIcon,
   LayoutGrid,
   Package,
@@ -21,6 +20,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { SiteHeader } from '@/components/site-header';
 import { SelectField, TextAreaField, TextField } from '@/components/ui/field';
+import { Modal } from '@/components/ui/modal';
 import { Pagination, usePagination } from '@/components/ui/pagination';
 import { ProductImage } from '@/components/ui/product-image';
 import { InlineLoader, SkeletonGrid } from '@/components/ui/loader';
@@ -46,18 +46,13 @@ type FormState = { name: string; description: string; price: string; stock: stri
 
 const empty: FormState = { name: '', description: '', price: '', stock: '0', category_id: '', image_url: '', images: [] };
 const FETCH_SIZE = 1000;
-const PAGE_SIZE = 12;
-const RECENT_SIZE = 3;
+const PAGE_SIZE = 20;
 
 const STATUS_OPTIONS = [
   { value: 'all', label: 'Todos os status' },
   { value: 'active', label: 'Somente ativos' },
   { value: 'inactive', label: 'Somente inativos' },
 ];
-
-function editedAt(product: Product) {
-  return new Date(product.updated_at || product.created_at || 0).getTime();
-}
 
 export default function ProductsAdminPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -72,7 +67,6 @@ export default function ProductsAdminPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [showAll, setShowAll] = useState(false);
   const [aiSource, setAiSource] = useState<File | null>(null);
   const [aiPreview, setAiPreview] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
@@ -135,7 +129,6 @@ export default function ProductsAdminPage() {
     resetAi();
     setFormError('');
     setShowForm(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function startEdit(product: Product) {
@@ -153,7 +146,6 @@ export default function ProductsAdminPage() {
     resetAi();
     setFormError('');
     setShowForm(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function handleAiFile(file: File | null) {
@@ -317,17 +309,11 @@ export default function ProductsAdminPage() {
     });
   }, [products, search, statusFilter, categoryFilter]);
 
-  const recent = useMemo(() => [...products].sort((a, b) => editedAt(b) - editedAt(a)).slice(0, RECENT_SIZE), [products]);
-  const filtering = Boolean(search.trim()) || statusFilter !== 'all' || categoryFilter !== 'all';
-  const listing = showAll || filtering;
-
   const { page, setPage, totalPages, pageItems, from, to, total } = usePagination(
     filtered,
     PAGE_SIZE,
-    `${search}|${statusFilter}|${categoryFilter}|${listing}`,
+    `${search}|${statusFilter}|${categoryFilter}`,
   );
-
-  const visible = listing ? pageItems : recent;
   const activeCount = products.filter((product) => product.active).length;
   const stockCount = products.reduce((sum, product) => sum + Number(product.stock || 0), 0);
 
@@ -375,18 +361,24 @@ export default function ProductsAdminPage() {
           </div>
         </div>
 
-        {showForm && (
-          <form onSubmit={saveProduct} className="product-editor">
-            <div className="editor-head">
-              <div>
-                <p className="eyebrow">{editing ? 'EDIÇÃO' : 'NOVO CADASTRO'}</p>
-                <h2>{editing ? 'Editar produto' : 'Adicionar produto'}</h2>
-                <p>Use uma foto real para a IA criar título e descrição precisos. A imagem não é modificada.</p>
-              </div>
-              <button type="button" className="icon-btn" onClick={cancel} aria-label="Fechar">
-                <X size={20} />
+        <Modal
+          open={showForm}
+          onClose={cancel}
+          eyebrow={editing ? 'EDIÇÃO' : 'NOVO CADASTRO'}
+          title={editing ? 'Editar produto' : 'Adicionar produto'}
+          description="Use uma foto real para a IA criar título e descrição precisos. A imagem não é modificada."
+          footer={
+            <>
+              <button type="button" className="secondary" onClick={cancel}>
+                Cancelar
               </button>
-            </div>
+              <button className="primary" type="submit" form="product-form" disabled={saving}>
+                {saving ? <InlineLoader label="Salvando..." /> : editing ? 'Salvar alterações' : 'Cadastrar produto'}
+              </button>
+            </>
+          }
+        >
+          <form id="product-form" onSubmit={saveProduct} className="product-editor">
 
             <section className="ai-copy-box">
               <div className="ai-copy-heading">
@@ -542,68 +534,57 @@ export default function ProductsAdminPage() {
             </div>
 
             {formError && <div className="editor-message">{formError}</div>}
-
-            <div className="editor-footer">
-              <button type="button" className="secondary" onClick={cancel}>
-                Cancelar
-              </button>
-              <button className="primary" type="submit" disabled={saving}>
-                {saving ? <InlineLoader label="Salvando..." /> : editing ? 'Salvar alterações' : 'Cadastrar produto'}
-              </button>
-            </div>
           </form>
-        )}
+        </Modal>
 
-        {!showForm && (
-          <div className="catalog-toolbar">
+        <div className="admin-filters">
+          <div className="span-6">
             <TextField
               aria-label="Buscar produto"
-              placeholder="Buscar produto por nome ou descrição..."
+              placeholder="Buscar por nome ou descrição..."
               value={search}
               icon={<Search size={17} />}
               onValueChange={setSearch}
               fullWidth
             />
+          </div>
+          <div className="span-3">
             <SelectField
               aria-label="Filtrar por categoria"
               value={categoryFilter}
               options={[{ value: 'all', label: 'Todas as categorias' }, ...categories.map((c) => ({ value: c.id, label: c.name }))]}
               onValueChange={setCategoryFilter}
+              fullWidth
             />
-            <SelectField aria-label="Filtrar por status" value={statusFilter} options={STATUS_OPTIONS} onValueChange={setStatusFilter} />
           </div>
-        )}
+          <div className="span-3">
+            <SelectField
+              aria-label="Filtrar por status"
+              value={statusFilter}
+              options={STATUS_OPTIONS}
+              onValueChange={setStatusFilter}
+              fullWidth
+            />
+          </div>
+        </div>
 
         <div className="catalog-list-head" id="lista-produtos">
           <div>
-            <p className="eyebrow">{listing ? 'CATÁLOGO COMPLETO' : 'EDIÇÃO RECENTE'}</p>
+            <p className="eyebrow">CATÁLOGO COMPLETO</p>
             <h2>
-              {listing ? (
-                <>
-                  <LayoutGrid size={18} /> Todos os produtos
-                </>
-              ) : (
-                <>
-                  <History size={18} /> Últimos {RECENT_SIZE} editados
-                </>
-              )}
+              <LayoutGrid size={18} /> Todos os produtos
             </h2>
             <span>
-              {listing
-                ? `${filtered.length.toLocaleString('pt-BR')} produto(s) encontrados${filtering ? ' com os filtros atuais' : ''}.`
-                : 'Continue de onde parou. Abra o catálogo completo para gerenciar todos os itens.'}
+              {filtered.length === products.length
+                ? `${products.length.toLocaleString('pt-BR')} produto(s) no catálogo.`
+                : `${filtered.length.toLocaleString('pt-BR')} de ${products.length.toLocaleString('pt-BR')} produto(s) com os filtros atuais.`}
             </span>
           </div>
-          {!filtering && products.length > RECENT_SIZE && (
-            <button type="button" className="catalog-toggle" onClick={() => setShowAll((value) => !value)}>
-              {showAll ? 'Ver só os recentes' : `Ver todos (${products.length.toLocaleString('pt-BR')})`}
-            </button>
-          )}
         </div>
 
         {loading ? (
           <SkeletonGrid count={6} height={330} />
-        ) : visible.length === 0 ? (
+        ) : pageItems.length === 0 ? (
           <div className="catalog-empty">
             <Package size={34} />
             <h3>{products.length ? 'Nenhum produto encontrado' : 'Seu catálogo está vazio'}</h3>
@@ -617,7 +598,7 @@ export default function ProductsAdminPage() {
         ) : (
           <>
             <div className="admin-product-grid">
-              {visible.map((product) => (
+              {pageItems.map((product) => (
                 <article className="admin-product-card" key={product.id}>
                   <div className="card-image">
                     <span className={`status-pill ${product.active ? 'active' : 'inactive'}`}>{product.active ? 'Ativo' : 'Inativo'}</span>
@@ -649,9 +630,7 @@ export default function ProductsAdminPage() {
                 </article>
               ))}
             </div>
-            {listing && (
-              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} from={from} to={to} total={total} label="produtos" scrollTargetId="lista-produtos" />
-            )}
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} from={from} to={to} total={total} label="produtos" scrollTargetId="lista-produtos" />
           </>
         )}
       </section>
@@ -674,7 +653,7 @@ export default function ProductsAdminPage() {
         .catalog-stats>div:last-child{border-right:0}
         .catalog-stats span,.catalog-stats small{display:block;color:#777;font-size:11px}
         .catalog-stats strong{display:block;font-size:32px;font-family:'Barlow Condensed';margin:4px 0;line-height:1}
-        .product-editor{background:#fff;border:1px solid #e4e4e0;border-radius:20px;padding:24px;margin-bottom:28px;box-shadow:0 7px 22px rgba(0,0,0,.03)}
+        .product-editor{background:transparent;border:0;padding:0;margin:0}
         .editor-head{display:flex;justify-content:space-between;gap:15px;margin-bottom:22px}
         .editor-head h2{font-size:28px;margin:0 0 5px}
         .editor-head p{color:#777;font-size:13px;margin:0}

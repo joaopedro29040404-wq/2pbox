@@ -19,6 +19,7 @@ const ADMIN_LINKS: NavLink[] = [
   { href: '/admin/produtos', label: 'Produtos' },
   { href: '/admin/categorias', label: 'Categorias' },
   { href: '/admin/pedidos', label: 'Pedidos' },
+  { href: '/admin/entregas', label: 'Entregas' },
   { href: '/admin/configuracoes', label: 'Configurações' },
 ];
 

@@ -54,6 +54,26 @@ export async function readOrderHistory(orderId: string) {
   return Array.isArray(rows) ? rows : [];
 }
 
+/** Registra o rateio no pedido. Tolera a ausencia das colunas antes da migracao. */
+export async function recordSplit(
+  orderId: string,
+  split: { platformFee: number; sellerAmount: number; mpSellerUserId?: string | null },
+) {
+  try {
+    await supabaseRest(`orders?id=eq.${orderId}`, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        platform_fee: split.platformFee,
+        seller_amount: split.sellerAmount,
+        mp_seller_user_id: split.mpSellerUserId ?? null,
+      }),
+    });
+  } catch (error) {
+    console.warn('[orders] nao foi possivel gravar o rateio:', error instanceof Error ? error.message : error);
+  }
+}
+
 export async function notifyPaymentChange(orderId: string, synced: SyncedPayment) {
   const template = paymentEmailTemplate(synced.normalizedStatus);
   if (!template) return;

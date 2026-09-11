@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getMercadoPagoAccessToken } from '@/lib/server/env';
-import { syncOrderPayment } from '@/lib/server/mercadopago';
-import { notifyPaymentChange } from '@/lib/server/orders';
+import { getMercadoPagoAccessToken, getMercadoPagoApi } from '@/lib/server/env';
+import { isMercadoPagoUnavailable, postMercadoPagoWithRetry, syncOrderPayment } from '@/lib/server/mercadopago';
+import { calculatePlatformFee, getSellerAccessToken, getSellerUserId } from '@/lib/server/mercadopago-oauth';
+import { notifyPaymentChange, readOrder, recordSplit } from '@/lib/server/orders';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+const PIX_EXPIRATION_MINUTES = 35;
 
 function safeCause(cause: unknown) {
   if (!Array.isArray(cause)) return cause ?? null;
@@ -12,36 +15,59 @@ function safeCause(cause: unknown) {
 }
 
 export async function POST(request: Request) {
-  const accessToken = getMercadoPagoAccessToken();
-  if (!accessToken) return NextResponse.json({ error: 'Mercado Pago não configurado no servidor. Verifique o Access Token na Vercel.' }, { status: 500 });
+  // Com a conta do lojista conectada por OAuth, o pagamento e criado com o
+  // token dele e a comissao da plataforma vai no application_fee. Sem conexao,
+  // cai no token da propria plataforma e nao ha split.
+  const sellerToken = await getSellerAccessToken().catch(() => null);
+  const accessToken = sellerToken || getMercadoPagoAccessToken();
+  const splitEnabled = Boolean(sellerToken);
+  if (!accessToken) return NextResponse.json({ error: 'Mercado Pago não configurado no servidor.' }, { status: 500 });
 
   try {
     const body = await request.json();
-    const { formData, orderId, total, deviceId, additionalData } = body;
-    const amount = Number(total);
-    if (!formData || !orderId || !Number.isFinite(amount) || amount <= 0) return NextResponse.json({ error: 'Dados inválidos para criar o pagamento.' }, { status: 400 });
+    const { formData, orderId, deviceId, additionalData, renew } = body;
+    if (!formData || !orderId) return NextResponse.json({ error: 'Dados inválidos para criar o pagamento.' }, { status: 400 });
+
+    // O valor cobrado vem do pedido gravado, nunca do corpo da requisicao: o
+    // cliente nao decide quanto paga.
+    const order = await readOrder(String(orderId));
+    if (!order) return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
+
+    const amount = Math.round(Number(order.total || 0) * 100) / 100;
+    if (!Number.isFinite(amount) || amount <= 0) return NextResponse.json({ error: 'O total do pedido é inválido.' }, { status: 409 });
+
+    if (String(order.payment_status || '') === 'paid') {
+      return NextResponse.json({ error: 'Este pedido já está pago.' }, { status: 409 });
+    }
 
     const paymentMethodId = String(formData.payment_method_id || '').trim();
     const token = String(formData.token || '').trim();
+    const isPix = paymentMethodId === 'pix';
     if (!paymentMethodId) return NextResponse.json({ error: 'Método de pagamento não identificado.' }, { status: 400 });
-    if (!token) return NextResponse.json({ error: 'Token do cartão não foi gerado pelo Card Payment Brick.' }, { status: 400 });
+    // PIX nao passa por tokenizacao: nao ha dado de cartao para proteger.
+    if (!isPix && !token) return NextResponse.json({ error: 'Token do cartão não foi gerado pelo Card Payment Brick.' }, { status: 400 });
 
     const rawPayerEmail = String(formData.payer?.email || formData.email || formData.cardholderEmail || '').trim().toLowerCase();
-    const isLegacyTestToken = /^TEST-/i.test(accessToken);
-    const payerEmail = isLegacyTestToken && /@testuser\.com$/i.test(rawPayerEmail) ? 'test_payer@example.com' : rawPayerEmail;
+    const isTestCredential = /^TEST-/i.test(accessToken);
+    const usePaymentsApi = getMercadoPagoApi() === 'payments';
+    const payerEmail = isTestCredential && /@testuser\.com$/i.test(rawPayerEmail) ? 'test_payer@example.com' : rawPayerEmail;
     if (!payerEmail) return NextResponse.json({ error: 'Informe um e-mail válido para o pagamento.' }, { status: 400 });
 
     const identificationType = String(formData.cardholderIdentificationType || formData.identificationType || formData.payer?.identification?.type || '').trim();
     const identificationNumber = String(formData.cardholderIdentificationNumber || formData.identificationNumber || formData.payer?.identification?.number || '').replace(/\D/g, '');
     const identification = identificationType && identificationNumber ? { type: identificationType, number: identificationNumber } : undefined;
     const receivedIssuerId = formData.issuer_id != null && Number.isFinite(Number(formData.issuer_id)) && Number(formData.issuer_id) > 0 ? Number(formData.issuer_id) : undefined;
-    const issuerId = isLegacyTestToken ? undefined : receivedIssuerId;
+    const issuerId = isTestCredential ? undefined : receivedIssuerId;
     const installments = Number(formData.installments || 1);
     const cardholderName = String(formData.cardholderName || formData.card_holder_name || additionalData?.cardholderName || '').trim();
     const nameParts = cardholderName ? cardholderName.split(/\s+/).filter(Boolean) : [];
     const siteUrl = String(process.env.NEXT_PUBLIC_SITE_URL || 'https://2pbox.vercel.app').replace(/\/$/, '');
-    const idempotencyKey = crypto.randomUUID();
+    // O PIX de um pedido e sempre o mesmo QR: recarregar a tela nao pode gerar
+    // uma segunda cobranca. So um pedido explicito de renovacao (QR expirado)
+    // abre uma nova chave.
+    const idempotencyKey = isPix && !renew ? `2pbox-pix-${String(orderId)}` : crypto.randomUUID();
     const normalizedDeviceId = String(deviceId || '').trim();
+    const platformFee = splitEnabled ? calculatePlatformFee(amount) : 0;
 
     const commonHeaders: Record<string, string> = {
       Authorization: `Bearer ${accessToken}`,
@@ -51,41 +77,95 @@ export async function POST(request: Request) {
     };
     if (normalizedDeviceId) commonHeaders['X-meli-session-id'] = normalizedDeviceId;
 
-    if (isLegacyTestToken) {
+    if (usePaymentsApi) {
+      const payerName = nameParts[0] || String(formData.payer?.first_name || '').trim();
+      const payerSurname = nameParts.length > 1 ? nameParts.slice(1).join(' ') : String(formData.payer?.last_name || '').trim();
+
       const paymentBody = {
         transaction_amount: amount,
-        token,
         description: `Pedido 2P Box ${String(orderId).slice(0, 50)}`,
-        installments,
         payment_method_id: paymentMethodId,
         external_reference: String(orderId).slice(0, 64),
         notification_url: `${siteUrl}/api/mercadopago/webhook`,
-        payer: { email: payerEmail, ...(identification ? { identification } : {}) },
+        payer: {
+          email: payerEmail,
+          ...(identification ? { identification } : {}),
+          ...(isPix && payerName ? { first_name: payerName } : {}),
+          ...(isPix && payerSurname ? { last_name: payerSurname } : {}),
+        },
+        ...(isPix ? {} : { token, installments }),
+        ...(isPix ? { date_of_expiration: new Date(Date.now() + PIX_EXPIRATION_MINUTES * 60_000).toISOString() } : {}),
+        ...(splitEnabled ? { application_fee: platformFee } : {}),
       };
-      const response = await fetch('https://api.mercadopago.com/v1/payments', { method: 'POST', headers: commonHeaders, body: JSON.stringify(paymentBody), cache: 'no-store' });
-      const result = await response.json().catch(() => null);
-      const mpRequestId = response.headers.get('x-request-id') || response.headers.get('x-correlation-id') || null;
+      const attempt = await postMercadoPagoWithRetry('/v1/payments', commonHeaders, JSON.stringify(paymentBody), isPix ? 4 : 2);
+      const response = { ok: attempt.ok, status: attempt.status, headers: attempt.headers };
+      const result = attempt.data as any;
+      const mpRequestId = attempt.headers.get('x-request-id') || attempt.headers.get('x-correlation-id') || null;
       if (!response.ok) {
         const cause = Array.isArray(result?.cause) ? result.cause[0] : null;
-        const detail = result?.status_detail || cause?.code || cause?.description || result?.message || `HTTP ${response.status}`;
-        return NextResponse.json({ id: result?.id || null, status: result?.status || 'rejected', statusDetail: detail, paymentMethodId, error: detail, details: result, mpRequestId }, { status: response.status });
+        const rawDetail = result?.status_detail || cause?.code || cause?.description || result?.message || `HTTP ${response.status}`;
+        const unavailable = isMercadoPagoUnavailable(rawDetail);
+        const detail = unavailable
+          ? isPix
+            ? 'O PIX do Mercado Pago está instável neste momento. Tente pagar com cartão ou refaça em alguns minutos.'
+            : 'O Mercado Pago está instável neste momento. Tente novamente em alguns minutos.'
+          : rawDetail;
+
+        return NextResponse.json(
+          {
+            id: result?.id || null,
+            status: unavailable ? 'pending' : result?.status || 'rejected',
+            statusDetail: detail,
+            paymentMethodId,
+            error: detail,
+            providerUnavailable: unavailable,
+            details: result,
+            mpRequestId,
+          },
+          { status: unavailable ? 503 : response.status },
+        );
       }
       const normalizedResult = { ...result, id: result?.id ? String(result.id) : null, status: result?.status || 'pending', status_detail: result?.status_detail || null, payment_method_id: result?.payment_method_id || paymentMethodId, external_reference: String(result?.external_reference || orderId) };
       let synced;
       try {
         synced = await syncOrderPayment(String(orderId), normalizedResult);
+        if (splitEnabled) {
+          await recordSplit(String(orderId), {
+            platformFee,
+            sellerAmount: Math.round((amount - platformFee) * 100) / 100,
+            mpSellerUserId: await getSellerUserId().catch(() => null),
+          });
+        }
         if (synced.changed) await notifyPaymentChange(String(orderId), synced).catch(() => undefined);
       } catch (syncError) {
         console.error('Legacy payment persistence error:', syncError);
         return NextResponse.json({ id: normalizedResult.id, status: 'pending', statusDetail: 'Pagamento recebido. Estamos confirmando o pedido.', paymentMethodId: normalizedResult.payment_method_id, synchronizationPending: true, error: 'Pagamento recebido, mas a confirmação do pedido ainda está sendo sincronizada.' }, { status: 202 });
       }
-      return NextResponse.json({ id: normalizedResult.id, orderId: null, status: synced.paymentStatus, statusDetail: synced.statusDetail, paymentStatus: synced.paymentStatus, orderStatus: synced.orderStatus, paymentMethodId: normalizedResult.payment_method_id, legacyPaymentsApi: true, pix: null });
+      const transactionData = result?.point_of_interaction?.transaction_data || {};
+      return NextResponse.json({
+        id: normalizedResult.id,
+        orderId: null,
+        status: synced.paymentStatus,
+        statusDetail: synced.statusDetail,
+        paymentStatus: synced.paymentStatus,
+        orderStatus: synced.orderStatus,
+        paymentMethodId: normalizedResult.payment_method_id,
+        pix: isPix
+          ? {
+              qrCode: transactionData.qr_code || null,
+              qrCodeBase64: transactionData.qr_code_base64 || null,
+              ticketUrl: transactionData.ticket_url || null,
+              expiresAt: result?.date_of_expiration || null,
+            }
+          : null,
+      });
     }
 
     const orderBody = {
       type: 'online', processing_mode: 'automatic', total_amount: amount.toFixed(2), external_reference: String(orderId).slice(0, 64), notification_url: `${siteUrl}/api/mercadopago/webhook`,
       payer: { email: payerEmail, ...(identification ? { identification } : {}), ...(formData.payer?.first_name || nameParts[0] ? { first_name: formData.payer?.first_name || nameParts[0] } : {}), ...(formData.payer?.last_name || nameParts.length > 1 ? { last_name: formData.payer?.last_name || nameParts.slice(1).join(' ') } : {}) },
       transactions: { payments: [{ amount: amount.toFixed(2), payment_method: { id: paymentMethodId, type: String(additionalData?.paymentTypeId || formData.payment_type_id || 'credit_card'), token, installments } }] },
+      ...(splitEnabled ? { marketplace_fee: platformFee.toFixed(2) } : {}),
     };
     const response = await fetch('https://api.mercadopago.com/v1/orders', { method: 'POST', headers: commonHeaders, body: JSON.stringify(orderBody), cache: 'no-store' });
     const result = await response.json().catch(() => null);
@@ -120,6 +200,13 @@ export async function POST(request: Request) {
     let synced;
     try {
       synced = await syncOrderPayment(String(orderId), normalizedResult);
+      if (splitEnabled) {
+        await recordSplit(String(orderId), {
+          platformFee,
+          sellerAmount: Math.round((amount - platformFee) * 100) / 100,
+          mpSellerUserId: await getSellerUserId().catch(() => null),
+        });
+      }
       if (synced.changed) await notifyPaymentChange(String(orderId), synced).catch(() => undefined);
     } catch (syncError) {
       console.error('Order payment persistence error:', syncError);
@@ -127,7 +214,6 @@ export async function POST(request: Request) {
     }
 
     const transactionData = payment?.point_of_interaction?.transaction_data || result?.point_of_interaction?.transaction_data || {};
-    const isPix = paymentMethodId === 'pix';
     return NextResponse.json({ id: mercadoPagoPaymentId || mercadoPagoOrderId, orderId: mercadoPagoOrderId, ...diagnostics, status: synced.paymentStatus, statusDetail: synced.statusDetail, paymentStatus: synced.paymentStatus, orderStatus: synced.orderStatus, paymentMethodId: payment?.payment_method?.id || paymentMethodId, pix: isPix ? { qrCode: transactionData.qr_code || null, qrCodeBase64: transactionData.qr_code_base64 || null, ticketUrl: transactionData.ticket_url || null } : null });
   } catch (error) {
     console.error('Mercado Pago payment creation error:', error);

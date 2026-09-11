@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
+  Bike,
+  QrCode,
   CheckCircle2,
   CreditCard,
   FileText,
@@ -21,14 +23,19 @@ import { useCart } from '@/components/cart-provider';
 import { supabase } from '@/lib/supabase';
 import { getStoreSettings } from '@/lib/store-settings';
 import PaymentBrick from '@/components/payment-brick';
+import PixPayment from '@/components/pix-payment';
 import { SiteHeader } from '@/components/site-header';
-import { TextAreaField, TextField } from '@/components/ui/field';
+import { RadioGroup, TextAreaField, TextField } from '@/components/ui/field';
+import { AddressAutocomplete, type AddressValue } from '@/components/address-autocomplete';
 import { InlineLoader, PageLoader } from '@/components/ui/loader';
 import { useToast } from '@/components/ui/toast';
-import { isValidCep, isValidCpf, isValidEmail, isValidPhone, onlyDigits } from '@/lib/masks';
+import { isValidCep, isValidCpf, isValidEmail, isValidPhone, onlyDigits, toWhatsAppNumber } from '@/lib/masks';
 import { money } from '@/lib/order-format';
 
 type Delivery = 'pickup' | 'whatsapp_shipping';
+type DeliveryOption = { provider: 'pickup' | 'own' | 'app'; label: string; description: string; fee: number | null; distanceKm: number | null; available: boolean };
+
+const EMPTY_ADDRESS: AddressValue = { line: '', number: '', complement: '', district: '', city: '', state: '', zip: '', placeId: null, lat: null, lng: null };
 type AuthUser = { id: string; email?: string | null; user_metadata?: { full_name?: string; phone?: string; cpf?: string } };
 type Errors = Record<string, string>;
 
@@ -58,8 +65,14 @@ function CheckoutForm() {
   const [orderId, setOrderId] = useState('');
   const [accessSent, setAccessSent] = useState(false);
   const [storeWhatsApp, setStoreWhatsApp] = useState('5511999999999');
-  const [preferenceId, setPreferenceId] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'pix'>('card');
   const [lookingUpCep, setLookingUpCep] = useState(false);
+  const [geoAddress, setGeoAddress] = useState<AddressValue>(EMPTY_ADDRESS);
+  const [options, setOptions] = useState<DeliveryOption[]>([]);
+  const [provider, setProvider] = useState<'whatsapp' | 'own' | 'app'>('whatsapp');
+  const [quoting, setQuoting] = useState(false);
+  const [payableTotal, setPayableTotal] = useState<number | null>(null);
+  const [feeBreakdown, setFeeBreakdown] = useState<{ fee: number; serviceFee: number; subtotal: number } | null>(null);
 
   useEffect(() => {
     setType(searchParams.get('entrega') === 'shipping' ? 'whatsapp_shipping' : 'pickup');
@@ -78,6 +91,40 @@ function CheckoutForm() {
       if (settings.whatsapp?.trim()) setStoreWhatsApp(settings.whatsapp.trim());
     });
   }, [searchParams]);
+
+  useEffect(() => {
+    if (type !== 'whatsapp_shipping') return;
+    if (geoAddress.lat == null && !geoAddress.placeId) {
+      setOptions([]);
+      return;
+    }
+
+    let active = true;
+    setQuoting(true);
+    fetch('/api/entrega/cotacao', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ placeId: geoAddress.placeId, lat: geoAddress.lat, lng: geoAddress.lng }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (!active) return;
+        const list = (Array.isArray(data?.options) ? data.options : []).filter((option: DeliveryOption) => option.provider !== 'pickup');
+        setOptions(list);
+        const first = list.find((option: DeliveryOption) => option.available);
+        setProvider(first ? first.provider : 'whatsapp');
+      })
+      .catch(() => {
+        if (active) setOptions([]);
+      })
+      .finally(() => {
+        if (active) setQuoting(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [type, geoAddress.placeId, geoAddress.lat, geoAddress.lng]);
 
   async function lookupCep(value: string) {
     const digits = onlyDigits(value);
@@ -100,6 +147,16 @@ function CheckoutForm() {
     } finally {
       setLookingUpCep(false);
     }
+  }
+
+  function applyGeoAddress(value: AddressValue) {
+    setGeoAddress(value);
+    if (value.line) setStreet(value.line);
+    if (value.number) setNumber(value.number);
+    if (value.district) setNeighborhood(value.district);
+    if (value.city) setCity(value.city);
+    if (value.state) setState(value.state);
+    if (value.zip) setCep(value.zip);
   }
 
   function validate(): boolean {
@@ -157,19 +214,24 @@ function CheckoutForm() {
             }
           : null;
 
-      const { data, error } = await client.rpc('create_order_with_stock_v2', {
+      const deliveryType = type === 'pickup' ? 'pickup' : provider === 'own' ? 'own_delivery' : provider === 'app' ? 'app_delivery' : 'whatsapp_shipping';
+      const args = {
         p_customer_name: name.trim(),
         p_customer_phone: phone.trim(),
         p_customer_email: email.trim(),
-        p_delivery_type: type,
         p_notes: notes.trim() || null,
         p_items: items.map((item) => ({ id: item.id, quantity: item.quantity })),
         p_delivery_address: address,
-      });
+      };
 
-      if (error) throw new Error(error.message.replace(/^.*?: /, ''));
+      let result = await client.rpc('create_order_with_stock_v3', { ...args, p_delivery_type: deliveryType });
+      // Sem a migration das novas modalidades, o pedido entra pelo fluxo antigo.
+      if (result.error && /create_order_with_stock_v3|schema cache|not find/i.test(result.error.message)) {
+        result = await client.rpc('create_order_with_stock_v2', { ...args, p_delivery_type: type });
+      }
+      if (result.error) throw new Error(result.error.message.replace(/^.*?: /, ''));
 
-      const id = data as string;
+      const id = result.data as string;
       setOrderId(id);
       const cleanCpf = onlyDigits(cpf);
       const normalizedEmail = email.trim().toLowerCase();
@@ -196,25 +258,32 @@ function CheckoutForm() {
         }
       }
 
-      if (type === 'pickup') {
-        setStatus('Preparando pagamento seguro...');
-        const payment = await fetch('/api/mercadopago/create-preference', {
+      if (type === 'pickup' || provider === 'own') {
+        const isOwnDelivery = provider === 'own' && type !== 'pickup';
+        setStatus(isOwnDelivery ? 'Calculando a entrega...' : 'Confirmando o valor...');
+
+        // O total cobrado sai sempre do servidor, com frete e taxas da loja.
+        const quote = await fetch('/api/pedido/entrega', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             orderId: id,
-            total,
+            provider: isOwnDelivery ? 'own' : 'pickup',
             email: normalizedEmail,
-            name: name.trim(),
-            cpf: cleanCpf,
-            items: items.map((item) => ({ id: item.id, name: item.name, price: item.price, quantity: item.quantity })),
+            ...(isOwnDelivery ? { placeId: geoAddress.placeId, lat: geoAddress.lat, lng: geoAddress.lng, address } : {}),
           }),
         });
-        const paymentData = await payment.json();
-        if (!payment.ok || !paymentData.id) throw new Error(paymentData.error || 'Não foi possível preparar o pagamento.');
-        setPreferenceId(String(paymentData.id));
+        const quoteData = await quote.json().catch(() => null);
+        if (!quote.ok) {
+          if (isOwnDelivery) throw new Error(quoteData?.error || 'Não foi possível calcular a entrega.');
+          console.error('[checkout] cotação de retirada falhou:', quoteData?.error);
+        } else {
+          setPayableTotal(Number(quoteData.total));
+          setFeeBreakdown({ fee: Number(quoteData.fee || 0), serviceFee: Number(quoteData.serviceFee || 0), subtotal: Number(quoteData.subtotal || 0) });
+          if (quoteData.warning && isOwnDelivery) toast.warning('Entrega registrada parcialmente', quoteData.warning);
+        }
+
         setStatus('');
-        toast.info('Pagamento pronto', 'Escolha a forma de pagamento abaixo.');
         return;
       }
 
@@ -227,7 +296,7 @@ function CheckoutForm() {
       clear({ silent: true });
       setDone(true);
       window.setTimeout(() => {
-        window.location.href = `https://wa.me/${onlyDigits(storeWhatsApp)}?text=${encodeURIComponent(message)}`;
+        window.location.href = `https://wa.me/${toWhatsAppNumber(storeWhatsApp)}?text=${encodeURIComponent(message)}`;
       }, 700);
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Não foi possível concluir o pedido.';
@@ -238,7 +307,9 @@ function CheckoutForm() {
     }
   }
 
-  const paymentReady = type === 'pickup' && Boolean(preferenceId);
+  const payableOnline = type === 'pickup' || provider === 'own';
+  const paymentReady = payableOnline && Boolean(orderId);
+  const chargeTotal = payableTotal ?? total;
 
   if (done) {
     return (
@@ -384,6 +455,12 @@ function CheckoutForm() {
                 </div>
               </div>
               <div className="form-grid">
+                <AddressAutocomplete
+                  label="Buscar endereço"
+                  hint="Selecionar o endereço na busca libera o cálculo automático da entrega."
+                  value={geoAddress}
+                  onChange={applyGeoAddress}
+                />
                 <TextField
                   label="CEP"
                   required
@@ -405,12 +482,59 @@ function CheckoutForm() {
                 <TextField label="Cidade" required placeholder="Sua cidade" value={city} error={errors.city} onValueChange={setCity} />
                 <TextField label="Estado" required mask="state" maxLength={2} placeholder="SP" value={state} error={errors.state} onValueChange={setState} />
               </div>
-              <div className="shipping-whatsapp-note">
-                <MessageCircle size={17} />
-                <span>
-                  Ao clicar no botão abaixo, enviaremos <strong>o pedido completo + endereço</strong> para a 2P Box no WhatsApp, já identificado como pedido de cálculo de frete.
-                </span>
-              </div>
+              {(quoting || options.length > 0) && (
+                <div className="delivery-options">
+                  {quoting ? (
+                    <InlineLoader label="Calculando as opções de entrega..." />
+                  ) : (
+                    <RadioGroup
+                      name="delivery-provider"
+                      label="Como você quer receber"
+                      value={provider}
+                      options={options
+                        .filter((option) => option.available)
+                        .map((option) => ({
+                          value: String(option.provider),
+                          label: option.label,
+                          description: option.fee != null && option.fee > 0 ? `${option.description} • ${money(option.fee)}` : option.fee === 0 ? `${option.description} • grátis` : option.description,
+                          icon: option.provider === 'own' ? <Bike size={19} /> : <MessageCircle size={19} />,
+                        }))
+                        .concat([{ value: 'whatsapp', label: 'Combinar pelo WhatsApp', description: 'A loja informa o valor do frete no atendimento', icon: <MessageCircle size={19} /> }])}
+                      onValueChange={(value) => setProvider(value as 'whatsapp' | 'own' | 'app')}
+                      fullWidth
+                    />
+                  )}
+
+                  {options.some((option) => !option.available) && (
+                    <ul className="delivery-unavailable">
+                      {options
+                        .filter((option) => !option.available)
+                        .map((option) => (
+                          <li key={option.provider}>
+                            {option.label}: {option.description}
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+
+              {provider === 'own' ? (
+                <div className="shipping-whatsapp-note">
+                  <Bike size={17} />
+                  <span>
+                    O frete já está calculado pela distância até a loja. Você <strong>paga tudo aqui</strong>, produtos e
+                    entrega, e o motoboy sai no ciclo de entregas.
+                  </span>
+                </div>
+              ) : (
+                <div className="shipping-whatsapp-note">
+                  <MessageCircle size={17} />
+                  <span>
+                    Ao clicar no botão abaixo, enviaremos <strong>o pedido completo + endereço</strong> para a 2P Box no WhatsApp, já identificado como pedido de cálculo de frete.
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
@@ -425,6 +549,31 @@ function CheckoutForm() {
             <TextAreaField placeholder="Escreva uma observação, se necessário..." value={notes} onValueChange={setNotes} fullWidth />
           </div>
 
+          {paymentReady && feeBreakdown && (
+            <div className="checkout-charge">
+              <div>
+                <span>Produtos</span>
+                <strong>{money(feeBreakdown.subtotal)}</strong>
+              </div>
+              {feeBreakdown.fee > 0 && (
+                <div>
+                  <span>Entrega</span>
+                  <strong>{money(feeBreakdown.fee)}</strong>
+                </div>
+              )}
+              {feeBreakdown.serviceFee > 0 && (
+                <div>
+                  <span>Taxa de serviço</span>
+                  <strong>{money(feeBreakdown.serviceFee)}</strong>
+                </div>
+              )}
+              <div className="checkout-charge-total">
+                <span>Total a pagar</span>
+                <strong>{money(chargeTotal)}</strong>
+              </div>
+            </div>
+          )}
+
           {paymentReady && (
             <div className="checkout-section payment-section">
               <div className="checkout-section-heading">
@@ -434,15 +583,45 @@ function CheckoutForm() {
                   <p>Escolha como pagar pelo Mercado Pago</p>
                 </div>
               </div>
-              <PaymentBrick
-                amount={total}
-                orderId={orderId}
-                email={email}
-                cpf={cpf}
-                preferenceId={preferenceId}
-                onResult={() => clear({ silent: true })}
-                onError={(message) => toast.error('Problema no pagamento', message)}
+
+              <RadioGroup
+                name="payment-method"
+                label="Forma de pagamento"
+                value={paymentMethod}
+                columns={2}
+                options={[
+                  { value: 'card', label: 'Cartão de crédito', description: 'Aprovação imediata', icon: <CreditCard size={19} /> },
+                  { value: 'pix', label: 'PIX', description: 'Confirmação em segundos', icon: <QrCode size={19} /> },
+                ]}
+                onValueChange={(value) => setPaymentMethod(value as 'card' | 'pix')}
+                fullWidth
               />
+
+              <div className="payment-method-body">
+                {paymentMethod === 'card' ? (
+                  <PaymentBrick
+                    amount={chargeTotal}
+                    orderId={orderId}
+                    email={email}
+                    cpf={cpf}
+                    onResult={() => clear({ silent: true })}
+                    onError={(message) => toast.error('Problema no pagamento', message)}
+                  />
+                ) : (
+                  <PixPayment
+                    amount={chargeTotal}
+                    orderId={orderId}
+                    email={email}
+                    cpf={cpf}
+                    name={name}
+                    onApproved={() => {
+                      clear({ silent: true });
+                      window.location.assign(`/pagamento/${encodeURIComponent(orderId)}`);
+                    }}
+                    onError={(message) => toast.error('Problema no PIX', message)}
+                  />
+                )}
+              </div>
             </div>
           )}
 
@@ -459,7 +638,7 @@ function CheckoutForm() {
                 <strong>{money(total)}</strong>
               </div>
               <button type="button" onClick={submitCheckout} className="primary checkout-submit" disabled={!items.length || submitting}>
-                {submitting ? 'Processando...' : items.length ? (type === 'whatsapp_shipping' ? 'Calcular frete pelo WhatsApp' : 'Continuar para pagamento') : 'Carrinho vazio'}
+                {submitting ? 'Processando...' : !items.length ? 'Carrinho vazio' : type === 'pickup' || provider === 'own' ? 'Continuar para pagamento' : 'Calcular frete pelo WhatsApp'}
               </button>
             </div>
           )}
@@ -501,6 +680,15 @@ function CheckoutForm() {
         .checkout-submit:hover:not(:disabled){background:#111;color:#fff}
         .checkout-submit:disabled{opacity:.55;cursor:not-allowed}
         .payment-section{overflow:visible}
+        .checkout-charge{display:grid;gap:9px;padding:22px 28px;border-bottom:1px solid #e9e9e9;background:#fafaf7}
+        .checkout-charge>div{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+        .checkout-charge span{font:800 10px Inter,Arial,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#777}
+        .checkout-charge strong{font:800 14px Inter,Arial,sans-serif}
+        .checkout-charge-total{padding-top:10px;border-top:1px solid #e6e6e0}
+        .checkout-charge-total strong{font:900 24px 'Barlow Condensed',Inter,sans-serif}
+        .delivery-options{margin-top:20px;padding-top:20px;border-top:1px solid #eee;display:grid;gap:12px}
+        .delivery-unavailable{margin:0;padding:0 0 0 18px;color:#8a8a86;font-size:11.5px;line-height:1.6}
+        .payment-method-body{margin-top:22px;padding-top:22px;border-top:1px solid #eee}
         .checkout-success{display:grid;place-items:center;min-height:60vh}
         .checkout-success-card{max-width:620px;text-align:center;border:1px solid #e9e9e9;border-radius:20px;padding:42px 34px}
         .success-icon{width:68px;height:68px;margin:0 auto 18px;border-radius:50%;background:#ffc400;display:grid;place-items:center}

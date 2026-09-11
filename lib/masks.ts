@@ -69,6 +69,18 @@ export function isValidCep(value: string) {
   return onlyDigits(value).length === 8;
 }
 
+/**
+ * Numero no formato aceito pelo wa.me: exige codigo do pais. Numero brasileiro
+ * salvo apenas com DDD (10 ou 11 digitos) recebe o 55.
+ */
+export function toWhatsAppNumber(value: string) {
+  const digits = onlyDigits(value);
+  if (!digits) return '';
+  if (digits.length === 10 || digits.length === 11) return `55${digits}`;
+  if (digits.length === 12 || digits.length === 13) return digits;
+  return '';
+}
+
 export const MASKS = { cpf: maskCpf, phone: maskPhone, cep: maskCep, email: maskEmail, state: maskState } as const;
 
 export type MaskName = keyof typeof MASKS;

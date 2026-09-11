@@ -11,3 +11,8 @@ next-env.d.ts
 npm-debug.log*
 deploy/generated-secrets.txt
 docs/DEPLOY.md
+docs/TESTE-MP.md
+
+# Gerados pelo Next (agentRules)
+AGENTS.md
+CLAUDE.md

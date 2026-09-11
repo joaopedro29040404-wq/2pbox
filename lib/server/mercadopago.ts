@@ -84,6 +84,42 @@ function authHeaders() {
   return { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' };
 }
 
+/**
+ * O endpoint de PIX do Mercado Pago devolve 500 "fill and validate error list:
+ * timeout" de forma intermitente (medido: ~40% de sucesso com payload
+ * identico). A chave de idempotencia e reaproveitada em todas as tentativas, o
+ * que foi verificado nao duplicar o pagamento.
+ */
+export async function postMercadoPagoWithRetry(
+  path: string,
+  headers: Record<string, string>,
+  body: string,
+  attempts = 4,
+) {
+  let last = await fetchJson(`${API}${path}`, { method: 'POST', headers, body });
+
+  for (let attempt = 1; attempt < attempts && !last.ok; attempt += 1) {
+    const message = String((last.data as any)?.message || '');
+
+    // Circuit breaker aberto e sinal de servico degradado: insistir mantem o
+    // breaker aberto e so gasta o tempo do cliente.
+    if (/circuit breaker/i.test(message)) break;
+
+    const transient = last.status >= 500 || /timeout|try again/i.test(message);
+    if (!transient) break;
+
+    await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
+    last = await fetchJson(`${API}${path}`, { method: 'POST', headers, body });
+  }
+
+  return last;
+}
+
+/** Indisponibilidade do lado do Mercado Pago, nao erro do pedido. */
+export function isMercadoPagoUnavailable(message: unknown) {
+  return /circuit breaker|internal error|internal_server_error|unavailable|timeout|try again/i.test(String(message || ''));
+}
+
 export function isMercadoPagoConfigured() {
   return Boolean(getMercadoPagoAccessToken());
 }

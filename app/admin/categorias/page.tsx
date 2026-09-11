@@ -147,16 +147,20 @@ export default function CategoriesAdminPage() {
               <span>{items.filter((item) => item.active).length} ativas</span>
             </div>
 
-            <div className="cat-filters">
-              <TextField
-                aria-label="Buscar categoria"
-                placeholder="Buscar categoria..."
-                value={search}
-                icon={<Search size={16} />}
-                onValueChange={setSearch}
-                fullWidth
-              />
-              <SelectField aria-label="Filtrar por status" value={statusFilter} options={STATUS_OPTIONS} onValueChange={setStatusFilter} />
+            <div className="cat-filters admin-filters">
+              <div className="span-6">
+                <TextField
+                  aria-label="Buscar categoria"
+                  placeholder="Buscar categoria..."
+                  value={search}
+                  icon={<Search size={16} />}
+                  onValueChange={setSearch}
+                  fullWidth
+                />
+              </div>
+              <div className="span-6">
+                <SelectField aria-label="Filtrar por status" value={statusFilter} options={STATUS_OPTIONS} onValueChange={setStatusFilter} fullWidth />
+              </div>
             </div>
 
             {loading ? (
@@ -239,7 +243,7 @@ export default function CategoriesAdminPage() {
         .cat-list-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:21px;border-bottom:1px solid #eee}
         .cat-list-head h2{font-size:25px}
         .cat-list-head>span{font-size:10px;color:#777;background:#f3f3ef;padding:7px 9px;border-radius:999px;font-weight:800;white-space:nowrap}
-        .cat-filters{display:grid;grid-template-columns:minmax(0,1fr) 170px;gap:10px;padding:16px 21px;border-bottom:1px solid #f0f0ec}
+        .cat-filters{padding:16px 21px;border-bottom:1px solid #f0f0ec;margin-bottom:0}
         .cat-list{padding:10px 18px}
         .cat-item{display:flex;align-items:center;gap:12px;padding:14px 4px;border-bottom:1px solid #eee}
         .cat-item:last-child{border-bottom:0}
@@ -271,7 +275,7 @@ export default function CategoriesAdminPage() {
           .cat-count{align-self:flex-start}
           .cat-list-head{align-items:flex-start;gap:10px}
           .cat-list-head h2{font-size:23px}
-          .cat-filters{grid-template-columns:1fr;padding:14px 16px}
+          .cat-filters{padding:14px 16px}
           .cat-list{padding:6px 14px}
           .cat-item{align-items:flex-start}
           .cat-item-copy p{white-space:normal;line-height:1.4}

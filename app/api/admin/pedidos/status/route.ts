@@ -6,7 +6,19 @@ import { supabaseRest } from '@/lib/server/supabase-admin';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const ALLOWED = new Set(['pending', 'confirmed', 'preparing', 'ready', 'completed', 'cancelled']);
+const ALLOWED = new Set([
+  'pending',
+  'confirmed',
+  'preparing',
+  'ready',
+  'out_for_delivery',
+  'delivered',
+  'completed',
+  'cancelled',
+]);
+
+/** Estados que so existem apos a migracao 20260912_order_logistics_states.sql. */
+const NEW_STATES = new Set(['out_for_delivery', 'delivered']);
 
 export async function POST(request: Request) {
   try {
@@ -28,11 +40,35 @@ export async function POST(request: Request) {
     if (previousStatus === status) return NextResponse.json({ ok: true, status, unchanged: true });
 
     const changedAt = new Date().toISOString();
-    await supabaseRest(`orders?id=eq.${orderId}`, {
-      method: 'PATCH',
-      headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify({ status, updated_at: changedAt }),
-    });
+    const payload: Record<string, unknown> = { status, updated_at: changedAt };
+    if (status === 'out_for_delivery') payload.dispatched_at = changedAt;
+    if (status === 'delivered' || status === 'completed') payload.delivered_at = changedAt;
+
+    try {
+      await supabaseRest(`orders?id=eq.${orderId}`, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      // Colunas de data ausentes: grava o essencial e segue.
+      if (/column|PGRST204/i.test(message)) {
+        await supabaseRest(`orders?id=eq.${orderId}`, {
+          method: 'PATCH',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({ status, updated_at: changedAt }),
+        });
+      } else if (/orders_status_check/i.test(message) && NEW_STATES.has(status)) {
+        return NextResponse.json(
+          { error: 'Este estado exige a migração 20260912_order_logistics_states.sql no Supabase.' },
+          { status: 409 },
+        );
+      } else {
+        throw error;
+      }
+    }
 
     if (note) {
       await supabaseRest('order_status_history', {

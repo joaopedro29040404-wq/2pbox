@@ -16,9 +16,17 @@ import { supabaseRest } from '@/lib/server/supabase-admin';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+/**
+ * Assinatura obrigatoria. Falha fechada de proposito: aceitar webhook nao
+ * autenticado seria um canal aberto para disparar trabalho no servidor. Se o
+ * webhook for recusado, a varredura do worker reconcilia o pedido em ate 60s.
+ */
 function validateSignature(request: Request, dataId: string) {
   const secret = getMercadoPagoWebhookSecret();
-  if (!secret) return true;
+  if (!secret) {
+    console.error('[webhook] MERCADOPAGO_WEBHOOK_SECRET ausente: notificacao recusada.');
+    return false;
+  }
 
   const xSignature = request.headers.get('x-signature') || '';
   const xRequestId = request.headers.get('x-request-id') || '';

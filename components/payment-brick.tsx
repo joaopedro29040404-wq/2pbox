@@ -4,7 +4,7 @@ import { CardPayment, initMercadoPago } from '@mercadopago/sdk-react';
 import { useEffect, useState } from 'react';
 
 type PaymentResult = { id?: string | number; status?: string; statusDetail?: string; paymentMethodId?: string; mercadoPagoOrderId?: string | null; mercadoPagoPaymentId?: string | null; orderStatus?: string | null; orderStatusDetail?: string | null; paymentStatus?: string | null; paymentStatusDetail?: string | null; message?: string | null; cause?: unknown; httpStatus?: number | null };
-type Props = { amount: number; orderId: string; email: string; cpf?: string; preferenceId?: string; onResult: (result: PaymentResult) => void; onError: (message: string) => void };
+type Props = { amount: number; orderId: string; email: string; cpf?: string; onResult: (result: PaymentResult) => void; onError: (message: string) => void };
 declare global { interface Window { MP_DEVICE_SESSION_ID?: string } }
 
 const publicKey = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY || '';
@@ -16,7 +16,13 @@ export default function PaymentBrick({ amount, orderId, email, cpf, onResult, on
 
   const payerEmail = email.trim().toLowerCase();
   const payerCpf = (cpf || '').replace(/\D/g, '');
-  const payer = payerCpf.length === 11 ? { identification: { type: 'CPF', number: payerCpf } } : undefined;
+  // O e-mail informado em "Seus dados" alimenta o Brick, para o cliente nao
+  // digitar novamente, e segue para o pagamento no Mercado Pago.
+  const payer = {
+    ...(payerEmail ? { email: payerEmail } : {}),
+    ...(payerCpf.length === 11 ? { identification: { type: 'CPF', number: payerCpf } } : {}),
+  };
+  const hasPayer = Object.keys(payer).length > 0;
 
   const redirectToResult = (paymentResult: PaymentResult) => {
     const query = new URLSearchParams({ payment: paymentResult.status || 'pending', statusDetail: paymentResult.statusDetail || 'Não informado pelo Mercado Pago' });
@@ -30,7 +36,7 @@ export default function PaymentBrick({ amount, orderId, email, cpf, onResult, on
 
   return <div className="payment-brick-wrap">
     <CardPayment
-      initialization={{ amount, ...(payer ? { payer } : {}) }}
+      initialization={{ amount, ...(hasPayer ? { payer } : {}) }}
       onSubmit={async (formData, additionalData) => {
         if (submitting) return;
         setSubmitting(true);

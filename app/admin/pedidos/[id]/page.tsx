@@ -230,7 +230,7 @@ export default function AdminOrderDetail() {
           </div>
         </div>
 
-        <OrderTracker status={order.status} history={history} />
+        <OrderTracker status={order.status} history={history} deliveryType={order.delivery_type} />
 
         <div className="detail-layout">
           <div className="main-column">

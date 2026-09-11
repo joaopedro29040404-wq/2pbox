@@ -23,6 +23,8 @@ const ORDER_STATUS_LABELS: Record<string, string> = {
   confirmed: 'Pagamento confirmado',
   preparing: 'Em preparação',
   ready: 'Pronto para retirada',
+  out_for_delivery: 'Em transporte',
+  delivered: 'Entregue',
   completed: 'Pedido concluído',
   cancelled: 'Pedido cancelado',
 };
@@ -186,7 +188,7 @@ const templates: Record<EmailTemplateId, (data: TemplateData) => RenderedEmail> 
       title: 'Recebemos seu pagamento',
       body: `${paragraph(`Olá, <strong>${escapeHtml(firstName(order.customer_name))}</strong>! Recebemos o pagamento do seu pedido <strong>#${shortOrderId(order.id)}</strong>.`)}
         ${paragraph('Assim que o Mercado Pago concluir a confirmação, avisamos você por e-mail e o pedido segue para separação.')}
-        ${stepper('pending')}
+        ${stepper('pending', order.delivery_type)}
         ${orderSummary(order, data.items || [])}
         ${button('Acompanhar pedido', orderUrl(order))}`,
     });
@@ -203,7 +205,7 @@ const templates: Record<EmailTemplateId, (data: TemplateData) => RenderedEmail> 
       title: 'Pagamento aprovado!',
       body: `${note(`<strong>Tudo certo, ${escapeHtml(firstName(order.customer_name))}!</strong> O pagamento do pedido <strong>#${shortOrderId(order.id)}</strong> foi aprovado.`, 'success')}
         ${paragraph('Já estamos preparando seus produtos. Você receberá um novo e-mail a cada mudança de status do pedido.')}
-        ${stepper('confirmed')}
+        ${stepper('confirmed', order.delivery_type)}
         ${orderSummary(order, data.items || [])}
         ${button('Acompanhar pedido', orderUrl(order))}`,
     });
@@ -220,7 +222,7 @@ const templates: Record<EmailTemplateId, (data: TemplateData) => RenderedEmail> 
       title: 'Aguardando confirmação',
       body: `${paragraph(`Olá, <strong>${escapeHtml(firstName(order.customer_name))}</strong>. O pagamento do pedido <strong>#${shortOrderId(order.id)}</strong> ainda não foi confirmado pelo Mercado Pago.`)}
         ${note('Pagamentos por Pix e boleto podem levar alguns minutos para serem processados. Você não precisa fazer nada — assim que confirmar, avisamos por e-mail.', 'warn')}
-        ${stepper('pending')}
+        ${stepper('pending', order.delivery_type)}
         ${orderSummary(order, data.items || [])}
         ${button('Ver status em tempo real', orderUrl(order))}`,
     });
@@ -273,7 +275,7 @@ const templates: Record<EmailTemplateId, (data: TemplateData) => RenderedEmail> 
       eyebrow: 'ACOMPANHAMENTO DO PEDIDO',
       title: orderStatusLabel(status),
       body: `${paragraph(`Olá, <strong>${escapeHtml(firstName(order.customer_name))}</strong>. Seu pedido <strong>#${shortOrderId(order.id)}</strong> foi atualizado.`)}
-        ${stepper(status)}
+        ${stepper(status, order.delivery_type)}
         ${panel(
           dataRows([
             ['Status atual', escapeHtml(orderStatusLabel(status))],
@@ -297,10 +299,29 @@ const templates: Record<EmailTemplateId, (data: TemplateData) => RenderedEmail> 
       eyebrow: 'RESUMO DO PEDIDO',
       title: `Pedido #${shortOrderId(order.id)}`,
       body: `${paragraph(`Olá, <strong>${escapeHtml(firstName(order.customer_name))}</strong>. Aqui está o resumo completo do seu pedido na 2P Box.`)}
-        ${stepper(String(order.status || 'pending'))}
+        ${stepper(String(order.status || 'pending'), order.delivery_type)}
         ${orderSummary(order, data.items || [])}
         ${order.notes ? panel(`<p style="margin:0 0 6px;font:900 10px/1 Arial,Helvetica,sans-serif;letter-spacing:2px;text-transform:uppercase;color:${BRAND.gold};">Observações</p><p style="margin:0;font:400 13px/1.7 Arial,Helvetica,sans-serif;color:#4d4d4d;">${escapeHtml(order.notes)}</p>`) : ''}
         ${button('Acompanhar pedido', orderUrl(order))}`,
+    });
+    return { subject, html };
+  },
+
+  order_access_code: (data) => {
+    const code = String(data.code || '');
+    const subject = `${code} e o seu codigo de acesso aos pedidos`.replace('codigo', 'código');
+    const html = renderEmail({
+      subject,
+      preheader: 'Use o codigo para consultar seus pedidos sem criar conta.',
+      eyebrow: 'ACESSO AOS SEUS PEDIDOS',
+      title: 'Seu codigo de acesso',
+      body: `${paragraph('Use o código abaixo para consultar seus pedidos na 2P Box. Ele vale por 10 minutos e só pode ser usado uma vez.')}
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px;">
+          <tr><td align="center" style="padding:22px;background:${BRAND.canvas};border:1px solid ${BRAND.line};border-radius:12px;">
+            <span style="font:900 38px/1 Arial,Helvetica,sans-serif;letter-spacing:10px;color:${BRAND.ink};">${escapeHtml(code)}</span>
+          </td></tr>
+        </table>
+        ${note('Se nao foi voce que pediu este codigo, ignore este e-mail. Ninguem consegue ver seus pedidos sem o codigo.', 'warn')}`,
     });
     return { subject, html };
   },
