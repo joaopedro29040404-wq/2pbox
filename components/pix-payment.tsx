@@ -20,7 +20,6 @@ type Props = {
 
 const POLL_MS = 4000;
 
-
 export default function PixPayment({ amount, orderId, email, cpf, name, onApproved, onError }: Props) {
   const [pix, setPix] = useState<PixData | null>(null);
   const [creating, setCreating] = useState(false);
@@ -29,6 +28,10 @@ export default function PixPayment({ amount, orderId, email, cpf, name, onApprov
   const [checking, setChecking] = useState(false);
   const [remaining, setRemaining] = useState<number | null>(null);
   const approved = useRef(false);
+  const errorHandler = useRef(onError);
+  const approvedHandler = useRef(onApproved);
+  errorHandler.current = onError;
+  approvedHandler.current = onApproved;
   const toast = useToast();
 
   const createPix = useCallback(async (renew = false) => {
@@ -68,11 +71,11 @@ export default function PixPayment({ amount, orderId, email, cpf, name, onApprov
       setFailed(false);
     } catch (error) {
       setFailed(true);
-      onError(error instanceof Error ? error.message : 'Não foi possível gerar o PIX.');
+      errorHandler.current(error instanceof Error ? error.message : 'Não foi possível gerar o PIX.');
     } finally {
       setCreating(false);
     }
-  }, [amount, cpf, creating, email, name, onError, orderId]);
+  }, [amount, cpf, creating, email, name, orderId]);
 
   const checkStatus = useCallback(async () => {
     if (approved.current) return;
@@ -85,14 +88,13 @@ export default function PixPayment({ amount, orderId, email, cpf, name, onApprov
       if (status === 'paid') {
         approved.current = true;
         toast.success('PIX confirmado!', 'Seu pagamento foi aprovado.');
-        onApproved();
+        approvedHandler.current();
       }
     } catch {
-      // Falha de rede momentanea nao invalida o PIX ja exibido.
     } finally {
       setChecking(false);
     }
-  }, [orderId, onApproved, toast]);
+  }, [orderId, toast]);
 
   useEffect(() => {
     if (!pix) return;
@@ -124,8 +126,6 @@ export default function PixPayment({ amount, orderId, email, cpf, name, onApprov
   const minutes = remaining !== null ? Math.floor(remaining / 60) : null;
   const seconds = remaining !== null ? remaining % 60 : null;
 
-  // O QR so nasce depois que o cliente confirma: o pedido ja existe, o que
-  // falta e o pagamento, e a tela precisa deixar essa separacao clara.
   if (!pix) {
     return (
       <div className="pix-confirm">
@@ -137,7 +137,7 @@ export default function PixPayment({ amount, orderId, email, cpf, name, onApprov
         <ol className="pix-steps">
           <li>Confirme o pedido abaixo</li>
           <li>Geramos o QR Code e o código copia e cola na hora</li>
-          <li>Pague pelo app do seu banco — esta tela avança sozinha</li>
+          <li>Pague pelo app do seu banco. Esta tela avança sozinha</li>
         </ol>
 
         <button type="button" className="pix-cta" onClick={() => void createPix()} disabled={creating}>
@@ -154,7 +154,7 @@ export default function PixPayment({ amount, orderId, email, cpf, name, onApprov
           )}
         </button>
 
-        {failed && <p className="pix-failed">Não conseguimos gerar o PIX agora. Seu pedido continua salvo — tente de novo em instantes.</p>}
+        {failed && <p className="pix-failed">Não conseguimos gerar o PIX agora. Seu pedido continua salvo, tente de novo em instantes.</p>}
 
         <p className="pix-note">
           <ShieldCheck size={13} /> Nada é cobrado até você pagar o PIX no app do seu banco.
@@ -220,7 +220,7 @@ export default function PixPayment({ amount, orderId, email, cpf, name, onApprov
       <ol className="pix-steps">
         <li>Abra o app do seu banco e escolha pagar com PIX</li>
         <li>Aponte para o QR Code ou use o código copia e cola</li>
-        <li>Confirme o pagamento — esta tela avança sozinha</li>
+        <li>Confirme o pagamento. Esta tela avança sozinha</li>
       </ol>
 
       {pix.qrCode && (
@@ -253,7 +253,7 @@ export default function PixPayment({ amount, orderId, email, cpf, name, onApprov
 
       <p className="pix-note">
         <ShieldCheck size={13} /> Pagamento processado pelo Mercado Pago. A confirmação chega pelo retorno oficial, não
-        pela sua palavra — por isso é seguro.
+        pela sua palavra, por isso é seguro.
       </p>
 
       <style jsx>{`

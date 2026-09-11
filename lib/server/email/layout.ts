@@ -88,7 +88,6 @@ export function itemsTable(items: Array<{ product_name?: string; quantity?: numb
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0 0;">${rows}${totalRow}</table>`;
 }
 
-/** O fluxo do e-mail acompanha a forma de recebimento, como na loja. */
 export function stepper(current: string, deliveryType?: string) {
   const steps: Array<[string, string]> =
     deliveryType === 'pickup'

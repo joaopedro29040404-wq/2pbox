@@ -103,7 +103,7 @@ export function SiteHeader({
 
       <header className={`sh-header ${sticky ? 'is-sticky' : ''} ${isAdmin ? 'is-admin' : ''}`}>
         <div className="sh-inner">
-          <Link href={isAdmin ? '/admin' : '/'} className="sh-brand" aria-label={isAdmin ? '2P Box — painel' : '2P Box — início'}>
+          <Link href={isAdmin ? '/admin' : '/'} className="sh-brand" aria-label={isAdmin ? '2P Box, painel' : '2P Box, início'}>
             <span className="sh-logo">
               <img src="/logo.pnh.png" alt="2P Box" width={112} height={70} />
             </span>

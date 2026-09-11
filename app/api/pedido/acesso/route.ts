@@ -40,8 +40,6 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Muitas tentativas. Aguarde alguns minutos e tente de novo.' }, { status: 429 });
       }
 
-      // O e-mail so e enviado quando ha pedido, mas a resposta e sempre igual:
-      // nao revelamos se o endereco comprou na loja.
       if (await hasOrders(email)) {
         await enqueueEmail({
           template: 'order_access_code',

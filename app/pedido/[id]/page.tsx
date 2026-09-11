@@ -298,7 +298,7 @@ function OrderPageContent() {
               </div>
               <div>
                 <dt>Pago em</dt>
-                <dd>{order.paid_at ? new Date(order.paid_at).toLocaleString('pt-BR') : '—'}</dd>
+                <dd>{order.paid_at ? new Date(order.paid_at).toLocaleString('pt-BR') : 'Não informado'}</dd>
               </div>
               <div>
                 <dt>Identificador</dt>
@@ -326,7 +326,7 @@ function OrderPageContent() {
               <MapPin size={18} />
               <h2>Recebimento</h2>
             </div>
-            <strong className="delivery-label">{order.delivery_type === 'pickup' ? 'Retirada na loja' : 'Entrega — frete pelo WhatsApp'}</strong>
+            <strong className="delivery-label">{order.delivery_type === 'pickup' ? 'Retirada na loja' : 'Entrega com frete pelo WhatsApp'}</strong>
             {address ? <address className="address">{address}</address> : null}
             <p className="muted">
               {order.delivery_type === 'pickup'

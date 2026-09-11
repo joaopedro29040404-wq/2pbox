@@ -13,7 +13,6 @@ const PAGE_SIZE = 200;
 
 type Identity = { email: string; source: 'session' | 'verified_code' };
 
-/** Sessao autenticada dispensa codigo; convidado precisa do cookie verificado. */
 async function resolveIdentity(): Promise<Identity | null> {
   const user = await getSessionUser().catch(() => null);
   if (user?.email) return { email: user.email.trim().toLowerCase(), source: 'session' };

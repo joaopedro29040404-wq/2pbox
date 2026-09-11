@@ -103,13 +103,13 @@ function formatAddress(address: OrderData['delivery_address']) {
   const a = address as Record<string, string>;
   const line1 = [a.street, a.number].filter(Boolean).join(', ');
   const line2 = [a.complement].filter(Boolean).join('');
-  const line3 = [a.neighborhood, [a.city, a.state].filter(Boolean).join('/')].filter(Boolean).join(' — ');
+  const line3 = [a.neighborhood, [a.city, a.state].filter(Boolean).join('/')].filter(Boolean).join(', ');
   const line4 = a.postal_code ? `CEP: ${a.postal_code}` : '';
   return [line1, line2, line3, line4].filter(Boolean).map(escapeHtml).join('<br />');
 }
 
 function deliveryLabel(order: OrderData) {
-  return order.delivery_type === 'pickup' ? 'Retirada na loja' : 'Entrega — frete pelo WhatsApp';
+  return order.delivery_type === 'pickup' ? 'Retirada na loja' : 'Entrega com frete pelo WhatsApp';
 }
 
 function billingBlock(order: OrderData) {
@@ -166,21 +166,21 @@ const templates: Record<EmailTemplateId, (data: TemplateData) => RenderedEmail> 
     const site = getSiteUrl();
     const link = String(data.resetUrl || `${site}/conta`);
     const html = renderEmail({
-      subject: 'Redefinir sua senha — 2P Box',
+      subject: 'Redefinir sua senha na 2P Box',
       preheader: 'Use o link para cadastrar uma nova senha de acesso.',
       eyebrow: 'SEGURANÇA DA CONTA',
       title: 'Redefinir sua senha',
       body: `${paragraph(`Olá, <strong>${escapeHtml(firstName(data.name))}</strong>. Recebemos um pedido para redefinir a senha da sua conta 2P Box.`)}
         ${paragraph('Clique no botão abaixo para cadastrar uma nova senha. O link é pessoal e expira em 1 hora.')}
         ${button('Criar nova senha', link)}
-        ${note('Se você não solicitou a redefinição, nenhuma ação é necessária — sua senha atual continua válida.', 'warn')}`,
+        ${note('Se você não solicitou a redefinição, nenhuma ação é necessária. Sua senha atual continua válida.', 'warn')}`,
     });
-    return { subject: 'Redefinir sua senha — 2P Box', html };
+    return { subject: 'Redefinir sua senha na 2P Box', html };
   },
 
   payment_received: (data) => {
     const order = (data.order || {}) as OrderData;
-    const subject = `Recebemos seu pagamento — pedido #${shortOrderId(order.id)}`;
+    const subject = `Recebemos seu pagamento do pedido #${shortOrderId(order.id)}`;
     const html = renderEmail({
       subject,
       preheader: 'Estamos confirmando o pagamento junto ao Mercado Pago.',
@@ -197,7 +197,7 @@ const templates: Record<EmailTemplateId, (data: TemplateData) => RenderedEmail> 
 
   payment_confirmed: (data) => {
     const order = (data.order || {}) as OrderData;
-    const subject = `Pagamento confirmado — pedido #${shortOrderId(order.id)}`;
+    const subject = `Pagamento confirmado do pedido #${shortOrderId(order.id)}`;
     const html = renderEmail({
       subject,
       preheader: 'Seu pagamento foi aprovado e o pedido já está em preparação.',
@@ -214,14 +214,14 @@ const templates: Record<EmailTemplateId, (data: TemplateData) => RenderedEmail> 
 
   payment_pending: (data) => {
     const order = (data.order || {}) as OrderData;
-    const subject = `Pagamento pendente — pedido #${shortOrderId(order.id)}`;
+    const subject = `Pagamento pendente do pedido #${shortOrderId(order.id)}`;
     const html = renderEmail({
       subject,
       preheader: 'Estamos aguardando a confirmação do pagamento.',
       eyebrow: 'PAGAMENTO PENDENTE',
       title: 'Aguardando confirmação',
       body: `${paragraph(`Olá, <strong>${escapeHtml(firstName(order.customer_name))}</strong>. O pagamento do pedido <strong>#${shortOrderId(order.id)}</strong> ainda não foi confirmado pelo Mercado Pago.`)}
-        ${note('Pagamentos por Pix e boleto podem levar alguns minutos para serem processados. Você não precisa fazer nada — assim que confirmar, avisamos por e-mail.', 'warn')}
+        ${note('Pagamentos por Pix e boleto podem levar alguns minutos para serem processados. Você não precisa fazer nada. Assim que confirmar, avisamos por e-mail.', 'warn')}
         ${stepper('pending', order.delivery_type)}
         ${orderSummary(order, data.items || [])}
         ${button('Ver status em tempo real', orderUrl(order))}`,
@@ -232,7 +232,7 @@ const templates: Record<EmailTemplateId, (data: TemplateData) => RenderedEmail> 
   payment_rejected: (data) => {
     const order = (data.order || {}) as OrderData;
     const site = getSiteUrl();
-    const subject = `Pagamento recusado — pedido #${shortOrderId(order.id)}`;
+    const subject = `Pagamento recusado do pedido #${shortOrderId(order.id)}`;
     const html = renderEmail({
       subject,
       preheader: 'O pagamento não foi aprovado. Você pode tentar novamente.',
@@ -250,7 +250,7 @@ const templates: Record<EmailTemplateId, (data: TemplateData) => RenderedEmail> 
   payment_cancelled: (data) => {
     const order = (data.order || {}) as OrderData;
     const site = getSiteUrl();
-    const subject = `Pagamento cancelado — pedido #${shortOrderId(order.id)}`;
+    const subject = `Pagamento cancelado do pedido #${shortOrderId(order.id)}`;
     const html = renderEmail({
       subject,
       preheader: 'O pagamento deste pedido foi cancelado.',
@@ -268,7 +268,7 @@ const templates: Record<EmailTemplateId, (data: TemplateData) => RenderedEmail> 
   order_status_updated: (data) => {
     const order = (data.order || {}) as OrderData;
     const status = String(data.status || order.status || 'pending');
-    const subject = `${orderStatusLabel(status)} — pedido #${shortOrderId(order.id)}`;
+    const subject = `${orderStatusLabel(status)}: pedido #${shortOrderId(order.id)}`;
     const html = renderEmail({
       subject,
       preheader: `Seu pedido mudou para: ${orderStatusLabel(status)}.`,
@@ -336,7 +336,7 @@ const templates: Record<EmailTemplateId, (data: TemplateData) => RenderedEmail> 
       eyebrow: 'SEU CARRINHO 2P BOX',
       title: 'Você esqueceu algo',
       body: `${paragraph(`Olá, <strong>${escapeHtml(firstName(data.name))}</strong>! Notamos que você deixou produtos no carrinho da 2P Box.`)}
-        ${paragraph('Eles continuam disponíveis — é só finalizar o pedido para garantir.')}
+        ${paragraph('Eles continuam disponíveis, é só finalizar o pedido para garantir.')}
         ${itemsTable(
           items.map((item: any) => ({ product_name: item.name || item.product_name, quantity: item.quantity, unit_price: item.price ?? item.unit_price })),
           data.total,

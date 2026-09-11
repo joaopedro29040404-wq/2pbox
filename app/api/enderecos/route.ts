@@ -4,8 +4,6 @@ import { isGeoAvailable, resolvePlace, suggestAddresses } from '@/lib/server/geo
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// A chave do Google fica no servidor: o browser consulta esta rota, nunca o
-// Google diretamente.
 export async function GET(request: Request) {
   if (!isGeoAvailable()) return NextResponse.json({ available: false, suggestions: [] });
 
@@ -22,7 +20,6 @@ export async function GET(request: Request) {
     const suggestions = await suggestAddresses(url.searchParams.get('q') || '', session);
     return NextResponse.json({ available: true, suggestions });
   } catch (error) {
-    // O detalhe do Google fica no log: a tela recebe uma mensagem propria.
     console.error('[enderecos] falha na busca:', error);
     return NextResponse.json(
       { available: true, error: 'Não foi possível buscar endereços agora. Tente de novo em instantes.', suggestions: [] },

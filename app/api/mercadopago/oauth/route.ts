@@ -28,8 +28,6 @@ export async function POST() {
   const state = generateState();
   const { verifier, challenge } = generatePkce();
   try {
-    // State e verifier vivem no Redis: sem eles o callback nao pode ser
-    // validado e a autorizacao ficaria vulneravel a CSRF.
     await strictSet(`mp-oauth:state:${state}`, `${admin.id}|${verifier}`, STATE_TTL_SECONDS);
   } catch (error) {
     console.error('[mp-oauth] Redis indisponível:', error);

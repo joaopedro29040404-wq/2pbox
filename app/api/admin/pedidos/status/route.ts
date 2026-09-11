@@ -17,7 +17,6 @@ const ALLOWED = new Set([
   'cancelled',
 ]);
 
-/** Estados que so existem apos a migracao 20260912_order_logistics_states.sql. */
 const NEW_STATES = new Set(['out_for_delivery', 'delivered']);
 
 export async function POST(request: Request) {
@@ -53,7 +52,6 @@ export async function POST(request: Request) {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
-      // Colunas de data ausentes: grava o essencial e segue.
       if (/column|PGRST204/i.test(message)) {
         await supabaseRest(`orders?id=eq.${orderId}`, {
           method: 'PATCH',

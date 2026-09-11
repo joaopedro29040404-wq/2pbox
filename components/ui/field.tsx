@@ -13,8 +13,6 @@ type BaseProps = {
   fullWidth?: boolean;
 };
 
-/** O texto de apoio vira tooltip para nao empurrar os campos vizinhos e
- *  desalinhar a grade do formulario. */
 function FieldInfo({ text }: { text: ReactNode }) {
   return (
     <span className="ui-field-info">
@@ -43,8 +41,6 @@ function FieldHead({ id, label, hint, optional }: { id?: string; label?: ReactNo
     </>
   );
 
-  // Sem id o campo e um grupo: o titulo precisa ser um legend filho direto do
-  // fieldset, senao deixa de nomear o grupo para leitores de tela.
   if (!id) return <legend className="ui-field-head">{content}</legend>;
 
   return (

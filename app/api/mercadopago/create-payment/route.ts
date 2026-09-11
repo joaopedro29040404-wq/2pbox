@@ -9,15 +9,37 @@ export const runtime = 'nodejs';
 
 const PIX_EXPIRATION_MINUTES = 35;
 
+const ACCOUNT_ERRORS: Array<{ match: RegExp; message: string }> = [
+  {
+    match: /without key enabled for QR|13253/i,
+    message: 'A loja ainda não cadastrou uma chave PIX no Mercado Pago, então o QR Code não pode ser gerado. Pague com cartão ou fale com a loja.',
+  },
+  {
+    match: /collector.*not.*allow|payment_method_id.*invalid|payment method.*not.*available/i,
+    message: 'Esta forma de pagamento não está habilitada na conta do Mercado Pago da loja.',
+  },
+];
+
+function describeFailure(result: any, status: number) {
+  const cause = Array.isArray(result?.cause) ? result.cause[0] : null;
+  const raw = [result?.message, cause?.description, result?.status_detail, cause?.code, `HTTP ${status}`]
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean);
+
+  const joined = raw.join(' | ');
+  const known = ACCOUNT_ERRORS.find((entry) => entry.match.test(joined));
+  if (known) return { detail: known.message, accountIssue: true };
+
+  const readable = raw.find((value) => /[a-zA-Z]{4}/.test(value)) || raw[0];
+  return { detail: readable, accountIssue: false };
+}
+
 function safeCause(cause: unknown) {
   if (!Array.isArray(cause)) return cause ?? null;
   return cause.map((item: any) => ({ code: item?.code ?? null, description: item?.description ?? null, data: item?.data ?? null }));
 }
 
 export async function POST(request: Request) {
-  // Com a conta do lojista conectada por OAuth, o pagamento e criado com o
-  // token dele e a comissao da plataforma vai no application_fee. Sem conexao,
-  // cai no token da propria plataforma e nao ha split.
   const sellerToken = await getSellerAccessToken().catch(() => null);
   const accessToken = sellerToken || getMercadoPagoAccessToken();
   const splitEnabled = Boolean(sellerToken);
@@ -28,8 +50,6 @@ export async function POST(request: Request) {
     const { formData, orderId, deviceId, additionalData, renew } = body;
     if (!formData || !orderId) return NextResponse.json({ error: 'Dados inválidos para criar o pagamento.' }, { status: 400 });
 
-    // O valor cobrado vem do pedido gravado, nunca do corpo da requisicao: o
-    // cliente nao decide quanto paga.
     const order = await readOrder(String(orderId));
     if (!order) return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
 
@@ -44,7 +64,6 @@ export async function POST(request: Request) {
     const token = String(formData.token || '').trim();
     const isPix = paymentMethodId === 'pix';
     if (!paymentMethodId) return NextResponse.json({ error: 'Método de pagamento não identificado.' }, { status: 400 });
-    // PIX nao passa por tokenizacao: nao ha dado de cartao para proteger.
     if (!isPix && !token) return NextResponse.json({ error: 'Token do cartão não foi gerado pelo Card Payment Brick.' }, { status: 400 });
 
     const rawPayerEmail = String(formData.payer?.email || formData.email || formData.cardholderEmail || '').trim().toLowerCase();
@@ -62,9 +81,6 @@ export async function POST(request: Request) {
     const cardholderName = String(formData.cardholderName || formData.card_holder_name || additionalData?.cardholderName || '').trim();
     const nameParts = cardholderName ? cardholderName.split(/\s+/).filter(Boolean) : [];
     const siteUrl = String(process.env.NEXT_PUBLIC_SITE_URL || 'https://2pbox.vercel.app').replace(/\/$/, '');
-    // O PIX de um pedido e sempre o mesmo QR: recarregar a tela nao pode gerar
-    // uma segunda cobranca. So um pedido explicito de renovacao (QR expirado)
-    // abre uma nova chave.
     const idempotencyKey = isPix && !renew ? `2pbox-pix-${String(orderId)}` : crypto.randomUUID();
     const normalizedDeviceId = String(deviceId || '').trim();
     const platformFee = splitEnabled ? calculatePlatformFee(amount) : 0;
@@ -102,14 +118,13 @@ export async function POST(request: Request) {
       const result = attempt.data as any;
       const mpRequestId = attempt.headers.get('x-request-id') || attempt.headers.get('x-correlation-id') || null;
       if (!response.ok) {
-        const cause = Array.isArray(result?.cause) ? result.cause[0] : null;
-        const rawDetail = result?.status_detail || cause?.code || cause?.description || result?.message || `HTTP ${response.status}`;
-        const unavailable = isMercadoPagoUnavailable(rawDetail);
+        const failure = describeFailure(result, response.status);
+        const unavailable = !failure.accountIssue && isMercadoPagoUnavailable(failure.detail);
         const detail = unavailable
           ? isPix
             ? 'O PIX do Mercado Pago está instável neste momento. Tente pagar com cartão ou refaça em alguns minutos.'
             : 'O Mercado Pago está instável neste momento. Tente novamente em alguns minutos.'
-          : rawDetail;
+          : failure.detail;
 
         return NextResponse.json(
           {
@@ -119,6 +134,7 @@ export async function POST(request: Request) {
             paymentMethodId,
             error: detail,
             providerUnavailable: unavailable,
+            accountIssue: failure.accountIssue,
             details: result,
             mpRequestId,
           },
@@ -181,8 +197,7 @@ export async function POST(request: Request) {
       mpRequestId: response.headers.get('x-request-id') || response.headers.get('x-correlation-id') || null,
     };
     if (!response.ok) {
-      const cause = Array.isArray(result?.cause) ? result.cause[0] : null;
-      const detail = result?.status_detail || cause?.code || cause?.description || result?.message || `HTTP ${response.status}`;
+      const detail = describeFailure(result, response.status).detail;
       return NextResponse.json({ id: null, ...diagnostics, status: 'rejected', statusDetail: detail, paymentMethodId, error: detail, details: result }, { status: response.status });
     }
 

@@ -44,8 +44,6 @@ export async function GET(request: Request) {
       }
     }
 
-    // Enquanto orders nao tiver as colunas de faturamento, completamos a
-    // resposta com os dados do proprio pagamento no Mercado Pago.
     if (order.payment_id && (!order.payment_method || !order.paid_at)) {
       const billing = await fetchPaymentBilling(String(order.payment_id)).catch(() => null);
       if (billing) {

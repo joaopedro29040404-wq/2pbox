@@ -37,7 +37,7 @@ export function formatAddress(address: Record<string, string> | string | null | 
   }
 
   const street = [address.street, address.number].filter(Boolean).join(', ');
-  const region = [address.neighborhood, [address.city, address.state].filter(Boolean).join('/')].filter(Boolean).join(' — ');
+  const region = [address.neighborhood, [address.city, address.state].filter(Boolean).join('/')].filter(Boolean).join(', ');
   return [street, address.complement, region, address.postal_code ? `CEP: ${address.postal_code}` : '']
     .filter(Boolean)
     .join('\n');

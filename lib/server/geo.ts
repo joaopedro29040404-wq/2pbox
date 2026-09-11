@@ -85,11 +85,6 @@ export async function resolvePlace(placeId: string, sessionToken?: string): Prom
 
 export type DistanceResult = { km: number; minutes: number | null; source: 'route' | 'straight-line' };
 
-/**
- * A distancia de rota e a que o motoboy percorre. Sem chave do Google, cai na
- * linha reta a partir das coordenadas, que subestima e por isso e declarada na
- * resposta.
- */
 export async function routeDistance(
   origin: { lat: number; lng: number },
   destination: { lat: number; lng: number },
@@ -106,7 +101,6 @@ export async function routeDistance(
       try {
         return JSON.parse(cached) as DistanceResult;
       } catch {
-        // Cache corrompido nao pode derrubar a cotacao.
       }
     }
   }

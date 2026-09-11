@@ -39,7 +39,6 @@ export async function PUT(request: Request) {
 
   const operations = {
     business_hours: hours,
-    // As colunas antigas seguem preenchidas para nada que ainda as le quebrar.
     business_days: days,
     opens_at: firstDay?.open ?? null,
     closes_at: firstDay?.close ?? null,
@@ -74,8 +73,6 @@ export async function PUT(request: Request) {
     return NextResponse.json({ ok: true, operationsSchema: true, operations: await readStoreOperations({ fresh: true }) });
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
-    // Antes da migration de operacoes so os campos antigos existem: o admin
-    // continua conseguindo salvar o essencial em vez de ver um erro seco.
     if (!/column|schema cache/i.test(message)) {
       return NextResponse.json({ error: message || 'Não foi possível salvar as configurações.' }, { status: 500 });
     }

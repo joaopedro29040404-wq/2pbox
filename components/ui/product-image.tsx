@@ -12,10 +12,6 @@ export type ProductImageProps = {
   padded?: boolean;
 };
 
-/**
- * As imagens do produto vivem em `images`; `image_url` e apenas a capa
- * derivada. Ler sempre por aqui evita telas divergindo sobre qual foto mostrar.
- */
 export function productGallery(product?: { image_url?: string | null; images?: string[] | null } | null) {
   const list = Array.isArray(product?.images) ? product!.images! : [];
   const all = [...list, product?.image_url].map((value) => String(value || '').trim()).filter(Boolean);
@@ -38,8 +34,6 @@ export function ProductImage({ src, alt, sizes = '(max-width:700px) 50vw, 300px'
     }
     setState('loading');
 
-    // Imagem em cache termina de carregar antes do React ligar o onLoad: sem
-    // esta checagem ela ficaria invisivel sob o shimmer para sempre.
     const node = imageRef.current;
     if (node?.complete) setState(node.naturalWidth > 0 ? 'ready' : 'failed');
   }, [source]);

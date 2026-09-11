@@ -58,8 +58,6 @@ async function readCycleOrders(start: Date, end: Date) {
     return legacy || [];
   }
 
-  // Um pedido remarcado para outro ciclo carrega delivery_cycle_start proprio e
-  // precisa aparecer no ciclo em que sera entregue, nao no da compra.
   const assigned = await query(`orders?select=${FIELDS}&delivery_cycle_start=eq.${start.toISOString()}&limit=400`);
   const merged = new Map<string, any>();
   for (const order of [...byWindow, ...(assigned || [])]) merged.set(String(order.id), order);
@@ -115,8 +113,6 @@ function parseReference(value: string | null) {
   if (!value) return new Date();
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return new Date();
-  // O parametro chega como inicio de ciclo: uma hora depois cai com folga
-  // dentro da propria janela.
   return new Date(parsed.getTime() + 60 * 60 * 1000);
 }
 

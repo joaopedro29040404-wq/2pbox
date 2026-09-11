@@ -191,7 +191,6 @@ export default function SettingsPage() {
     patch({ businessHours: { ...data.businessHours, [day]: { ...current, [field]: value } } });
   }
 
-  /** Repetir o intervalo do primeiro dia evita preencher sete vezes o mesmo horario. */
   function applyToAllDays() {
     if (!data) return;
     const reference = firstOpenRange(data.businessHours);
@@ -380,7 +379,7 @@ export default function SettingsPage() {
                   <dl className="mp-data">
                     <div>
                       <dt>Conta Mercado Pago</dt>
-                      <dd>{mp.mpUserId || '—'}</dd>
+                      <dd>{mp.mpUserId || 'Não informado'}</dd>
                     </div>
                     <div>
                       <dt>Ambiente</dt>
@@ -388,7 +387,7 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <dt>Conectado em</dt>
-                      <dd>{mp.connectedAt ? new Date(mp.connectedAt).toLocaleString('pt-BR') : '—'}</dd>
+                      <dd>{mp.connectedAt ? new Date(mp.connectedAt).toLocaleString('pt-BR') : 'Não informado'}</dd>
                     </div>
                     <div>
                       <dt>Autorização expira</dt>
@@ -562,7 +561,7 @@ export default function SettingsPage() {
 
                   {data.priceTable.length === 0 ? (
                     <p className="tier-empty">
-                      Nenhuma faixa configurada — a loja usa a tabela padrão ({DEFAULT_PRICE_TABLE.map((tier) => `até ${tier.upToKm}km R$ ${tier.price}`).join(' • ')}).
+                      Nenhuma faixa configurada. A loja usa a tabela padrão ({DEFAULT_PRICE_TABLE.map((tier) => `até ${tier.upToKm}km R$ ${tier.price}`).join(' • ')}).
                     </p>
                   ) : (
                     <ul className="tier-list">

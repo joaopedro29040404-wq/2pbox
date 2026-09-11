@@ -287,7 +287,7 @@ export default function AdminOrderDetail() {
                 </div>
                 <div>
                   <dt>Detalhe do gateway</dt>
-                  <dd>{order.payment_status_detail || '—'}</dd>
+                  <dd>{order.payment_status_detail || 'Não informado'}</dd>
                 </div>
                 <div>
                   <dt>ID do pagamento</dt>
@@ -295,7 +295,7 @@ export default function AdminOrderDetail() {
                 </div>
                 <div>
                   <dt>Pago em</dt>
-                  <dd>{order.paid_at ? new Date(order.paid_at).toLocaleString('pt-BR') : '—'}</dd>
+                  <dd>{order.paid_at ? new Date(order.paid_at).toLocaleString('pt-BR') : 'Não informado'}</dd>
                 </div>
               </dl>
             </section>
@@ -316,7 +316,7 @@ export default function AdminOrderDetail() {
                 <MapPin size={19} />
                 <h2>Endereço e recebimento</h2>
               </div>
-              <strong className="delivery-label">{order.delivery_type === 'pickup' ? 'Retirada na loja' : 'Entrega — frete pelo WhatsApp'}</strong>
+              <strong className="delivery-label">{order.delivery_type === 'pickup' ? 'Retirada na loja' : 'Entrega com frete pelo WhatsApp'}</strong>
               {address ? (
                 <address className="address">{address}</address>
               ) : (

@@ -75,6 +75,7 @@ function CheckoutForm() {
   const [feeBreakdown, setFeeBreakdown] = useState<{ fee: number; serviceFee: number; subtotal: number } | null>(null);
   const [paymentsOnline, setPaymentsOnline] = useState(true);
   const [mpPublicKey, setMpPublicKey] = useState('');
+  const [mpMethods, setMpMethods] = useState({ card: true, pix: true });
   const lastPaymentError = useRef({ message: '', at: 0 });
 
   useEffect(() => {
@@ -87,6 +88,11 @@ function CheckoutForm() {
       .then((data) => {
         setPaymentsOnline(data?.available !== false);
         setMpPublicKey(String(data?.publicKey || ''));
+        if (data?.methods) {
+          const methods = { card: data.methods.card !== false, pix: data.methods.pix === true };
+          setMpMethods(methods);
+          setPaymentMethod(methods.card ? 'card' : 'pix');
+        }
       })
       .catch(() => setPaymentsOnline(true));
 
@@ -154,13 +160,11 @@ function CheckoutForm() {
       setCity((current) => data.localidade || current);
       setState((current) => data.uf || current);
     } catch {
-      // Uma falha na consulta do CEP não impede o preenchimento manual.
     } finally {
       setLookingUpCep(false);
     }
   }
 
-  /** O Brick dispara o mesmo erro varias vezes: repetir o toast so polui a tela. */
   function reportPaymentError(message: string) {
     const now = Date.now();
     if (lastPaymentError.current.message === message && now - lastPaymentError.current.at < 8000) return;
@@ -169,7 +173,7 @@ function CheckoutForm() {
     const whatsapp = toWhatsAppNumber(storeWhatsApp);
     toast.error(
       'Não foi possível concluir o pagamento',
-      whatsapp ? `${message} Seu pedido está salvo — fale com a gente no WhatsApp para finalizar.` : message,
+      whatsapp ? `${message} Seu pedido está salvo. Fale com a gente no WhatsApp para finalizar.` : message,
     );
   }
 
@@ -249,7 +253,6 @@ function CheckoutForm() {
       };
 
       let result = await client.rpc('create_order_with_stock_v3', { ...args, p_delivery_type: deliveryType });
-      // Sem a migration das novas modalidades, o pedido entra pelo fluxo antigo.
       if (result.error && /create_order_with_stock_v3|schema cache|not find/i.test(result.error.message)) {
         result = await client.rpc('create_order_with_stock_v2', { ...args, p_delivery_type: type });
       }
@@ -285,7 +288,7 @@ function CheckoutForm() {
       if ((type === 'pickup' || provider === 'own') && !paymentsOnline) {
         setStatus('');
         toast.warning(
-          'Pedido registrado — falta combinar o pagamento',
+          'Pedido registrado, falta combinar o pagamento',
           'O pagamento online ainda não está disponível nesta loja. Fale com a gente no WhatsApp para concluir a compra.',
         );
         return;
@@ -295,7 +298,6 @@ function CheckoutForm() {
         const isOwnDelivery = provider === 'own' && type !== 'pickup';
         setStatus(isOwnDelivery ? 'Calculando a entrega...' : 'Confirmando o valor...');
 
-        // O total cobrado sai sempre do servidor, com frete e taxas da loja.
         const quote = await fetch('/api/pedido/entrega', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -320,11 +322,11 @@ function CheckoutForm() {
         return;
       }
 
-      const list = items.map((item) => `${item.quantity}x ${item.name} — ${money(item.price * item.quantity)}`).join('\n');
+      const list = items.map((item) => `${item.quantity}x ${item.name}: ${money(item.price * item.quantity)}`).join('\n');
       const addressText = address
-        ? `\n\nENDEREÇO PARA FRETE\n${address.street}, ${address.number}${address.complement ? ` — ${address.complement}` : ''}\n${address.neighborhood} — ${address.city}/${address.state}\nCEP: ${address.postal_code}`
+        ? `\n\nENDEREÇO PARA FRETE\n${address.street}, ${address.number}${address.complement ? `, ${address.complement}` : ''}\n${address.neighborhood}, ${address.city}/${address.state}\nCEP: ${address.postal_code}`
         : '';
-      const message = `Olá, 2P Box!\n\nQuero calcular o frete para o pedido ${id}.\n\nCliente: ${name}\nTelefone: ${phone}\nE-mail: ${email}\n\n${list}\n\nTotal dos produtos: ${money(total)}\nForma de recebimento: Entrega — calcular frete pelo WhatsApp${addressText}${notes ? `\n\nObservações: ${notes}` : ''}`;
+      const message = `Olá, 2P Box!\n\nQuero calcular o frete para o pedido ${id}.\n\nCliente: ${name}\nTelefone: ${phone}\nE-mail: ${email}\n\n${list}\n\nTotal dos produtos: ${money(total)}\nForma de recebimento: Entrega com cálculo de frete pelo WhatsApp${addressText}${notes ? `\n\nObservações: ${notes}` : ''}`;
 
       clear({ silent: true });
       setDone(true);
@@ -596,7 +598,7 @@ function CheckoutForm() {
 
               <p className="contact-copy">
                 O pagamento online ainda não está disponível nesta loja. Seu pedido{' '}
-                <strong>#{orderId.slice(0, 8).toUpperCase()}</strong> já está salvo e reservado — é só chamar a gente no
+                <strong>#{orderId.slice(0, 8).toUpperCase()}</strong> já está salvo e reservado. É só chamar a gente no
                 WhatsApp para combinar a forma de pagamento.
               </p>
 
@@ -654,8 +656,8 @@ function CheckoutForm() {
                 value={paymentMethod}
                 columns={2}
                 options={[
-                  { value: 'card', label: 'Cartão de crédito', description: 'Aprovação imediata', icon: <CreditCard size={19} /> },
-                  { value: 'pix', label: 'PIX', description: 'Confirmação em segundos', icon: <QrCode size={19} /> },
+                  ...(mpMethods.card ? [{ value: 'card', label: 'Cartão de crédito', description: 'Aprovação imediata', icon: <CreditCard size={19} /> }] : []),
+                  ...(mpMethods.pix ? [{ value: 'pix', label: 'PIX', description: 'Confirmação em segundos', icon: <QrCode size={19} /> }] : []),
                 ]}
                 onValueChange={(value) => setPaymentMethod(value as 'card' | 'pix')}
                 fullWidth

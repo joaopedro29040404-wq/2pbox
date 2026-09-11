@@ -164,7 +164,7 @@ export function AddressAutocomplete({ label = 'Endereço', hint, value, onChange
       {filled && value.lat != null && (
         <p className="addr-selected">
           <MapPin size={13} /> {value.line}
-          {value.number ? `, ${value.number}` : ''} — {value.district ? `${value.district}, ` : ''}
+          {value.number ? `, ${value.number}` : ''}. {value.district ? `${value.district}, ` : ''}
           {value.city}/{value.state}
         </p>
       )}

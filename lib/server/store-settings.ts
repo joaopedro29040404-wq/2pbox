@@ -60,8 +60,6 @@ async function fetchRow() {
   const primary = await supabaseRest(query(OPERATIONS_FIELDS)).catch(() => null);
   if (Array.isArray(primary)) return primary[0] || null;
 
-  // Antes da migration de operacoes as colunas novas nao existem: a loja segue
-  // funcionando com os campos antigos.
   const fallback = await supabaseRest(query(FALLBACK_FIELDS)).catch(() => null);
   return Array.isArray(fallback) ? fallback[0] || null : null;
 }
@@ -69,8 +67,6 @@ async function fetchRow() {
 function mapRow(row: any): StoreOperations {
   const data = row || {};
   const table = normalizePriceTable(data.delivery_price_table);
-  // Antes da migration so existe o intervalo unico: ele vira o mesmo horario
-  // em todos os dias marcados.
   const stored = normalizeBusinessHours(data.business_hours);
   const hours = Object.keys(stored).length
     ? stored

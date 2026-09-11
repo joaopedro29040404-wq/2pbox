@@ -84,12 +84,6 @@ function authHeaders() {
   return { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' };
 }
 
-/**
- * O endpoint de PIX do Mercado Pago devolve 500 "fill and validate error list:
- * timeout" de forma intermitente (medido: ~40% de sucesso com payload
- * identico). A chave de idempotencia e reaproveitada em todas as tentativas, o
- * que foi verificado nao duplicar o pagamento.
- */
 export async function postMercadoPagoWithRetry(
   path: string,
   headers: Record<string, string>,
@@ -101,8 +95,6 @@ export async function postMercadoPagoWithRetry(
   for (let attempt = 1; attempt < attempts && !last.ok; attempt += 1) {
     const message = String((last.data as any)?.message || '');
 
-    // Circuit breaker aberto e sinal de servico degradado: insistir mantem o
-    // breaker aberto e so gasta o tempo do cliente.
     if (/circuit breaker/i.test(message)) break;
 
     const transient = last.status >= 500 || /timeout|try again/i.test(message);
@@ -115,9 +107,36 @@ export async function postMercadoPagoWithRetry(
   return last;
 }
 
-/** Indisponibilidade do lado do Mercado Pago, nao erro do pedido. */
 export function isMercadoPagoUnavailable(message: unknown) {
   return /circuit breaker|internal error|internal_server_error|unavailable|timeout|try again/i.test(String(message || ''));
+}
+
+type MethodSupport = { card: boolean; pix: boolean };
+
+let methodsCache: { key: string; value: MethodSupport; at: number } | null = null;
+const METHODS_TTL_MS = 5 * 60 * 1000;
+
+export async function readSupportedMethods(accessToken: string): Promise<MethodSupport> {
+  const key = accessToken.slice(-12);
+  if (methodsCache && methodsCache.key === key && Date.now() - methodsCache.at < METHODS_TTL_MS) return methodsCache.value;
+
+  const fallback: MethodSupport = { card: true, pix: false };
+  if (!accessToken) return fallback;
+
+  const { ok, data } = await fetchJson<any>(`${API}/v1/payment_methods`, {
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+    cache: 'no-store',
+  }).catch(() => ({ ok: false, data: null }) as any);
+
+  if (!ok || !Array.isArray(data)) return fallback;
+
+  const active = (id: string) => data.some((method: any) => method?.id === id && String(method?.status || 'active') === 'active');
+  const value: MethodSupport = {
+    card: data.some((method: any) => String(method?.payment_type_id || '') === 'credit_card'),
+    pix: active('pix'),
+  };
+  methodsCache = { key, value, at: Date.now() };
+  return value;
 }
 
 export function isMercadoPagoConfigured() {
@@ -243,10 +262,6 @@ const billingMemo = new Map<string, { value: PaymentBilling; expiresAt: number }
 const BILLING_MEMO_MS = 60_000;
 const BILLING_CACHE_SECONDS = 60 * 30;
 
-/**
- * Dados de faturamento a partir do proprio Mercado Pago. Serve enquanto as
- * colunas payment_method/payment_type/paid_at nao existirem em orders.
- */
 export async function fetchPaymentBilling(paymentId: string): Promise<PaymentBilling | null> {
   const id = String(paymentId || '').trim();
   if (!id || !isMercadoPagoConfigured()) return null;

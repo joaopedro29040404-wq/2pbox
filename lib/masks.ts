@@ -69,10 +69,6 @@ export function isValidCep(value: string) {
   return onlyDigits(value).length === 8;
 }
 
-/**
- * Numero no formato aceito pelo wa.me: exige codigo do pais. Numero brasileiro
- * salvo apenas com DDD (10 ou 11 digitos) recebe o 55.
- */
 export function toWhatsAppNumber(value: string) {
   const digits = onlyDigits(value);
   if (!digits) return '';

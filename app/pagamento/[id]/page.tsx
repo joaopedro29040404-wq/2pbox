@@ -67,7 +67,6 @@ function PaymentResultContent() {
       setStatus(normalize(data.paymentStatus));
       setLastUpdate(new Date());
     } catch {
-      // Mantém o último status persistido quando a rede falha momentaneamente.
     } finally {
       setLoading(false);
       setChecking(false);
@@ -114,7 +113,7 @@ function PaymentResultContent() {
         <div className="payment-icon">
           <Icon size={36} />
         </div>
-        <p className="payment-eyebrow">PEDIDO {orderId ? orderId.slice(0, 8).toUpperCase() : '—'}</p>
+        <p className="payment-eyebrow">PEDIDO {orderId ? orderId.slice(0, 8).toUpperCase() : 'Não informado'}</p>
         <h1>{config.title}</h1>
         <p className="payment-text">{config.text}</p>
 

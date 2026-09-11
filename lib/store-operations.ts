@@ -53,10 +53,6 @@ export const DEFAULT_PRICE_TABLE: DeliveryTier[] = [
   { upToKm: 12, price: 26 },
 ];
 
-/**
- * O cliente paga o valor da faixa menos o subsidio da loja. Sem faixa que
- * cubra a distancia, a entrega propria nao atende o endereco.
- */
 export function quoteOwnDelivery(distanceKm: number, table: DeliveryTier[], subsidyPercent: number) {
   const tiers = table.length ? table : DEFAULT_PRICE_TABLE;
   const tier = tiers.find((item) => distanceKm <= item.upToKm);
@@ -77,10 +73,6 @@ export function isValidTime(value: unknown) {
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value ?? '').trim());
 }
 
-/**
- * Cada dia guarda o proprio intervalo, para a loja poder abrir sabado num
- * horario diferente do resto da semana. Dia ausente significa fechado.
- */
 export function normalizeBusinessHours(value: unknown): BusinessHours {
   const source = value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, any>) : {};
   const hours: BusinessHours = {};
@@ -98,7 +90,6 @@ export function normalizeBusinessHours(value: unknown): BusinessHours {
   return hours;
 }
 
-/** Converte a configuracao antiga (dias + um unico intervalo) para o formato por dia. */
 export function businessHoursFromLegacy(days: unknown, opensAt: unknown, closesAt: unknown): BusinessHours {
   const list = Array.isArray(days) ? days.map(String) : [];
   const open = isValidTime(opensAt) ? String(opensAt) : DEFAULT_DAY_HOURS.open;
@@ -133,7 +124,6 @@ function toMinutes(value?: string | null) {
   return hours * 60 + mins;
 }
 
-/** Agrupa dias seguidos com o mesmo intervalo: "Seg-Sex 09:00 as 18:00 - Sab 09:00 as 15:00". */
 export function describeHours(hours: BusinessHours) {
   const active = WEEK_DAYS.filter((day) => hours[day.value]);
   if (!active.length) return 'Fechado';
@@ -185,20 +175,13 @@ function offsetMinutes(date: Date) {
   return (asUtc - Math.floor(date.getTime() / 1000) * 1000) / 60000;
 }
 
-/** Instante UTC que corresponde ao horario de parede informado em Sao Paulo. */
 function zonedTimeToInstant(year: number, month: number, day: number, hour: number) {
   const naive = Date.UTC(year, month - 1, day, hour, 0, 0);
   let instant = new Date(naive - offsetMinutes(new Date(naive)) * 60000);
-  // Uma segunda passada acerta a borda de mudanca de offset.
   instant = new Date(naive - offsetMinutes(instant) * 60000);
   return instant;
 }
 
-/**
- * O dia operacional da entrega vira as 16h: um pedido feito as 15h59 sai no
- * ciclo do dia; as 16h01 entra no ciclo seguinte. O calculo e sempre no fuso da
- * loja, para o painel nao trocar de ciclo por causa do fuso do servidor.
- */
 export function cycleStartFor(date: Date, cycleHour = 16) {
   const parts = zonedParts(date);
   const day = parts.hour < cycleHour ? shiftDay(parts, -1) : parts;

@@ -28,8 +28,6 @@ export async function POST(request: Request) {
   const order = await readOrder(orderId);
   if (!order) return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
 
-  // Sem a conferencia do e-mail qualquer um poderia reconfigurar a entrega de
-  // um pedido alheio ainda em aberto.
   const orderEmail = String(order.customer_email || '').trim().toLowerCase();
   if (!email || !orderEmail || email !== orderEmail) {
     return NextResponse.json({ error: 'Não foi possível confirmar o pedido.' }, { status: 403 });
@@ -103,7 +101,6 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : '';
     if (!/column|PGRST204|schema cache|orders_delivery_type/i.test(message)) throw error;
 
-    // Sem as migrations de operacao, ao menos o total cobrado fica correto.
     await patch(orderId, { total, updated_at: new Date().toISOString() });
     return NextResponse.json({
       total,

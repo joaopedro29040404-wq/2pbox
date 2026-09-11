@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
-// OpenRouter Free escolhe automaticamente um modelo gratuito compatível com visão.
-// A função é somente analisar a foto e gerar texto; nenhuma imagem é criada ou editada.
 const MODEL = 'openrouter/free';
 const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 

@@ -39,7 +39,6 @@ export type ConnectionStatus = {
   commissionPercent: number;
 };
 
-/** PKCE S256: o verifier fica no Redis e o challenge vai na URL. */
 export function generatePkce() {
   const verifier = randomBytes(48).toString('base64url');
   const challenge = createHash('sha256').update(verifier).digest('base64url');
@@ -89,7 +88,6 @@ function expiresAtFrom(expiresIn: unknown) {
   return new Date(Date.now() + seconds * 1000).toISOString();
 }
 
-/** Troca o `code` do callback pelos tokens do lojista e persiste a conexao. */
 export async function exchangeCodeForTokens(code: string, codeVerifier?: string) {
   const { ok, data } = await fetchJson(TOKEN_URL, {
     method: 'POST',
@@ -160,10 +158,6 @@ async function refresh(connection: Connection) {
   return String(data.access_token);
 }
 
-/**
- * Token do lojista pronto para uso, renovado quando esta perto de expirar.
- * Devolve null quando a loja ainda nao conectou a conta.
- */
 export async function getSellerUserId(): Promise<string | null> {
   const connection = await readConnection();
   return connection?.mp_user_id ?? null;
@@ -203,7 +197,6 @@ export async function disconnect() {
   await supabaseRest(`store_mercadopago?id=eq.${connection.id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
 }
 
-/** Comissao da plataforma sobre o valor bruto, arredondada em centavos. */
 export function calculatePlatformFee(amount: number) {
   const gross = Number(amount || 0);
   if (!Number.isFinite(gross) || gross <= 0) return 0;

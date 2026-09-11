@@ -30,7 +30,6 @@ const DELIVERY_STEPS: Step[] = [
   { key: 'delivered', label: 'Entregue', hint: 'Entrega concluída', icon: Truck },
 ];
 
-/** O fluxo depende da forma de recebimento: retirada termina na loja, entrega no cliente. */
 export function stepsFor(deliveryType?: DeliveryType) {
   return deliveryType === 'pickup' ? PICKUP_STEPS : DELIVERY_STEPS;
 }

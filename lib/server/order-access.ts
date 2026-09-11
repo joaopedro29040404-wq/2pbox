@@ -35,10 +35,6 @@ function hashCode(email: string, code: string) {
 
 export type RequestOutcome = { ok: true; code: string } | { ok: false; reason: 'rate_limited' };
 
-/**
- * Gera o codigo de acesso. Rate limit por e-mail e por IP; sem Redis a chamada
- * lanca, para nunca liberar consulta de pedido sem verificacao.
- */
 export async function issueAccessCode(rawEmail: string, ip: string): Promise<RequestOutcome> {
   const email = normalizeEmail(rawEmail);
 

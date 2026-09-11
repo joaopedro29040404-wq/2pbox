@@ -1,26 +1,26 @@
 'use client';
 
 import { CardPayment, initMercadoPago } from '@mercadopago/sdk-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { InlineLoader } from '@/components/ui/loader';
 
 type PaymentResult = { id?: string | number; status?: string; statusDetail?: string; paymentMethodId?: string; mercadoPagoOrderId?: string | null; mercadoPagoPaymentId?: string | null; orderStatus?: string | null; orderStatusDetail?: string | null; paymentStatus?: string | null; paymentStatusDetail?: string | null; message?: string | null; cause?: unknown; httpStatus?: number | null };
 type Props = { amount: number; orderId: string; email: string; cpf?: string; publicKey: string; onResult: (result: PaymentResult) => void; onError: (message: string) => void };
 declare global { interface Window { MP_DEVICE_SESSION_ID?: string } }
 
-// A chave vem do lojista conectado, nao de uma variavel fixa: e ela que precisa
-// combinar com o token que cobra, senao o cartao e tokenizado num ambiente e
-// cobrado em outro.
 let initialized = '';
 
 export default function PaymentBrick({ amount, orderId, email, cpf, publicKey, onResult, onError }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [ready, setReady] = useState(false);
+  const errorHandler = useRef(onError);
+  errorHandler.current = onError;
 
   useEffect(() => {
     const key = String(publicKey || '').trim();
     if (!key) {
-      onError('A chave pública do Mercado Pago ainda não foi configurada nesta loja.');
+      errorHandler.current('A chave pública do Mercado Pago ainda não foi configurada nesta loja.');
+      setReady(false);
       return;
     }
     if (initialized !== key) {
@@ -28,12 +28,10 @@ export default function PaymentBrick({ amount, orderId, email, cpf, publicKey, o
       initialized = key;
     }
     setReady(true);
-  }, [publicKey, onError]);
+  }, [publicKey]);
 
   const payerEmail = email.trim().toLowerCase();
   const payerCpf = (cpf || '').replace(/\D/g, '');
-  // O e-mail informado em "Seus dados" alimenta o Brick, para o cliente nao
-  // digitar novamente, e segue para o pagamento no Mercado Pago.
   const payer = {
     ...(payerEmail ? { email: payerEmail } : {}),
     ...(payerCpf.length === 11 ? { identification: { type: 'CPF', number: payerCpf } } : {}),
@@ -50,7 +48,6 @@ export default function PaymentBrick({ amount, orderId, email, cpf, publicKey, o
     window.location.replace(`/pagamento/${encodeURIComponent(orderId)}?${query.toString()}`);
   };
 
-  // O Brick so pode montar depois do initMercadoPago, senao usa a chave errada.
   if (!ready) {
     return (
       <div className="payment-brick-wrap">

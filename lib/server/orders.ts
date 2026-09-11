@@ -54,7 +54,6 @@ export async function readOrderHistory(orderId: string) {
   return Array.isArray(rows) ? rows : [];
 }
 
-/** Registra o rateio no pedido. Tolera a ausencia das colunas antes da migracao. */
 export async function recordSplit(
   orderId: string,
   split: { platformFee: number; sellerAmount: number; mpSellerUserId?: string | null },

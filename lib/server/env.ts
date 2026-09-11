@@ -31,13 +31,6 @@ export function getMercadoPagoWebhookSecret() {
   return read('MERCADOPAGO_WEBHOOK_SECRET');
 }
 
-/**
- * Qual API do Mercado Pago usar para criar pagamentos.
- * 'payments' = /v1/payments (application_fee, aceita credencial de teste)
- * 'orders'   = /v1/orders   (marketplace_fee, recusa credencial de teste)
- * A escolha e explicita de proposito: inferir pelo prefixo do token misturava
- * ambiente com versao de API e levava a producao para um caminho nao testado.
- */
 export function getMercadoPagoApi(): 'payments' | 'orders' {
   return read('MERCADOPAGO_API').toLowerCase() === 'orders' ? 'orders' : 'payments';
 }
@@ -54,7 +47,6 @@ export function getMercadoPagoOAuthRedirectUri() {
   return read('MERCADOPAGO_OAUTH_REDIRECT_URI') || `${getSiteUrl()}/api/mercadopago/oauth/callback`;
 }
 
-/** Comissao da plataforma sobre o valor bruto da venda, em porcentagem. */
 export function getPlatformCommissionPercent() {
   const value = Number(read('PLATFORM_COMMISSION_PERCENT') || '6');
   if (!Number.isFinite(value) || value < 0 || value >= 100) return 6;
