@@ -10,7 +10,9 @@
     "worker": "node dist-worker/worker/index.js",
     "worker:dev": "tsx worker/index.ts",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "smoke:mp": "node scripts/smoke-mercadopago.mjs",
+    "smoke:checkout": "node scripts/smoke-checkout.mjs"
   },
   "dependencies": {
     "@mercadopago/sdk-react": "1.0.7",

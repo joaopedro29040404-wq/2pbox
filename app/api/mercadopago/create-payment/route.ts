@@ -20,6 +20,12 @@ const ACCOUNT_ERRORS: Array<{ match: RegExp; message: string }> = [
   },
 ];
 
+function rejectsApplicationFee(result: any) {
+  const cause = Array.isArray(result?.cause) ? result.cause : [];
+  const text = [result?.message, ...cause.map((item: any) => `${item?.code} ${item?.description}`)].join(' ');
+  return /application_fee|2059/i.test(text);
+}
+
 function describeFailure(result: any, status: number) {
   const cause = Array.isArray(result?.cause) ? result.cause[0] : null;
   const raw = [result?.message, cause?.description, result?.status_detail, cause?.code, `HTTP ${status}`]
@@ -113,7 +119,17 @@ export async function POST(request: Request) {
         ...(isPix ? { date_of_expiration: new Date(Date.now() + PIX_EXPIRATION_MINUTES * 60_000).toISOString() } : {}),
         ...(splitEnabled ? { application_fee: platformFee } : {}),
       };
-      const attempt = await postMercadoPagoWithRetry('/v1/payments', commonHeaders, JSON.stringify(paymentBody), isPix ? 4 : 2);
+
+      let attempt = await postMercadoPagoWithRetry('/v1/payments', commonHeaders, JSON.stringify(paymentBody), isPix ? 4 : 2);
+      let splitApplied = splitEnabled;
+
+      if (!attempt.ok && splitEnabled && rejectsApplicationFee(attempt.data)) {
+        const { application_fee: _discarded, ...withoutFee } = paymentBody as Record<string, unknown>;
+        console.error('[create-payment] Mercado Pago recusou application_fee, cobrando sem split:', orderId);
+        attempt = await postMercadoPagoWithRetry('/v1/payments', commonHeaders, JSON.stringify(withoutFee), isPix ? 4 : 2);
+        splitApplied = false;
+      }
+
       const response = { ok: attempt.ok, status: attempt.status, headers: attempt.headers };
       const result = attempt.data as any;
       const mpRequestId = attempt.headers.get('x-request-id') || attempt.headers.get('x-correlation-id') || null;
@@ -145,7 +161,7 @@ export async function POST(request: Request) {
       let synced;
       try {
         synced = await syncOrderPayment(String(orderId), normalizedResult);
-        if (splitEnabled) {
+        if (splitApplied) {
           await recordSplit(String(orderId), {
             platformFee,
             sellerAmount: Math.round((amount - platformFee) * 100) / 100,
