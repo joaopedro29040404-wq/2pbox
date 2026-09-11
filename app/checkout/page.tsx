@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -73,11 +73,22 @@ function CheckoutForm() {
   const [quoting, setQuoting] = useState(false);
   const [payableTotal, setPayableTotal] = useState<number | null>(null);
   const [feeBreakdown, setFeeBreakdown] = useState<{ fee: number; serviceFee: number; subtotal: number } | null>(null);
+  const [paymentsOnline, setPaymentsOnline] = useState(true);
+  const [mpPublicKey, setMpPublicKey] = useState('');
+  const lastPaymentError = useRef({ message: '', at: 0 });
 
   useEffect(() => {
     setType(searchParams.get('entrega') === 'shipping' ? 'whatsapp_shipping' : 'pickup');
     const client = supabase;
     if (!client) return;
+
+    fetch('/api/mercadopago/disponibilidade', { cache: 'no-store' })
+      .then((response) => response.json())
+      .then((data) => {
+        setPaymentsOnline(data?.available !== false);
+        setMpPublicKey(String(data?.publicKey || ''));
+      })
+      .catch(() => setPaymentsOnline(true));
 
     Promise.all([client.auth.getUser(), getStoreSettings()]).then(([authResult, settings]) => {
       const currentUser = authResult.data.user as AuthUser | null;
@@ -147,6 +158,19 @@ function CheckoutForm() {
     } finally {
       setLookingUpCep(false);
     }
+  }
+
+  /** O Brick dispara o mesmo erro varias vezes: repetir o toast so polui a tela. */
+  function reportPaymentError(message: string) {
+    const now = Date.now();
+    if (lastPaymentError.current.message === message && now - lastPaymentError.current.at < 8000) return;
+    lastPaymentError.current = { message, at: now };
+
+    const whatsapp = toWhatsAppNumber(storeWhatsApp);
+    toast.error(
+      'Não foi possível concluir o pagamento',
+      whatsapp ? `${message} Seu pedido está salvo — fale com a gente no WhatsApp para finalizar.` : message,
+    );
   }
 
   function applyGeoAddress(value: AddressValue) {
@@ -258,6 +282,15 @@ function CheckoutForm() {
         }
       }
 
+      if ((type === 'pickup' || provider === 'own') && !paymentsOnline) {
+        setStatus('');
+        toast.warning(
+          'Pedido registrado — falta combinar o pagamento',
+          'O pagamento online ainda não está disponível nesta loja. Fale com a gente no WhatsApp para concluir a compra.',
+        );
+        return;
+      }
+
       if (type === 'pickup' || provider === 'own') {
         const isOwnDelivery = provider === 'own' && type !== 'pickup';
         setStatus(isOwnDelivery ? 'Calculando a entrega...' : 'Confirmando o valor...');
@@ -307,7 +340,8 @@ function CheckoutForm() {
     }
   }
 
-  const payableOnline = type === 'pickup' || provider === 'own';
+  const payableOnline = (type === 'pickup' || provider === 'own') && paymentsOnline;
+  const awaitingContact = (type === 'pickup' || provider === 'own') && !paymentsOnline && Boolean(orderId);
   const paymentReady = payableOnline && Boolean(orderId);
   const chargeTotal = payableTotal ?? total;
 
@@ -550,6 +584,35 @@ function CheckoutForm() {
             <TextAreaField placeholder="Escreva uma observação, se necessário..." value={notes} onValueChange={setNotes} fullWidth />
           </div>
 
+          {awaitingContact && (
+            <div className="checkout-section contact-section">
+              <div className="checkout-section-heading">
+                <MessageCircle size={20} />
+                <div>
+                  <h2>Pedido registrado</h2>
+                  <p>Falta combinar o pagamento com a loja</p>
+                </div>
+              </div>
+
+              <p className="contact-copy">
+                O pagamento online ainda não está disponível nesta loja. Seu pedido{' '}
+                <strong>#{orderId.slice(0, 8).toUpperCase()}</strong> já está salvo e reservado — é só chamar a gente no
+                WhatsApp para combinar a forma de pagamento.
+              </p>
+
+              {toWhatsAppNumber(storeWhatsApp) && (
+                <a
+                  className="primary contact-button"
+                  href={`https://wa.me/${toWhatsAppNumber(storeWhatsApp)}?text=${encodeURIComponent(`Olá, 2P Box! Quero combinar o pagamento do pedido ${orderId}.`)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <MessageCircle size={17} /> Falar no WhatsApp
+                </a>
+              )}
+            </div>
+          )}
+
           {paymentReady && feeBreakdown && (
             <div className="checkout-charge">
               <div>
@@ -602,11 +665,12 @@ function CheckoutForm() {
                 {paymentMethod === 'card' ? (
                   <PaymentBrick
                     amount={chargeTotal}
+                    publicKey={mpPublicKey}
                     orderId={orderId}
                     email={email}
                     cpf={cpf}
                     onResult={() => clear({ silent: true })}
-                    onError={(message) => toast.error('Problema no pagamento', message)}
+                    onError={reportPaymentError}
                   />
                 ) : (
                   <PixPayment
@@ -619,7 +683,7 @@ function CheckoutForm() {
                       clear({ silent: true });
                       window.location.assign(`/pagamento/${encodeURIComponent(orderId)}`);
                     }}
-                    onError={(message) => toast.error('Problema no PIX', message)}
+                    onError={reportPaymentError}
                   />
                 )}
               </div>
@@ -681,6 +745,10 @@ function CheckoutForm() {
         .checkout-submit:hover:not(:disabled){background:#111;color:#fff}
         .checkout-submit:disabled{opacity:.55;cursor:not-allowed}
         .payment-section{overflow:visible}
+        .contact-copy{margin:0 0 18px;color:#4d4d4d;font-size:13.5px;line-height:1.65}
+        .contact-button{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:52px;padding:0 24px;border:0;border-radius:10px;background:#ffc400;color:#111;text-decoration:none;font:900 12px Inter,Arial,sans-serif;letter-spacing:.04em;text-transform:uppercase}
+        .contact-button:hover{background:#111;color:#fff}
+        @media(max-width:600px){.contact-button{width:100%}}
         .checkout-charge{display:grid;gap:9px;padding:22px 28px;border-bottom:1px solid #e9e9e9;background:#fafaf7}
         .checkout-charge>div{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
         .checkout-charge span{font:800 10px Inter,Arial,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#777}

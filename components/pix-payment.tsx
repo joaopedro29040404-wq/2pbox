@@ -20,6 +20,7 @@ type Props = {
 
 const POLL_MS = 4000;
 
+
 export default function PixPayment({ amount, orderId, email, cpf, name, onApproved, onError }: Props) {
   const [pix, setPix] = useState<PixData | null>(null);
   const [creating, setCreating] = useState(false);
@@ -120,6 +121,9 @@ export default function PixPayment({ amount, orderId, email, cpf, name, onApprov
     }
   }
 
+  const minutes = remaining !== null ? Math.floor(remaining / 60) : null;
+  const seconds = remaining !== null ? remaining % 60 : null;
+
   // O QR so nasce depois que o cliente confirma: o pedido ja existe, o que
   // falta e o pagamento, e a tela precisa deixar essa separacao clara.
   if (!pix) {
@@ -155,12 +159,42 @@ export default function PixPayment({ amount, orderId, email, cpf, name, onApprov
         <p className="pix-note">
           <ShieldCheck size={13} /> Nada é cobrado até você pagar o PIX no app do seu banco.
         </p>
+        <style jsx>{`
+        .pix-wrap,.pix-confirm{display:grid;gap:18px}
+        .pix-cta{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:54px;border:0;border-radius:10px;background:#ffc400;color:#111;font:900 12.5px Inter,Arial,sans-serif;letter-spacing:.04em;text-transform:uppercase;cursor:pointer}
+        .pix-cta:hover:not(:disabled){background:#111;color:#fff}
+        .pix-cta:disabled{opacity:.75;cursor:wait}
+        .pix-failed{margin:0;padding:12px 14px;background:#fff2f2;border:1px solid #f0cccc;border-radius:10px;color:#8f2626;font-size:12px;line-height:1.5}
+        .pix-placed{display:flex;align-items:flex-start;gap:11px;padding:14px 15px;background:#effaf1;border:1px solid #bfe6c8;border-radius:11px}
+        .pix-placed svg{flex:none;margin-top:1px;color:#276b36}
+        .pix-placed>div{display:grid;gap:3px}
+        .pix-placed strong{font:800 12.5px Inter,Arial,sans-serif;color:#1f5b2c}
+        .pix-placed span{font-size:11.5px;line-height:1.5;color:#3f7a4d}
+        .pix-expired button{display:inline-flex;align-items:center;gap:7px;min-height:44px;padding:0 18px;border:1px solid #dcdcd6;border-radius:9px;background:#fff;font:800 12px Inter,Arial,sans-serif;cursor:pointer}
+        .pix-total{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding-bottom:14px;border-bottom:1px solid #eee}
+        .pix-total span{font:800 10px Inter,Arial,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#777}
+        .pix-total strong{font:900 26px 'Barlow Condensed',Inter,sans-serif}
+        .pix-qr{display:grid;place-items:center;padding:18px;background:#fff;border:1px solid #e6e6e2;border-radius:14px}
+        .pix-qr img{width:min(240px,100%);height:auto;display:block;image-rendering:pixelated}
+        .pix-steps{margin:0;padding:0 0 0 20px;display:grid;gap:7px;color:#5d5d5d;font-size:12.5px;line-height:1.5}
+        .pix-code{display:grid;gap:10px}
+        .pix-code code{display:block;padding:12px 13px;background:#f7f7f5;border:1px solid #e6e6e2;border-radius:9px;font:400 11px/1.5 ui-monospace,Menlo,monospace;overflow-wrap:anywhere;max-height:88px;overflow-y:auto}
+        .pix-code button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;border:0;border-radius:9px;background:#ffc400;color:#111;font:900 12px Inter,Arial,sans-serif;cursor:pointer}
+        .pix-code button:hover{background:#111;color:#fff}
+        .pix-code button.is-copied{background:#111;color:#fff}
+        .pix-status{display:flex;align-items:center;gap:9px;padding:13px 15px;background:#fafaf7;border:1px solid #e8e8df;border-radius:10px}
+        .pix-status strong{font:800 11px Inter,Arial,sans-serif}
+        .pix-status small{margin-left:auto;color:#8a8a86;font-size:10px;white-space:nowrap}
+        .pix-dot{width:8px;height:8px;flex:none;border-radius:50%;background:#d3d3d0}
+        .pix-dot.is-active{background:#ffc400}
+        .pix-expired{display:grid;gap:10px;padding:14px 15px;background:#fff4f4;border:1px solid #f0cccc;border-radius:10px;text-align:center}
+        .pix-expired p{margin:0;font:700 12px Inter,Arial,sans-serif;color:#8f2626}
+        .pix-note{display:flex;align-items:flex-start;gap:6px;margin:0;color:#8a8a86;font-size:10px;line-height:1.5}
+        @media(max-width:600px){.pix-total strong{font-size:23px}.pix-qr{padding:12px}}
+      `}</style>
       </div>
     );
   }
-
-  const minutes = remaining !== null ? Math.floor(remaining / 60) : null;
-  const seconds = remaining !== null ? remaining % 60 : null;
 
   return (
     <div className="pix-wrap">

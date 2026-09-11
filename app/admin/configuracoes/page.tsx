@@ -82,6 +82,13 @@ const SECTIONS = [
 
 type SectionKey = (typeof SECTIONS)[number]['key'];
 
+const MP_HEALTH_MESSAGES: Record<string, string> = {
+  'mercadopago-desconectado': 'Nenhuma conta Mercado Pago conectada: o checkout está oferecendo contato por WhatsApp no lugar do pagamento online.',
+  'public-key-ausente': 'Falta a NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY: sem ela o formulário de cartão não carrega.',
+  'ambiente-divergente':
+    'A public key do navegador e o token que cobra estão em ambientes diferentes (uma de teste, o outro de produção). O cartão é tokenizado num ambiente e cobrado no outro, então todo pagamento falha. Use a public key do mesmo ambiente da conta conectada.',
+};
+
 const CYCLE_HOURS = Array.from({ length: 24 }, (_, hour) => ({
   value: String(hour),
   label: `${String(hour).padStart(2, '0')}:00`,
@@ -98,12 +105,17 @@ export default function SettingsPage() {
   const [manualAddress, setManualAddress] = useState(false);
   const [mp, setMp] = useState<MpStatus | null>(null);
   const [mpBusy, setMpBusy] = useState(false);
+  const [mpHealth, setMpHealth] = useState<{ available: boolean; reason: string | null } | null>(null);
   const toast = useToast();
 
   const loadMp = useCallback(async () => {
-    const response = await fetch('/api/mercadopago/oauth', { cache: 'no-store' });
-    if (!response.ok) return;
-    setMp((await response.json()) as MpStatus);
+    const [status, health] = await Promise.all([
+      fetch('/api/mercadopago/oauth', { cache: 'no-store' }),
+      fetch('/api/mercadopago/disponibilidade', { cache: 'no-store' }),
+    ]);
+    if (health.ok) setMpHealth(await health.json());
+    if (!status.ok) return;
+    setMp((await status.json()) as MpStatus);
   }, []);
 
   useEffect(() => {
@@ -350,6 +362,13 @@ export default function SettingsPage() {
             </div>
 
             <div className="mp-body">
+              {mpHealth && !mpHealth.available && (
+                <div className="mp-warning">
+                  <ShieldAlert size={17} />
+                  <span>{MP_HEALTH_MESSAGES[mpHealth.reason || ''] || 'O pagamento online está indisponível para os clientes.'}</span>
+                </div>
+              )}
+
               <p className="mp-copy">
                 Conecte a conta Mercado Pago da loja. O dinheiro cai direto na conta do lojista e a plataforma retém
                 automaticamente <strong>{mp?.commissionPercent ?? 6}%</strong> de cada venda, sem passar por outra conta.

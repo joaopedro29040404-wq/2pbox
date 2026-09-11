@@ -2,17 +2,33 @@
 
 import { CardPayment, initMercadoPago } from '@mercadopago/sdk-react';
 import { useEffect, useState } from 'react';
+import { InlineLoader } from '@/components/ui/loader';
 
 type PaymentResult = { id?: string | number; status?: string; statusDetail?: string; paymentMethodId?: string; mercadoPagoOrderId?: string | null; mercadoPagoPaymentId?: string | null; orderStatus?: string | null; orderStatusDetail?: string | null; paymentStatus?: string | null; paymentStatusDetail?: string | null; message?: string | null; cause?: unknown; httpStatus?: number | null };
-type Props = { amount: number; orderId: string; email: string; cpf?: string; onResult: (result: PaymentResult) => void; onError: (message: string) => void };
+type Props = { amount: number; orderId: string; email: string; cpf?: string; publicKey: string; onResult: (result: PaymentResult) => void; onError: (message: string) => void };
 declare global { interface Window { MP_DEVICE_SESSION_ID?: string } }
 
-const publicKey = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY || '';
-if (publicKey) initMercadoPago(publicKey, { locale: 'pt-BR' });
+// A chave vem do lojista conectado, nao de uma variavel fixa: e ela que precisa
+// combinar com o token que cobra, senao o cartao e tokenizado num ambiente e
+// cobrado em outro.
+let initialized = '';
 
-export default function PaymentBrick({ amount, orderId, email, cpf, onResult, onError }: Props) {
+export default function PaymentBrick({ amount, orderId, email, cpf, publicKey, onResult, onError }: Props) {
   const [submitting, setSubmitting] = useState(false);
-  useEffect(() => { if (!publicKey) onError('A chave pública do Mercado Pago ainda não foi configurada na Vercel.'); }, [onError]);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const key = String(publicKey || '').trim();
+    if (!key) {
+      onError('A chave pública do Mercado Pago ainda não foi configurada nesta loja.');
+      return;
+    }
+    if (initialized !== key) {
+      initMercadoPago(key, { locale: 'pt-BR' });
+      initialized = key;
+    }
+    setReady(true);
+  }, [publicKey, onError]);
 
   const payerEmail = email.trim().toLowerCase();
   const payerCpf = (cpf || '').replace(/\D/g, '');
@@ -33,6 +49,15 @@ export default function PaymentBrick({ amount, orderId, email, cpf, onResult, on
     if (paymentResult.orderStatus) query.set('orderStatus', String(paymentResult.orderStatus));
     window.location.replace(`/pagamento/${encodeURIComponent(orderId)}?${query.toString()}`);
   };
+
+  // O Brick so pode montar depois do initMercadoPago, senao usa a chave errada.
+  if (!ready) {
+    return (
+      <div className="payment-brick-wrap">
+        <InlineLoader label="Preparando o pagamento seguro..." />
+      </div>
+    );
+  }
 
   return <div className="payment-brick-wrap">
     <CardPayment

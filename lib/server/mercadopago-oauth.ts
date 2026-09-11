@@ -33,6 +33,7 @@ export type ConnectionStatus = {
   nickname: string | null;
   email: string | null;
   liveMode: boolean;
+  publicKey: string | null;
   expiresAt: string | null;
   connectedAt: string | null;
   commissionPercent: number;
@@ -189,6 +190,7 @@ export async function getConnectionStatus(): Promise<ConnectionStatus> {
     nickname: connection?.nickname ?? null,
     email: connection?.email ?? null,
     liveMode: Boolean(connection?.live_mode),
+    publicKey: connection?.public_key ?? null,
     expiresAt: connection?.expires_at ?? null,
     connectedAt: connection?.connected_at ?? null,
     commissionPercent: getPlatformCommissionPercent(),
