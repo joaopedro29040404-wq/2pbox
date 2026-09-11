@@ -211,15 +211,47 @@ function CheckoutForm() {
     return true;
   }
 
+  async function checkStock(client: NonNullable<typeof supabase>) {
+    const { data, error } = await client
+      .from('products')
+      .select('id,name,stock,active')
+      .in('id', items.map((item) => item.id));
+    if (error) return null;
+
+    const current = new Map<string, any>((data || []).map((row: any) => [String(row.id), row]));
+    return items
+      .map((item) => {
+        const row = current.get(item.id);
+        if (!row || row.active === false) return { name: item.name, available: 0 };
+        if (Number(row.stock) < item.quantity) return { name: row.name || item.name, available: Number(row.stock) };
+        return null;
+      })
+      .filter(Boolean) as Array<{ name: string; available: number }>;
+  }
+
   async function submitCheckout() {
     const client = supabase;
     if (!client || !items.length || submitting) return;
     if (!validate()) return;
 
     setSubmitting(true);
-    setStatus('Registrando seu pedido...');
+    setStatus('Conferindo a disponibilidade dos produtos...');
 
     try {
+      const unavailable = await checkStock(client);
+      if (unavailable?.length) {
+        const first = unavailable[0];
+        setStatus('');
+        toast.warning(
+          first.available > 0 ? 'Estoque insuficiente' : 'Produto indisponível',
+          first.available > 0
+            ? `Só temos ${first.available} unidade(s) de ${first.name}. Ajuste a quantidade no carrinho.`
+            : `${first.name} ficou sem estoque. Remova do carrinho para continuar.`,
+        );
+        return;
+      }
+
+      setStatus('Registrando seu pedido...');
       if (user) {
         const { error } = await client.auth.updateUser({
           data: { full_name: name.trim(), phone: phone.trim(), cpf: onlyDigits(cpf) || null },
@@ -256,7 +288,16 @@ function CheckoutForm() {
       if (result.error && /create_order_with_stock_v3|schema cache|not find/i.test(result.error.message)) {
         result = await client.rpc('create_order_with_stock_v2', { ...args, p_delivery_type: type });
       }
-      if (result.error) throw new Error(result.error.message.replace(/^.*?: /, ''));
+      if (result.error) {
+        const raw = result.error.message || '';
+        let friendly = raw.replace(/^.*?: /, '');
+        if (/timeout|gateway|statement canceled|57014|504/i.test(raw)) {
+          friendly = 'O servidor demorou para responder. Confira em "Meus pedidos" antes de tentar de novo, para o pedido não sair duplicado.';
+        } else if (/orders_delivery_type_check/i.test(raw)) {
+          friendly = 'Esta modalidade de entrega ainda não foi liberada no banco. Aplique a migration 20260913_order_delivery_modes.sql ou escolha outra forma de recebimento.';
+        }
+        throw new Error(friendly);
+      }
 
       const id = result.data as string;
       setOrderId(id);

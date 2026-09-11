@@ -14,7 +14,7 @@ export type CartItem = {
 };
 
 type AddOptions = { quantity?: number; silent?: boolean };
-type AddOutcome = 'added' | 'updated' | 'limited';
+type AddOutcome = 'added' | 'updated' | 'limited' | 'unavailable';
 
 type CartContextValue = {
   items: CartItem[];
@@ -95,10 +95,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       const requested = Math.max(1, Number(options.quantity || 1));
       const result: { outcome: AddOutcome; quantity: number } = { outcome: 'added', quantity: requested };
 
+      if (Number(product.stock) <= 0) {
+        result.outcome = 'unavailable';
+        result.quantity = 0;
+      }
+
       setItems((current) => {
+        if (Number(product.stock) <= 0) return current;
+
         const existing = current.find((item) => item.id === product.id);
         if (!existing) {
-          const quantity = Math.min(requested, Math.max(1, product.stock));
+          const quantity = Math.min(requested, product.stock);
           result.quantity = quantity;
           result.outcome = quantity < requested ? 'limited' : 'added';
           return [...current, { ...product, quantity }];
@@ -112,6 +119,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (options.silent) return;
+      if (result.outcome === 'unavailable') {
+        toast.warning('Produto sem estoque', `${product.name} está indisponível no momento.`);
+        return;
+      }
       if (result.outcome === 'limited') {
         toast.warning('Estoque máximo atingido', `Só temos ${product.stock} unidade(s) de ${product.name}.`);
         return;

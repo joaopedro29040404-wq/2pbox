@@ -1,6 +1,10 @@
--- As modalidades de entrega deixam de ser apenas retirada e frete pelo
--- WhatsApp: entram o motoboy da loja e o motofrete por aplicativo. O valor do
--- frete continua sendo calculado no servidor, nunca enviado pelo cliente.
+alter table public.orders
+  drop constraint if exists orders_delivery_type_check;
+
+alter table public.orders
+  add constraint orders_delivery_type_check
+  check (delivery_type in ('pickup','whatsapp_shipping','own_delivery','app_delivery'));
+
 create or replace function public.create_order_with_stock_v3(
   p_customer_name text,
   p_customer_phone text,
