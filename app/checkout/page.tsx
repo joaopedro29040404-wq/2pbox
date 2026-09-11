@@ -469,7 +469,8 @@ function CheckoutForm() {
                   placeholder="00000-000"
                   value={cep}
                   error={errors.cep}
-                  hint={lookingUpCep ? 'Buscando endereço...' : 'Preenchemos o resto automaticamente.'}
+                  hint="Preenchemos o resto automaticamente."
+                  icon={lookingUpCep ? <InlineLoader /> : undefined}
                   onValueChange={(value) => {
                     setCep(value);
                     void lookupCep(value);

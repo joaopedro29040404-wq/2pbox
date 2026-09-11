@@ -410,17 +410,11 @@ export default function SettingsPage() {
                 />
                 <TextField label="Rua" value={data.address.line} onValueChange={(value) => patch({ address: { ...data.address, line: value } })} readOnly={!manualAddress && Boolean(data.address.placeId)} />
                 <TextField label="Número" value={data.address.number} onValueChange={(value) => patch({ address: { ...data.address, number: value } })} />
-                <TextField label="Complemento" placeholder="Sala, andar, referência" value={data.address.complement} onValueChange={(value) => patch({ address: { ...data.address, complement: value } })} />
                 <TextField label="Bairro" value={data.address.district} onValueChange={(value) => patch({ address: { ...data.address, district: value } })} />
                 <TextField label="Cidade" value={data.address.city} onValueChange={(value) => patch({ address: { ...data.address, city: value } })} />
                 <TextField label="Estado" mask="state" placeholder="SP" value={data.address.state} onValueChange={(value) => patch({ address: { ...data.address, state: value } })} />
                 <TextField label="CEP" mask="cep" inputMode="numeric" value={data.address.zip} onValueChange={(value) => patch({ address: { ...data.address, zip: value } })} />
-                <TextField
-                  label="Coordenadas"
-                  value={data.address.lat != null && data.address.lng != null ? `${data.address.lat}, ${data.address.lng}` : ''}
-                  hint="Preenchido ao selecionar o endereço na busca. Sem coordenadas, a entrega própria não calcula distância."
-                  readOnly
-                />
+                <TextField label="Complemento" placeholder="Sala, andar, referência" value={data.address.complement} onValueChange={(value) => patch({ address: { ...data.address, complement: value } })} fullWidth />
               </div>
             )}
 
@@ -575,7 +569,7 @@ export default function SettingsPage() {
         .settings-toggles{display:grid;gap:13px}
         .settings-note{grid-column:1/-1;padding:13px 15px;background:#fafaf7;border:1px solid #e8e8df;border-radius:10px;color:#5d5d5d;font-size:12px;line-height:1.55}
         .tier-block{grid-column:1/-1}
-        .tier-head{display:flex;align-items:center;justify-content:space-between;gap:14px}
+        .tier-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:1rem}
         .tier-head button{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 14px;border:1px solid #dcdcd6;border-radius:9px;background:#fff;font:800 11px Inter,Arial,sans-serif;cursor:pointer}
         .tier-head button:hover{border-color:#111}
         .tier-empty{margin:0;padding:14px 15px;background:#fafaf7;border:1px solid #e8e8df;border-radius:10px;color:#777;font-size:12px;line-height:1.55}

@@ -309,19 +309,19 @@ const templates: Record<EmailTemplateId, (data: TemplateData) => RenderedEmail> 
 
   order_access_code: (data) => {
     const code = String(data.code || '');
-    const subject = `${code} e o seu codigo de acesso aos pedidos`.replace('codigo', 'código');
+    const subject = `${code} é o seu código de acesso aos pedidos`;
     const html = renderEmail({
       subject,
-      preheader: 'Use o codigo para consultar seus pedidos sem criar conta.',
+      preheader: 'Use o código para consultar seus pedidos sem criar conta.',
       eyebrow: 'ACESSO AOS SEUS PEDIDOS',
-      title: 'Seu codigo de acesso',
+      title: 'Seu código de acesso',
       body: `${paragraph('Use o código abaixo para consultar seus pedidos na 2P Box. Ele vale por 10 minutos e só pode ser usado uma vez.')}
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px;">
           <tr><td align="center" style="padding:22px;background:${BRAND.canvas};border:1px solid ${BRAND.line};border-radius:12px;">
             <span style="font:900 38px/1 Arial,Helvetica,sans-serif;letter-spacing:10px;color:${BRAND.ink};">${escapeHtml(code)}</span>
           </td></tr>
         </table>
-        ${note('Se nao foi voce que pediu este codigo, ignore este e-mail. Ninguem consegue ver seus pedidos sem o codigo.', 'warn')}`,
+        ${note('Se não foi você que pediu este código, ignore este e-mail. Ninguém consegue ver seus pedidos sem o código.', 'warn')}`,
     });
     return { subject, html };
   },

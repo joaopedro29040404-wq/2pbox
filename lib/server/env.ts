@@ -86,7 +86,7 @@ export function getResendKey() {
 }
 
 export function getEmailFrom() {
-  return read('EMAIL_FROM') || '2P Box <nao-responda@2pbox.com.br>';
+  return read('EMAIL_FROM') || '2P Box <no-reply@2pbox.com.br>';
 }
 
 export function getEmailReplyTo() {

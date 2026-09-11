@@ -1,7 +1,7 @@
 'use client';
 
 import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Info } from 'lucide-react';
 import { applyMask, type MaskName } from '@/lib/masks';
 
 type BaseProps = {
@@ -12,6 +12,47 @@ type BaseProps = {
   icon?: ReactNode;
   fullWidth?: boolean;
 };
+
+/** O texto de apoio vira tooltip para nao empurrar os campos vizinhos e
+ *  desalinhar a grade do formulario. */
+function FieldInfo({ text }: { text: ReactNode }) {
+  return (
+    <span className="ui-field-info">
+      <button type="button" aria-label={typeof text === 'string' ? text : 'Mais informações'} onClick={(event) => event.preventDefault()}>
+        <Info size={12} />
+      </button>
+      <span className="ui-field-tip" role="tooltip">
+        {text}
+      </span>
+    </span>
+  );
+}
+
+function FieldHead({ id, label, hint, optional }: { id?: string; label?: ReactNode; hint?: ReactNode; optional?: boolean }) {
+  if (!label && !hint) return null;
+
+  const content = (
+    <>
+      {label && (
+        <span className="ui-field-head-text">
+          {label}
+          {optional && <em>opcional</em>}
+        </span>
+      )}
+      {hint && <FieldInfo text={hint} />}
+    </>
+  );
+
+  // Sem id o campo e um grupo: o titulo precisa ser um legend filho direto do
+  // fieldset, senao deixa de nomear o grupo para leitores de tela.
+  if (!id) return <legend className="ui-field-head">{content}</legend>;
+
+  return (
+    <div className="ui-field-head">
+      <label htmlFor={id}>{content}</label>
+    </div>
+  );
+}
 
 function FieldShell({
   id,
@@ -24,19 +65,12 @@ function FieldShell({
 }: BaseProps & { id: string; children: ReactNode }) {
   return (
     <div className={`ui-field ${error ? 'has-error' : ''} ${fullWidth ? 'is-full' : ''}`}>
-      {label && (
-        <label htmlFor={id}>
-          {label}
-          {optional && <em>opcional</em>}
-        </label>
-      )}
+      <FieldHead id={id} label={label} hint={hint} optional={optional} />
       {children}
-      {error ? (
+      {error && (
         <p className="ui-field-error" role="alert">
           <AlertCircle size={13} /> {error}
         </p>
-      ) : (
-        hint && <p className="ui-field-hint">{hint}</p>
       )}
     </div>
   );
@@ -157,10 +191,9 @@ export type RadioGroupProps = BaseProps & {
 };
 
 export function RadioGroup({ label, hint, error, name, value, options, columns = 1, fullWidth, onValueChange }: RadioGroupProps) {
-  const groupId = useId();
   return (
-    <fieldset className={`ui-field ui-radio-group ${error ? 'has-error' : ''} ${fullWidth ? 'is-full' : ''}`} aria-describedby={`${groupId}-hint`}>
-      {label && <legend>{label}</legend>}
+    <fieldset className={`ui-field ui-radio-group ${error ? 'has-error' : ''} ${fullWidth ? 'is-full' : ''}`}>
+      <FieldHead label={label} hint={hint} />
       <div className="ui-radio-list" data-columns={columns}>
         {options.map((option) => (
           <label key={option.value} className={`ui-radio ${value === option.value ? 'is-selected' : ''} ${option.disabled ? 'is-disabled' : ''}`}>
@@ -181,16 +214,10 @@ export function RadioGroup({ label, hint, error, name, value, options, columns =
           </label>
         ))}
       </div>
-      {error ? (
+      {error && (
         <p className="ui-field-error" role="alert">
           <AlertCircle size={13} /> {error}
         </p>
-      ) : (
-        hint && (
-          <p className="ui-field-hint" id={`${groupId}-hint`}>
-            {hint}
-          </p>
-        )
       )}
     </fieldset>
   );

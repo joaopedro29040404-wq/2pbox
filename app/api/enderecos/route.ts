@@ -22,7 +22,11 @@ export async function GET(request: Request) {
     const suggestions = await suggestAddresses(url.searchParams.get('q') || '', session);
     return NextResponse.json({ available: true, suggestions });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Falha na busca de endereços.';
-    return NextResponse.json({ available: true, error: message, suggestions: [] }, { status: 502 });
+    // O detalhe do Google fica no log: a tela recebe uma mensagem propria.
+    console.error('[enderecos] falha na busca:', error);
+    return NextResponse.json(
+      { available: true, error: 'Não foi possível buscar endereços agora. Tente de novo em instantes.', suggestions: [] },
+      { status: 502 },
+    );
   }
 }
