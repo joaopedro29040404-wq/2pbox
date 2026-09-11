@@ -1,10 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Copy, QrCode, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Check, ClipboardCheck, Copy, QrCode, RefreshCw, ShieldCheck } from 'lucide-react';
 import { InlineLoader } from '@/components/ui/loader';
 import { useToast } from '@/components/ui/toast';
-import { money } from '@/lib/order-format';
+import { money, shortId } from '@/lib/order-format';
 
 type PixData = { qrCode: string | null; qrCodeBase64: string | null; ticketUrl: string | null; expiresAt?: string | null };
 
@@ -23,6 +23,7 @@ const POLL_MS = 4000;
 export default function PixPayment({ amount, orderId, email, cpf, name, onApproved, onError }: Props) {
   const [pix, setPix] = useState<PixData | null>(null);
   const [creating, setCreating] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [copied, setCopied] = useState(false);
   const [checking, setChecking] = useState(false);
   const [remaining, setRemaining] = useState<number | null>(null);
@@ -63,18 +64,14 @@ export default function PixPayment({ amount, orderId, email, cpf, name, onApprov
       if (!data?.pix?.qrCode && !data?.pix?.qrCodeBase64) throw new Error('O Mercado Pago não retornou o QR Code do PIX.');
 
       setPix(data.pix as PixData);
+      setFailed(false);
     } catch (error) {
+      setFailed(true);
       onError(error instanceof Error ? error.message : 'Não foi possível gerar o PIX.');
     } finally {
       setCreating(false);
     }
   }, [amount, cpf, creating, email, name, onError, orderId]);
-
-  useEffect(() => {
-    void createPix();
-    // Gera o PIX uma vez por pedido; recriar mudaria o QR na mao do cliente.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const checkStatus = useCallback(async () => {
     if (approved.current) return;
@@ -123,21 +120,41 @@ export default function PixPayment({ amount, orderId, email, cpf, name, onApprov
     }
   }
 
-  if (creating && !pix) {
-    return (
-      <div className="pix-loading">
-        <InlineLoader label="Gerando seu PIX..." />
-      </div>
-    );
-  }
-
+  // O QR so nasce depois que o cliente confirma: o pedido ja existe, o que
+  // falta e o pagamento, e a tela precisa deixar essa separacao clara.
   if (!pix) {
     return (
-      <div className="pix-retry">
-        <p>Não conseguimos gerar o PIX.</p>
-        <button type="button" onClick={() => void createPix()}>
-          <RefreshCw size={15} /> Tentar novamente
+      <div className="pix-confirm">
+        <div className="pix-total">
+          <span>Valor a pagar</span>
+          <strong>{money(amount)}</strong>
+        </div>
+
+        <ol className="pix-steps">
+          <li>Confirme o pedido abaixo</li>
+          <li>Geramos o QR Code e o código copia e cola na hora</li>
+          <li>Pague pelo app do seu banco — esta tela avança sozinha</li>
+        </ol>
+
+        <button type="button" className="pix-cta" onClick={() => void createPix()} disabled={creating}>
+          {creating ? (
+            <InlineLoader label="Registrando seu pedido..." />
+          ) : failed ? (
+            <>
+              <RefreshCw size={16} /> Tentar gerar o PIX novamente
+            </>
+          ) : (
+            <>
+              <QrCode size={17} /> Confirmar pedido e gerar PIX
+            </>
+          )}
         </button>
+
+        {failed && <p className="pix-failed">Não conseguimos gerar o PIX agora. Seu pedido continua salvo — tente de novo em instantes.</p>}
+
+        <p className="pix-note">
+          <ShieldCheck size={13} /> Nada é cobrado até você pagar o PIX no app do seu banco.
+        </p>
       </div>
     );
   }
@@ -147,6 +164,14 @@ export default function PixPayment({ amount, orderId, email, cpf, name, onApprov
 
   return (
     <div className="pix-wrap">
+      <div className="pix-placed">
+        <ClipboardCheck size={19} />
+        <div>
+          <strong>Pedido {shortId(orderId)} registrado</strong>
+          <span>Falta apenas o pagamento. Assim que o PIX cair, confirmamos automaticamente.</span>
+        </div>
+      </div>
+
       <div className="pix-total">
         <span>Valor a pagar</span>
         <strong>{money(amount)}</strong>
@@ -198,10 +223,17 @@ export default function PixPayment({ amount, orderId, email, cpf, name, onApprov
       </p>
 
       <style jsx>{`
-        .pix-wrap{display:grid;gap:18px}
-        .pix-loading,.pix-retry{min-height:220px;display:grid;place-items:center;gap:12px;text-align:center;color:#777}
-        .pix-retry p{margin:0;font-size:13px}
-        .pix-retry button,.pix-expired button{display:inline-flex;align-items:center;gap:7px;min-height:44px;padding:0 18px;border:1px solid #dcdcd6;border-radius:9px;background:#fff;font:800 12px Inter,Arial,sans-serif;cursor:pointer}
+        .pix-wrap,.pix-confirm{display:grid;gap:18px}
+        .pix-cta{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:54px;border:0;border-radius:10px;background:#ffc400;color:#111;font:900 12.5px Inter,Arial,sans-serif;letter-spacing:.04em;text-transform:uppercase;cursor:pointer}
+        .pix-cta:hover:not(:disabled){background:#111;color:#fff}
+        .pix-cta:disabled{opacity:.75;cursor:wait}
+        .pix-failed{margin:0;padding:12px 14px;background:#fff2f2;border:1px solid #f0cccc;border-radius:10px;color:#8f2626;font-size:12px;line-height:1.5}
+        .pix-placed{display:flex;align-items:flex-start;gap:11px;padding:14px 15px;background:#effaf1;border:1px solid #bfe6c8;border-radius:11px}
+        .pix-placed svg{flex:none;margin-top:1px;color:#276b36}
+        .pix-placed>div{display:grid;gap:3px}
+        .pix-placed strong{font:800 12.5px Inter,Arial,sans-serif;color:#1f5b2c}
+        .pix-placed span{font-size:11.5px;line-height:1.5;color:#3f7a4d}
+        .pix-expired button{display:inline-flex;align-items:center;gap:7px;min-height:44px;padding:0 18px;border:1px solid #dcdcd6;border-radius:9px;background:#fff;font:800 12px Inter,Arial,sans-serif;cursor:pointer}
         .pix-total{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding-bottom:14px;border-bottom:1px solid #eee}
         .pix-total span{font:800 10px Inter,Arial,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#777}
         .pix-total strong{font:900 26px 'Barlow Condensed',Inter,sans-serif}
