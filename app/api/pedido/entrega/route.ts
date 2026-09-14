@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { isGeoAvailable, resolvePlace, routeDistance } from '@/lib/server/geo';
+import { geocodeAddress, isGeoAvailable, resolvePlace, routeDistance } from '@/lib/server/geo';
 import { readOrder, readOrderItems } from '@/lib/server/orders';
 import { readStoreOperations, storeOrigin } from '@/lib/server/store-settings';
 import { supabaseRest } from '@/lib/server/supabase-admin';
@@ -48,6 +48,9 @@ export async function POST(request: Request) {
   let subsidy = 0;
 
   if (provider === 'express') {
+    if (operations.expressFee <= 0) {
+      return NextResponse.json({ error: 'O frete do envio imediato ainda não foi definido pela loja.' }, { status: 409 });
+    }
     fee = round(operations.expressFee);
     subsidy = 0;
   }
@@ -122,12 +125,27 @@ async function destinationFor(body: any) {
   const lng = Number(body?.lng);
   if (Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0) return { lat, lng };
 
-  const placeId = String(body?.placeId || '').trim();
-  if (!placeId || !isGeoAvailable()) return null;
+  if (!isGeoAvailable()) return null;
 
-  const address = await resolvePlace(placeId).catch(() => null);
-  if (!address || address.lat == null || address.lng == null) return null;
-  return { lat: address.lat, lng: address.lng };
+  const placeId = String(body?.placeId || '').trim();
+  if (placeId) {
+    const address = await resolvePlace(placeId).catch(() => null);
+    if (address?.lat != null && address?.lng != null) return { lat: address.lat, lng: address.lng };
+  }
+
+  const typed = body?.address;
+  if (typed && typeof typed === 'object') {
+    return geocodeAddress({
+      street: typed.street ?? typed.line,
+      number: typed.number,
+      district: typed.neighborhood ?? typed.district,
+      city: typed.city,
+      state: typed.state,
+      zip: typed.postal_code ?? typed.zip,
+    });
+  }
+
+  return null;
 }
 
 function patch(orderId: string, payload: Record<string, unknown>) {

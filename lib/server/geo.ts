@@ -19,6 +19,7 @@ export type ResolvedAddress = {
 };
 
 const PLACES = 'https://maps.googleapis.com/maps/api/place';
+const GEOCODE = 'https://maps.googleapis.com/maps/api/geocode/json';
 const DISTANCE = 'https://maps.googleapis.com/maps/api/distancematrix/json';
 const CACHE_TTL_SECONDS = 60 * 60 * 24 * 7;
 
@@ -81,6 +82,53 @@ export async function resolvePlace(placeId: string, sessionToken?: string): Prom
     lat: Number(result.geometry?.location?.lat ?? NaN) || null,
     lng: Number(result.geometry?.location?.lng ?? NaN) || null,
   };
+}
+
+export async function geocodeAddress(parts: {
+  street?: string | null;
+  number?: string | null;
+  district?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+}) {
+  const key = getGoogleMapsKey();
+  if (!key) return null;
+
+  const street = [parts.street, parts.number].map((value) => String(value || '').trim()).filter(Boolean).join(', ');
+  const region = [parts.district, parts.city, parts.state].map((value) => String(value || '').trim()).filter(Boolean).join(', ');
+  const zip = String(parts.zip || '').replace(/\D/g, '');
+  const query = [street, region, zip].filter(Boolean).join(' - ');
+  if (!street && !zip) return null;
+
+  const cacheKey = `geo:addr:${query.toLowerCase()}`;
+  const redis = getRedis();
+  if (redis) {
+    const cached = await redis.get(cacheKey).catch(() => null);
+    if (cached) {
+      try {
+        return JSON.parse(cached) as { lat: number; lng: number };
+      } catch {
+      }
+    }
+  }
+
+  const url = new URL(GEOCODE);
+  url.searchParams.set('address', query);
+  url.searchParams.set('key', key);
+  url.searchParams.set('language', 'pt-BR');
+  url.searchParams.set('region', 'br');
+  url.searchParams.set('components', 'country:BR');
+
+  const { data } = await fetchJson<any>(url.toString(), { cache: 'no-store' });
+  const location = data?.results?.[0]?.geometry?.location;
+  if (String(data?.status) !== 'OK' || !location) return null;
+
+  const point = { lat: Number(location.lat), lng: Number(location.lng) };
+  if (!Number.isFinite(point.lat) || !Number.isFinite(point.lng)) return null;
+
+  if (redis) await redis.set(cacheKey, JSON.stringify(point), 'EX', CACHE_TTL_SECONDS).catch(() => null);
+  return point;
 }
 
 export type DistanceResult = { km: number; minutes: number | null; source: 'route' | 'straight-line' };

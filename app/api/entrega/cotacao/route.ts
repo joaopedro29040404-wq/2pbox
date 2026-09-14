@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { isGeoAvailable, resolvePlace, routeDistance } from '@/lib/server/geo';
+import { geocodeAddress, isGeoAvailable, resolvePlace, routeDistance } from '@/lib/server/geo';
 import { readStoreOperations, storeOrigin, type StoreOperations } from '@/lib/server/store-settings';
 import { DELIVERY_PROVIDERS, quoteOwnDelivery, type DeliveryProvider } from '@/lib/store-operations';
 
@@ -37,7 +37,9 @@ export async function GET() {
   return NextResponse.json({
     sameDay: { enabled: operations.sameDayEnabled, cutoff: operations.sameDayCutoff },
     address: storeAddressLabel(operations),
-    options: providers.map((provider) => {
+    options: providers
+      .filter((provider) => provider !== 'express' || operations.expressFee > 0)
+      .map((provider) => {
       const meta = describe(provider);
       const fee = provider === 'pickup' ? 0 : provider === 'express' ? operations.expressFee : null;
       return {
@@ -70,15 +72,19 @@ export async function POST(request: Request) {
     }
 
     if (provider === 'express') {
-      options.push({
-        provider,
-        label: meta.label,
-        description: operations.expressFee > 0 ? `Frete fixo de ${currency(operations.expressFee)}` : meta.description,
-        fee: operations.expressFee,
-        distanceKm: null,
-        needsAddress: true,
-        available: true,
-      });
+      options.push(
+        operations.expressFee > 0
+          ? {
+              provider,
+              label: meta.label,
+              description: `Frete fixo de ${currency(operations.expressFee)}`,
+              fee: operations.expressFee,
+              distanceKm: null,
+              needsAddress: true,
+              available: true,
+            }
+          : unavailable(provider, meta.label, 'Frete do envio imediato ainda não foi definido pela loja.'),
+      );
       continue;
     }
 
@@ -123,12 +129,27 @@ async function resolveDestination(body: any) {
   const lng = Number(body?.lng);
   if (Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0) return { lat, lng };
 
-  const placeId = String(body?.placeId || '').trim();
-  if (!placeId || !isGeoAvailable()) return null;
+  if (!isGeoAvailable()) return null;
 
-  const address = await resolvePlace(placeId).catch(() => null);
-  if (!address || address.lat == null || address.lng == null) return null;
-  return { lat: address.lat, lng: address.lng };
+  const placeId = String(body?.placeId || '').trim();
+  if (placeId) {
+    const address = await resolvePlace(placeId).catch(() => null);
+    if (address?.lat != null && address?.lng != null) return { lat: address.lat, lng: address.lng };
+  }
+
+  const typed = body?.address;
+  if (typed && typeof typed === 'object') {
+    return geocodeAddress({
+      street: typed.street ?? typed.line,
+      number: typed.number,
+      district: typed.neighborhood ?? typed.district,
+      city: typed.city,
+      state: typed.state,
+      zip: typed.postal_code ?? typed.zip,
+    });
+  }
+
+  return null;
 }
 
 function unavailable(provider: DeliveryProvider, label: string, reason: string): Option {

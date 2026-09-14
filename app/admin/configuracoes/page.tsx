@@ -529,7 +529,16 @@ export default function SettingsPage() {
                   <span className="settings-block-label">Modalidades oferecidas ao cliente</span>
                   <CheckboxField label="Retirada na loja" description="Sem custo de entrega." checked={data.pickupEnabled} onCheckedChange={(checked) => patch({ pickupEnabled: checked })} />
                   <CheckboxField label="Entrega no mesmo dia" description="Motoboy da loja, cobrado pela tabela de distância." checked={data.ownDeliveryEnabled} onCheckedChange={(checked) => patch({ ownDeliveryEnabled: checked })} />
-                  <CheckboxField label="Envio imediato" description="Frete fixo definido pela loja, sem subsídio." checked={data.expressEnabled} onCheckedChange={(checked) => patch({ expressEnabled: checked })} />
+                  <CheckboxField
+                    label="Envio imediato"
+                    description={
+                      data.expressEnabled && data.expressFee <= 0
+                        ? 'Defina o frete na aba Entregas: com o valor zerado a modalidade não é oferecida ao cliente.'
+                        : 'Frete fixo definido pela loja, sem subsídio.'
+                    }
+                    checked={data.expressEnabled}
+                    onCheckedChange={(checked) => patch({ expressEnabled: checked })}
+                  />
                   <CheckboxField label="Motofrete por aplicativo" description="Valor combinado com o cliente após o pedido." checked={data.appDeliveryEnabled} onCheckedChange={(checked) => patch({ appDeliveryEnabled: checked })} />
                 </div>
               </div>

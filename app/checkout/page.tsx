@@ -37,6 +37,8 @@ type Delivery = 'pickup' | 'whatsapp_shipping';
 type Provider = 'whatsapp' | 'pickup' | 'own' | 'express' | 'app';
 type DeliveryOption = { provider: Provider; label: string; description: string; fee: number | null; distanceKm: number | null; available: boolean };
 
+const QUOTE_DEBOUNCE_MS = 600;
+
 const EMPTY_ADDRESS: AddressValue = { line: '', number: '', complement: '', district: '', city: '', state: '', zip: '', placeId: null, lat: null, lng: null };
 type AuthUser = { id: string; email?: string | null; user_metadata?: { full_name?: string; phone?: string; cpf?: string } };
 type Errors = Record<string, string>;
@@ -121,38 +123,48 @@ function CheckoutForm() {
 
   useEffect(() => {
     if (type !== 'whatsapp_shipping') return;
-    if (geoAddress.lat == null && !geoAddress.placeId) {
+
+    const hasPin = geoAddress.lat != null || Boolean(geoAddress.placeId);
+    const typed = { street: street.trim(), number: number.trim(), neighborhood: neighborhood.trim(), city: city.trim(), state: state.trim(), postal_code: cep.trim() };
+    const hasTyped = Boolean(typed.street && typed.number && typed.city) || onlyDigits(typed.postal_code).length === 8;
+
+    if (!hasPin && !hasTyped) {
       setOptions([]);
+      setQuotedFee(null);
       return;
     }
 
     let active = true;
     setQuoting(true);
-    fetch('/api/entrega/cotacao', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ placeId: geoAddress.placeId, lat: geoAddress.lat, lng: geoAddress.lng }),
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        if (!active) return;
-        const list = (Array.isArray(data?.options) ? data.options : []).filter((option: DeliveryOption) => option.provider !== 'pickup');
-        setQuotedFee(list.find((option: DeliveryOption) => option.available)?.fee ?? null);
-        setOptions(list);
-        const first = list.find((option: DeliveryOption) => option.available);
-        setProvider((current) => (list.some((option: DeliveryOption) => option.provider === current && option.available) ? current : first ? first.provider : 'whatsapp'));
+
+    const timer = window.setTimeout(() => {
+      fetch('/api/entrega/cotacao', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ placeId: geoAddress.placeId, lat: geoAddress.lat, lng: geoAddress.lng, address: typed }),
       })
-      .catch(() => {
-        if (active) setOptions([]);
-      })
-      .finally(() => {
-        if (active) setQuoting(false);
-      });
+        .then((response) => response.json())
+        .then((data) => {
+          if (!active) return;
+          const list = (Array.isArray(data?.options) ? data.options : []).filter((option: DeliveryOption) => option.provider !== 'pickup');
+          setQuotedFee(list.find((option: DeliveryOption) => option.available)?.fee ?? null);
+          setOptions(list);
+          const first = list.find((option: DeliveryOption) => option.available);
+          setProvider((current) => (list.some((option: DeliveryOption) => option.provider === current && option.available) ? current : first ? first.provider : 'whatsapp'));
+        })
+        .catch(() => {
+          if (active) setOptions([]);
+        })
+        .finally(() => {
+          if (active) setQuoting(false);
+        });
+    }, QUOTE_DEBOUNCE_MS);
 
     return () => {
       active = false;
+      window.clearTimeout(timer);
     };
-  }, [type, geoAddress.placeId, geoAddress.lat, geoAddress.lng]);
+  }, [type, geoAddress.placeId, geoAddress.lat, geoAddress.lng, street, number, neighborhood, city, state, cep]);
 
   async function lookupCep(value: string) {
     const digits = onlyDigits(value);
