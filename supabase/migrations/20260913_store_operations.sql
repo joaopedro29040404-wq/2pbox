@@ -64,3 +64,7 @@ set business_hours = (
   from unnest(coalesce(business_days, array['mon','tue','wed','thu','fri']::text[])) as day
 )
 where business_hours is null;
+
+alter table public.store_settings
+  add column if not exists delivery_express_enabled boolean default false,
+  add column if not exists delivery_express_fee numeric(10,2) default 0;

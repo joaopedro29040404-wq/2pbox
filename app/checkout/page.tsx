@@ -31,9 +31,11 @@ import { InlineLoader, PageLoader } from '@/components/ui/loader';
 import { useToast } from '@/components/ui/toast';
 import { isValidCep, isValidCpf, isValidEmail, isValidPhone, onlyDigits, toWhatsAppNumber } from '@/lib/masks';
 import { money } from '@/lib/order-format';
+import { DELIVERY_TYPE_BY_PROVIDER } from '@/lib/store-operations';
 
 type Delivery = 'pickup' | 'whatsapp_shipping';
-type DeliveryOption = { provider: 'pickup' | 'own' | 'app'; label: string; description: string; fee: number | null; distanceKm: number | null; available: boolean };
+type Provider = 'whatsapp' | 'pickup' | 'own' | 'express' | 'app';
+type DeliveryOption = { provider: Provider; label: string; description: string; fee: number | null; distanceKm: number | null; available: boolean };
 
 const EMPTY_ADDRESS: AddressValue = { line: '', number: '', complement: '', district: '', city: '', state: '', zip: '', placeId: null, lat: null, lng: null };
 type AuthUser = { id: string; email?: string | null; user_metadata?: { full_name?: string; phone?: string; cpf?: string } };
@@ -69,17 +71,23 @@ function CheckoutForm() {
   const [lookingUpCep, setLookingUpCep] = useState(false);
   const [geoAddress, setGeoAddress] = useState<AddressValue>(EMPTY_ADDRESS);
   const [options, setOptions] = useState<DeliveryOption[]>([]);
-  const [provider, setProvider] = useState<'whatsapp' | 'own' | 'app'>('whatsapp');
+  const [provider, setProvider] = useState<Provider>('whatsapp');
   const [quoting, setQuoting] = useState(false);
   const [payableTotal, setPayableTotal] = useState<number | null>(null);
   const [feeBreakdown, setFeeBreakdown] = useState<{ fee: number; serviceFee: number; subtotal: number } | null>(null);
   const [paymentsOnline, setPaymentsOnline] = useState(true);
   const [mpPublicKey, setMpPublicKey] = useState('');
-  const [mpMethods, setMpMethods] = useState({ card: true, pix: true });
+  const [mpMethods, setMpMethods] = useState({ card: true, debit: false, pix: true });
+  const [mpLoaded, setMpLoaded] = useState(false);
   const lastPaymentError = useRef({ message: '', at: 0 });
+  const paysOnline = provider === 'own' || provider === 'express';
 
   useEffect(() => {
-    setType(searchParams.get('entrega') === 'shipping' ? 'whatsapp_shipping' : 'pickup');
+    const chosen = String(searchParams.get('entrega') || 'pickup');
+    const known: Provider[] = ['whatsapp', 'pickup', 'own', 'express', 'app'];
+    const selected = (known.includes(chosen as Provider) ? chosen : chosen === 'shipping' ? 'whatsapp' : 'pickup') as Provider;
+    setProvider(selected === 'pickup' ? 'whatsapp' : selected);
+    setType(selected === 'pickup' ? 'pickup' : 'whatsapp_shipping');
     const client = supabase;
     if (!client) return;
 
@@ -89,12 +97,13 @@ function CheckoutForm() {
         setPaymentsOnline(data?.available !== false);
         setMpPublicKey(String(data?.publicKey || ''));
         if (data?.methods) {
-          const methods = { card: data.methods.card !== false, pix: data.methods.pix === true };
+          const methods = { card: data.methods.card !== false, debit: data.methods.debit === true, pix: data.methods.pix === true };
           setMpMethods(methods);
           setPaymentMethod(methods.card ? 'card' : 'pix');
         }
       })
-      .catch(() => setPaymentsOnline(true));
+      .catch(() => setPaymentsOnline(true))
+      .finally(() => setMpLoaded(true));
 
     Promise.all([client.auth.getUser(), getStoreSettings()]).then(([authResult, settings]) => {
       const currentUser = authResult.data.user as AuthUser | null;
@@ -129,7 +138,7 @@ function CheckoutForm() {
         const list = (Array.isArray(data?.options) ? data.options : []).filter((option: DeliveryOption) => option.provider !== 'pickup');
         setOptions(list);
         const first = list.find((option: DeliveryOption) => option.available);
-        setProvider(first ? first.provider : 'whatsapp');
+        setProvider((current) => (list.some((option: DeliveryOption) => option.provider === current && option.available) ? current : first ? first.provider : 'whatsapp'));
       })
       .catch(() => {
         if (active) setOptions([]);
@@ -274,7 +283,7 @@ function CheckoutForm() {
             }
           : null;
 
-      const deliveryType = type === 'pickup' ? 'pickup' : provider === 'own' ? 'own_delivery' : provider === 'app' ? 'app_delivery' : 'whatsapp_shipping';
+      const deliveryType = type === 'pickup' ? 'pickup' : DELIVERY_TYPE_BY_PROVIDER[provider as Exclude<Provider, 'whatsapp'>] || 'whatsapp_shipping';
       const args = {
         p_customer_name: name.trim(),
         p_customer_phone: phone.trim(),
@@ -326,7 +335,7 @@ function CheckoutForm() {
         }
       }
 
-      if ((type === 'pickup' || provider === 'own') && !paymentsOnline) {
+      if ((type === 'pickup' || paysOnline) && !paymentsOnline) {
         setStatus('');
         toast.warning(
           'Pedido registrado, falta combinar o pagamento',
@@ -335,28 +344,28 @@ function CheckoutForm() {
         return;
       }
 
-      if (type === 'pickup' || provider === 'own') {
-        const isOwnDelivery = provider === 'own' && type !== 'pickup';
-        setStatus(isOwnDelivery ? 'Calculando a entrega...' : 'Confirmando o valor...');
+      if (type === 'pickup' || paysOnline) {
+        const chargedDelivery = paysOnline && type !== 'pickup';
+        setStatus(chargedDelivery ? 'Calculando a entrega...' : 'Confirmando o valor...');
 
         const quote = await fetch('/api/pedido/entrega', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             orderId: id,
-            provider: isOwnDelivery ? 'own' : 'pickup',
+            provider: chargedDelivery ? provider : 'pickup',
             email: normalizedEmail,
-            ...(isOwnDelivery ? { placeId: geoAddress.placeId, lat: geoAddress.lat, lng: geoAddress.lng, address } : {}),
+            ...(chargedDelivery ? { placeId: geoAddress.placeId, lat: geoAddress.lat, lng: geoAddress.lng, address } : {}),
           }),
         });
         const quoteData = await quote.json().catch(() => null);
         if (!quote.ok) {
-          if (isOwnDelivery) throw new Error(quoteData?.error || 'Não foi possível calcular a entrega.');
+          if (chargedDelivery) throw new Error(quoteData?.error || 'Não foi possível calcular a entrega.');
           console.error('[checkout] cotação de retirada falhou:', quoteData?.error);
         } else {
           setPayableTotal(Number(quoteData.total));
           setFeeBreakdown({ fee: Number(quoteData.fee || 0), serviceFee: Number(quoteData.serviceFee || 0), subtotal: Number(quoteData.subtotal || 0) });
-          if (quoteData.warning && isOwnDelivery) toast.warning('Entrega registrada parcialmente', quoteData.warning);
+          if (quoteData.warning && chargedDelivery) toast.warning('Entrega registrada parcialmente', quoteData.warning);
         }
 
         setStatus('');
@@ -383,8 +392,8 @@ function CheckoutForm() {
     }
   }
 
-  const payableOnline = (type === 'pickup' || provider === 'own') && paymentsOnline;
-  const awaitingContact = (type === 'pickup' || provider === 'own') && !paymentsOnline && Boolean(orderId);
+  const payableOnline = (type === 'pickup' || paysOnline) && paymentsOnline;
+  const awaitingContact = (type === 'pickup' || paysOnline) && !paymentsOnline && Boolean(orderId);
   const paymentReady = payableOnline && Boolean(orderId);
   const chargeTotal = payableTotal ?? total;
 
@@ -575,7 +584,7 @@ function CheckoutForm() {
                           value: String(option.provider),
                           label: option.label,
                           description: option.fee != null && option.fee > 0 ? `${option.description} • ${money(option.fee)}` : option.fee === 0 ? `${option.description} • grátis` : option.description,
-                          icon: option.provider === 'own' ? <Bike size={19} /> : <MessageCircle size={19} />,
+                          icon: option.provider === 'app' || option.provider === 'whatsapp' ? <MessageCircle size={19} /> : <Bike size={19} />,
                         }))
                         .concat([{ value: 'whatsapp', label: 'Combinar pelo WhatsApp', description: 'A loja informa o valor do frete no atendimento', icon: <MessageCircle size={19} /> }])}
                       onValueChange={(value) => setProvider(value as 'whatsapp' | 'own' | 'app')}
@@ -597,7 +606,7 @@ function CheckoutForm() {
                 </div>
               )}
 
-              {provider === 'own' ? (
+              {paysOnline ? (
                 <div className="shipping-whatsapp-note">
                   <Bike size={17} />
                   <span>
@@ -697,7 +706,14 @@ function CheckoutForm() {
                 value={paymentMethod}
                 columns={2}
                 options={[
-                  ...(mpMethods.card ? [{ value: 'card', label: 'Cartão de crédito', description: 'Aprovação imediata', icon: <CreditCard size={19} /> }] : []),
+                  ...(mpMethods.card
+                    ? [{
+                        value: 'card',
+                        label: mpMethods.debit ? 'Cartão de crédito ou débito' : 'Cartão de crédito',
+                        description: mpMethods.debit ? 'Crédito, débito e Mercado Pago' : 'Aprovação imediata',
+                        icon: <CreditCard size={19} />,
+                      }]
+                    : []),
                   ...(mpMethods.pix ? [{ value: 'pix', label: 'PIX', description: 'Confirmação em segundos', icon: <QrCode size={19} /> }] : []),
                 ]}
                 onValueChange={(value) => setPaymentMethod(value as 'card' | 'pix')}
@@ -705,7 +721,11 @@ function CheckoutForm() {
               />
 
               <div className="payment-method-body">
-                {paymentMethod === 'card' ? (
+                {!mpLoaded ? (
+                  <div className="payment-booting">
+                    <InlineLoader label="Preparando o pagamento seguro..." />
+                  </div>
+                ) : paymentMethod === 'card' ? (
                   <PaymentBrick
                     amount={chargeTotal}
                     publicKey={mpPublicKey}
@@ -746,7 +766,7 @@ function CheckoutForm() {
                 <strong>{money(total)}</strong>
               </div>
               <button type="button" onClick={submitCheckout} className="primary checkout-submit" disabled={!items.length || submitting}>
-                {submitting ? 'Processando...' : !items.length ? 'Carrinho vazio' : type === 'pickup' || provider === 'own' ? 'Continuar para pagamento' : 'Calcular frete pelo WhatsApp'}
+                {submitting ? 'Processando...' : !items.length ? 'Carrinho vazio' : type === 'pickup' || paysOnline ? 'Continuar para pagamento' : 'Calcular frete pelo WhatsApp'}
               </button>
             </div>
           )}
@@ -801,6 +821,7 @@ function CheckoutForm() {
         .delivery-options{margin-top:20px;padding-top:20px;border-top:1px solid #eee;display:grid;gap:12px}
         .delivery-unavailable{margin:0;padding:0 0 0 18px;color:#8a8a86;font-size:11.5px;line-height:1.6}
         .payment-method-body{margin-top:22px;padding-top:22px;border-top:1px solid #eee}
+        .payment-booting{min-height:180px;display:grid;place-items:center}
         .checkout-success{display:grid;place-items:center;min-height:60vh}
         .checkout-success-card{max-width:620px;text-align:center;border:1px solid #e9e9e9;border-radius:20px;padding:42px 34px}
         .success-icon{width:68px;height:68px;margin:0 auto 18px;border-radius:50%;background:#ffc400;display:grid;place-items:center}

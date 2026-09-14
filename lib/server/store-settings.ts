@@ -27,17 +27,14 @@ export type StoreOperations = {
   };
   pickupEnabled: boolean;
   ownDeliveryEnabled: boolean;
+  expressEnabled: boolean;
+  expressFee: number;
   appDeliveryEnabled: boolean;
   subsidyPercent: number;
   maxKm: number;
   priceTable: DeliveryTier[];
   cycleHour: number;
 };
-
-const OPERATIONS_FIELDS =
-  'id,name,whatsapp,business_hours,business_days,opens_at,closes_at,shipping_mode,pickup_mode,service_fee_percent,service_fee_fixed,min_order_total,free_shipping_from,address_line,address_number,address_complement,address_district,address_city,address_state,address_zip,address_place_id,address_lat,address_lng,delivery_pickup_enabled,delivery_own_enabled,delivery_app_enabled,delivery_subsidy_percent,delivery_max_km,delivery_price_table,delivery_cycle_hour';
-
-const FALLBACK_FIELDS = 'id,name,whatsapp,hours,pickup,shipping';
 
 let cache: { value: StoreOperations; at: number } | null = null;
 const CACHE_MS = 30_000;
@@ -56,12 +53,8 @@ export function invalidateStoreOperations() {
 }
 
 async function fetchRow() {
-  const query = (fields: string) => `store_settings?select=${fields}&order=updated_at.desc.nullslast&limit=1`;
-  const primary = await supabaseRest(query(OPERATIONS_FIELDS)).catch(() => null);
-  if (Array.isArray(primary)) return primary[0] || null;
-
-  const fallback = await supabaseRest(query(FALLBACK_FIELDS)).catch(() => null);
-  return Array.isArray(fallback) ? fallback[0] || null : null;
+  const rows = await supabaseRest('store_settings?select=*&order=updated_at.desc.nullslast&limit=1').catch(() => null);
+  return Array.isArray(rows) ? rows[0] || null : null;
 }
 
 function mapRow(row: any): StoreOperations {
@@ -102,6 +95,8 @@ function mapRow(row: any): StoreOperations {
     },
     pickupEnabled: data.delivery_pickup_enabled !== false,
     ownDeliveryEnabled: Boolean(data.delivery_own_enabled),
+    expressEnabled: Boolean(data.delivery_express_enabled),
+    expressFee: num(data.delivery_express_fee, 0),
     appDeliveryEnabled: Boolean(data.delivery_app_enabled),
     subsidyPercent: num(data.delivery_subsidy_percent, 30),
     maxKm: num(data.delivery_max_km, 12),

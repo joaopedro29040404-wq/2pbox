@@ -19,7 +19,6 @@ export default function PaymentBrick({ amount, orderId, email, cpf, publicKey, o
   useEffect(() => {
     const key = String(publicKey || '').trim();
     if (!key) {
-      errorHandler.current('A chave pública do Mercado Pago ainda não foi configurada nesta loja.');
       setReady(false);
       return;
     }

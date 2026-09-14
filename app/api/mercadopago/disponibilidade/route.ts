@@ -33,7 +33,7 @@ export async function GET() {
     Boolean(publicKey) && isTest(publicKey) === chargeIsTest;
 
   const chargeToken = connected ? await getSellerAccessToken().catch(() => null) : platformToken;
-  const methods = hasToken && environmentMatches && chargeToken ? await readSupportedMethods(chargeToken) : { card: false, pix: false };
+  const methods = hasToken && environmentMatches && chargeToken ? await readSupportedMethods(chargeToken) : { card: false, debit: false, pix: false };
 
   let reason: string | null = null;
   if (!hasToken) reason = "mercadopago-desconectado";

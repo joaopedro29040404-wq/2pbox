@@ -1,24 +1,59 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, MessageCircle, Minus, Plus, ShoppingBag, Store, Trash2 } from 'lucide-react';
+import { ArrowRight, Bike, MessageCircle, Minus, Plus, ShoppingBag, Store, Trash2, Zap } from 'lucide-react';
 import { useCart } from '@/components/cart-provider';
 import { SiteHeader } from '@/components/site-header';
 import { RadioGroup } from '@/components/ui/field';
 import { ProductImage } from '@/components/ui/product-image';
 import { money } from '@/lib/order-format';
 
-type Delivery = 'pickup' | 'shipping';
+type DeliveryOption = { provider: string; label: string; description: string; fee: number | null; needsAddress: boolean };
 
-const DELIVERY_OPTIONS = [
-  { value: 'pickup', label: 'Retirar na loja', description: 'Sem custo de entrega', icon: <Store size={19} /> },
-  { value: 'shipping', label: 'Calcular frete no WhatsApp', description: 'Combine o frete conosco', icon: <MessageCircle size={19} /> },
-];
+const WHATSAPP_OPTION: DeliveryOption = {
+  provider: 'whatsapp',
+  label: 'Calcular frete no WhatsApp',
+  description: 'Combine o frete conosco',
+  fee: null,
+  needsAddress: true,
+};
+
+const ICONS: Record<string, React.ReactNode> = {
+  pickup: <Store size={19} />,
+  own: <Bike size={19} />,
+  express: <Zap size={19} />,
+  app: <Bike size={19} />,
+  whatsapp: <MessageCircle size={19} />,
+};
 
 export default function CarrinhoPage() {
   const { items, setQty, remove, total, count, clear } = useCart();
-  const [delivery, setDelivery] = useState<Delivery>('pickup');
+  const [options, setOptions] = useState<DeliveryOption[]>([]);
+  const [delivery, setDelivery] = useState('pickup');
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/entrega/cotacao', { cache: 'no-store' })
+      .then((response) => response.json())
+      .then((data) => {
+        if (!active) return;
+        const list: DeliveryOption[] = Array.isArray(data?.options) ? data.options : [];
+        const withFallback = list.length ? list : [WHATSAPP_OPTION];
+        setOptions(withFallback);
+        setDelivery(withFallback[0].provider);
+      })
+      .catch(() => {
+        if (!active) return;
+        setOptions([WHATSAPP_OPTION]);
+        setDelivery(WHATSAPP_OPTION.provider);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const selected = options.find((option) => option.provider === delivery);
 
   return (
     <main className="cart-page-shell">
@@ -108,14 +143,19 @@ export default function CarrinhoPage() {
                   name="delivery"
                   label="Como você quer receber?"
                   value={delivery}
-                  options={DELIVERY_OPTIONS}
-                  onValueChange={(value) => setDelivery(value as Delivery)}
+                  options={options.map((option) => ({
+                    value: option.provider,
+                    label: option.label,
+                    description: option.fee && option.fee > 0 ? `${option.description} · ${money(option.fee)}` : option.fee === 0 ? option.description : option.description,
+                    icon: ICONS[option.provider] || <MessageCircle size={19} />,
+                  }))}
+                  onValueChange={setDelivery}
                 />
               </div>
 
               <div className="summary-line">
                 <span>Entrega</span>
-                <span className="summary-muted">{delivery === 'pickup' ? 'Retirada na loja' : 'Frete calculado no WhatsApp'}</span>
+                <span className="summary-muted">{selected ? (selected.fee && selected.fee > 0 ? `${selected.label} · ${money(selected.fee)}` : selected.label) : 'Escolha uma opção'}</span>
               </div>
 
               <div className="summary-total">

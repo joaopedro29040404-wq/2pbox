@@ -53,6 +53,8 @@ type Operations = {
   address: AddressValue;
   pickupEnabled: boolean;
   ownDeliveryEnabled: boolean;
+  expressEnabled: boolean;
+  expressFee: number;
   appDeliveryEnabled: boolean;
   subsidyPercent: number;
   maxKm: number;
@@ -520,7 +522,8 @@ export default function SettingsPage() {
                 <div className="settings-toggles">
                   <span className="settings-block-label">Modalidades oferecidas ao cliente</span>
                   <CheckboxField label="Retirada na loja" description="Sem custo de entrega." checked={data.pickupEnabled} onCheckedChange={(checked) => patch({ pickupEnabled: checked })} />
-                  <CheckboxField label="Motoboy da loja" description="Usa a tabela de distância da aba Entregas." checked={data.ownDeliveryEnabled} onCheckedChange={(checked) => patch({ ownDeliveryEnabled: checked })} />
+                  <CheckboxField label="Entrega no mesmo dia" description="Motoboy da loja, cobrado pela tabela de distância." checked={data.ownDeliveryEnabled} onCheckedChange={(checked) => patch({ ownDeliveryEnabled: checked })} />
+                  <CheckboxField label="Envio imediato" description="Frete fixo definido pela loja, sem subsídio." checked={data.expressEnabled} onCheckedChange={(checked) => patch({ expressEnabled: checked })} />
                   <CheckboxField label="Motofrete por aplicativo" description="Valor combinado com o cliente após o pedido." checked={data.appDeliveryEnabled} onCheckedChange={(checked) => patch({ appDeliveryEnabled: checked })} />
                 </div>
               </div>
@@ -541,7 +544,8 @@ export default function SettingsPage() {
 
             {section === 'delivery' && (
               <div className="settings-grid">
-                <TextField label="Subsídio da loja (%)" type="number" step="1" min="0" max="100" value={String(data.subsidyPercent)} onValueChange={(value) => patch({ subsidyPercent: Number(value) || 0 })} hint="Parte do frete que a loja absorve." />
+                <TextField label="Subsídio da loja (%)" type="number" step="1" min="0" max="100" value={String(data.subsidyPercent)} onValueChange={(value) => patch({ subsidyPercent: Number(value) || 0 })} hint="Parte do frete que a loja absorve na entrega no mesmo dia. Não se aplica ao envio imediato." />
+                <TextField label="Frete do envio imediato (R$)" type="number" step="0.01" min="0" value={String(data.expressFee)} onValueChange={(value) => patch({ expressFee: Number(value) || 0 })} hint="Valor fixo cobrado do cliente. O cliente paga o valor cheio, sem subsídio da loja." />
                 <TextField label="Raio máximo (km)" type="number" step="0.5" min="0.5" value={String(data.maxKm)} onValueChange={(value) => patch({ maxKm: Number(value) || 0 })} hint="Acima disso a entrega própria não é oferecida." />
                 <SelectField
                   label="Virada do ciclo de entregas"

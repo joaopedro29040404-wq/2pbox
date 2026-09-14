@@ -111,7 +111,7 @@ export function isMercadoPagoUnavailable(message: unknown) {
   return /circuit breaker|internal error|internal_server_error|unavailable|timeout|try again/i.test(String(message || ''));
 }
 
-type MethodSupport = { card: boolean; pix: boolean };
+type MethodSupport = { card: boolean; debit: boolean; pix: boolean };
 
 let methodsCache: { key: string; value: MethodSupport; at: number } | null = null;
 const METHODS_TTL_MS = 5 * 60 * 1000;
@@ -120,7 +120,7 @@ export async function readSupportedMethods(accessToken: string): Promise<MethodS
   const key = accessToken.slice(-12);
   if (methodsCache && methodsCache.key === key && Date.now() - methodsCache.at < METHODS_TTL_MS) return methodsCache.value;
 
-  const fallback: MethodSupport = { card: true, pix: false };
+  const fallback: MethodSupport = { card: true, debit: false, pix: false };
   if (!accessToken) return fallback;
 
   const { ok, data } = await fetchJson<any>(`${API}/v1/payment_methods`, {
@@ -133,6 +133,7 @@ export async function readSupportedMethods(accessToken: string): Promise<MethodS
   const active = (id: string) => data.some((method: any) => method?.id === id && String(method?.status || 'active') === 'active');
   const value: MethodSupport = {
     card: data.some((method: any) => String(method?.payment_type_id || '') === 'credit_card'),
+    debit: data.some((method: any) => ['debit_card', 'prepaid_card', 'account_money'].includes(String(method?.payment_type_id || ''))),
     pix: active('pix'),
   };
   methodsCache = { key, value, at: Date.now() };

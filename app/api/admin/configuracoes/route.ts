@@ -60,6 +60,8 @@ export async function PUT(request: Request) {
     address_lng: coordinate(body.address?.lng),
     delivery_pickup_enabled: bool(body.pickupEnabled, current.pickupEnabled),
     delivery_own_enabled: bool(body.ownDeliveryEnabled, current.ownDeliveryEnabled),
+    delivery_express_enabled: bool(body.expressEnabled, current.expressEnabled),
+    delivery_express_fee: bounded(body.expressFee, 0, 10000, current.expressFee),
     delivery_app_enabled: bool(body.appDeliveryEnabled, current.appDeliveryEnabled),
     delivery_subsidy_percent: bounded(body.subsidyPercent, 0, 100, current.subsidyPercent),
     delivery_max_km: bounded(body.maxKm, 0.5, 200, current.maxKm),

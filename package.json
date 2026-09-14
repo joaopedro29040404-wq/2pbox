@@ -12,7 +12,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "smoke:mp": "node scripts/smoke-mercadopago.mjs",
-    "smoke:checkout": "node scripts/smoke-checkout.mjs"
+    "smoke:checkout": "node scripts/smoke-checkout.mjs",
+    "produtos:reativar": "node scripts/reativar-produtos.mjs"
   },
   "dependencies": {
     "@mercadopago/sdk-react": "1.0.7",

@@ -3,18 +3,12 @@ import { isGeoAvailable, resolvePlace, routeDistance } from '@/lib/server/geo';
 import { readOrder, readOrderItems } from '@/lib/server/orders';
 import { readStoreOperations, storeOrigin } from '@/lib/server/store-settings';
 import { supabaseRest } from '@/lib/server/supabase-admin';
-import { cycleStartFor, quoteOwnDelivery } from '@/lib/store-operations';
+import { DELIVERY_TYPE_BY_PROVIDER, cycleStartFor, quoteOwnDelivery, type DeliveryProvider } from '@/lib/store-operations';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const PROVIDERS = new Set(['pickup', 'own', 'app']);
-
-const DELIVERY_TYPE: Record<string, string> = {
-  pickup: 'pickup',
-  own: 'own_delivery',
-  app: 'app_delivery',
-};
+const PROVIDERS = new Set(['pickup', 'own', 'express', 'app']);
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -37,7 +31,8 @@ export async function POST(request: Request) {
   }
 
   const operations = await readStoreOperations();
-  if (provider === 'own' && !operations.ownDeliveryEnabled) return NextResponse.json({ error: 'A entrega própria está desativada.' }, { status: 409 });
+  if (provider === 'own' && !operations.ownDeliveryEnabled) return NextResponse.json({ error: 'A entrega no mesmo dia está desativada.' }, { status: 409 });
+  if (provider === 'express' && !operations.expressEnabled) return NextResponse.json({ error: 'O envio imediato está desativado.' }, { status: 409 });
   if (provider === 'app' && !operations.appDeliveryEnabled) return NextResponse.json({ error: 'O motofrete está desativado.' }, { status: 409 });
   if (provider === 'pickup' && !operations.pickupEnabled) return NextResponse.json({ error: 'A retirada está desativada.' }, { status: 409 });
 
@@ -51,6 +46,11 @@ export async function POST(request: Request) {
   let distanceKm: number | null = null;
   let fee = 0;
   let subsidy = 0;
+
+  if (provider === 'express') {
+    fee = round(operations.expressFee);
+    subsidy = 0;
+  }
 
   if (provider === 'own') {
     const origin = storeOrigin(operations);
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
   const total = round(subtotal + fee + serviceFee);
 
   const payload: Record<string, unknown> = {
-    delivery_type: DELIVERY_TYPE[provider],
+    delivery_type: DELIVERY_TYPE_BY_PROVIDER[provider as DeliveryProvider],
     delivery_provider: provider,
     delivery_distance_km: distanceKm,
     delivery_fee: fee,

@@ -14,7 +14,8 @@ const DAY_INDEX: Record<WeekDay, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu
 
 export const SHIPPING_MODES = [
   { value: 'whatsapp', label: 'Combinar pelo WhatsApp' },
-  { value: 'own', label: 'Entrega própria (motoboy da loja)' },
+  { value: 'own', label: 'Entrega no mesmo dia (motoboy da loja)' },
+  { value: 'express', label: 'Envio imediato (frete fixo)' },
   { value: 'app', label: 'Aplicativo de motofrete' },
   { value: 'pickup_only', label: 'Somente retirada' },
 ] as const;
@@ -27,10 +28,18 @@ export const PICKUP_MODES = [
 ] as const;
 
 export const DELIVERY_PROVIDERS = [
-  { value: 'pickup', label: 'Retirada na loja' },
-  { value: 'own', label: 'Motoboy da loja' },
-  { value: 'app', label: 'Motofrete por aplicativo' },
+  { value: 'pickup', label: 'Retirada na loja', description: 'Sem custo de entrega', needsAddress: false },
+  { value: 'own', label: 'Entrega no mesmo dia', description: 'Motoboy da loja, valor por distância', needsAddress: true },
+  { value: 'express', label: 'Envio imediato', description: 'Sai agora, com frete fixo da loja', needsAddress: true },
+  { value: 'app', label: 'Motofrete por aplicativo', description: 'A loja chama o motofrete e informa o valor', needsAddress: true },
 ] as const;
+
+export const DELIVERY_TYPE_BY_PROVIDER: Record<DeliveryProvider, string> = {
+  pickup: 'pickup',
+  own: 'own_delivery',
+  express: 'express_delivery',
+  app: 'app_delivery',
+};
 
 export type ShippingMode = (typeof SHIPPING_MODES)[number]['value'];
 export type PickupMode = (typeof PICKUP_MODES)[number]['value'];
