@@ -92,8 +92,12 @@ export default function PaymentBrick({ amount, orderId, email, cpf, publicKey, o
       }}
       onReady={() => undefined}
       onError={(error) => {
-        console.error('Mercado Pago Card Payment Brick:', error);
-        onError('O Mercado Pago encontrou um problema no formulário.');
+        const detail = error as { type?: string; cause?: string; message?: string };
+        console.error('Mercado Pago Card Payment Brick:', { type: detail?.type, cause: detail?.cause, message: detail?.message, raw: error });
+
+        if (String(detail?.type || '').toLowerCase() !== 'critical') return;
+
+        errorHandler.current('O formulário de cartão não carregou corretamente. Recarregue a página e tente de novo.');
       }}
     />
     {submitting && <div className="payment-processing" role="status" aria-live="polite">Processando pagamento… não feche esta tela.</div>}
