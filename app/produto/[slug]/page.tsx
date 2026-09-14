@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { useCart } from '@/components/cart-provider';
 import { SiteHeader } from '@/components/site-header';
 import { ProductImage, productGallery } from '@/components/ui/product-image';
+import { DeliveryPolicy } from '@/components/delivery-policy';
 import { PageLoader } from '@/components/ui/loader';
 import { useToast } from '@/components/ui/toast';
 import { money } from '@/lib/order-format';
@@ -186,6 +187,8 @@ export default function ProductPage() {
             <div className={`availability ${product.stock > 0 ? 'available' : 'unavailable'}`}>
               {product.stock > 0 ? `Em estoque · ${product.stock} unidade(s)` : 'Produto sem estoque'}
             </div>
+
+            <DeliveryPolicy />
 
             {product.stock > 0 && (
               <div className="purchase-box">

@@ -68,3 +68,7 @@ where business_hours is null;
 alter table public.store_settings
   add column if not exists delivery_express_enabled boolean default false,
   add column if not exists delivery_express_fee numeric(10,2) default 0;
+
+alter table public.store_settings
+  add column if not exists same_day_enabled boolean default false,
+  add column if not exists same_day_cutoff text default '16:00';

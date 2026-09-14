@@ -126,7 +126,7 @@ export function AddressAutocomplete({ label = 'Endereço', hint, value, onChange
       {available === false ? (
         <p className="addr-manual">A busca do Google não está ativa neste ambiente. Preencha o endereço nos campos abaixo.</p>
       ) : (
-        <div className="addr-search">
+        <div className="addr-search ui-input has-icon">
           <Search size={16} />
           <input
             type="text"
@@ -172,10 +172,8 @@ export function AddressAutocomplete({ label = 'Endereço', hint, value, onChange
       <style jsx>{`
         .addr{grid-column:1/-1;display:grid;gap:8px;position:relative}
         .addr-label{display:flex;align-items:center;gap:7px;font:800 10px Inter,Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#555}
-        .addr-search{position:relative;display:flex;align-items:center;gap:9px;padding:0 13px;min-height:50px;border:1px solid #dcdcd6;border-radius:10px;background:#fff}
-        .addr-search:focus-within{border-color:#111}
-        .addr-search svg{flex:none;color:#8a8a86}
-        .addr-search input{flex:1;min-width:0;border:0;outline:0;background:transparent;font:500 13.5px Inter,Arial,sans-serif;color:#111}
+        .addr-search{gap:9px;padding-right:13px}
+        .addr-search > svg{flex:none;margin-left:14px;color:#8a8a86}
         .addr-search > button{display:grid;place-items:center;width:26px;height:26px;flex:none;border:0;border-radius:50%;background:#f2f2ef;color:#666;cursor:pointer}
         .addr-list{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:30;margin:0;padding:6px;list-style:none;background:#fff;border:1px solid #e0e0da;border-radius:12px;box-shadow:0 18px 44px rgba(0,0,0,.13);max-height:290px;overflow-y:auto}
         .addr-list button{display:grid;gap:3px;width:100%;padding:11px 12px;border:0;border-radius:8px;background:transparent;text-align:left;cursor:pointer}

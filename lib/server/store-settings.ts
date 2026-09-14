@@ -34,6 +34,8 @@ export type StoreOperations = {
   maxKm: number;
   priceTable: DeliveryTier[];
   cycleHour: number;
+  sameDayEnabled: boolean;
+  sameDayCutoff: string;
 };
 
 let cache: { value: StoreOperations; at: number } | null = null;
@@ -102,6 +104,8 @@ function mapRow(row: any): StoreOperations {
     maxKm: num(data.delivery_max_km, 12),
     priceTable: table.length ? table : DEFAULT_PRICE_TABLE,
     cycleHour: Math.min(23, Math.max(0, Math.round(num(data.delivery_cycle_hour, 16)))),
+    sameDayEnabled: Boolean(data.same_day_enabled),
+    sameDayCutoff: /^([01]\d|2[0-3]):[0-5]\d$/.test(String(data.same_day_cutoff || '')) ? String(data.same_day_cutoff) : '16:00',
   };
 }
 

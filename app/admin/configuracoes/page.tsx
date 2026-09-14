@@ -60,6 +60,8 @@ type Operations = {
   maxKm: number;
   priceTable: DeliveryTier[];
   cycleHour: number;
+  sameDayEnabled: boolean;
+  sameDayCutoff: string;
 };
 
 type MpStatus = {
@@ -483,11 +485,15 @@ export default function SettingsPage() {
                             <div className="hours-times">
                               <label>
                                 <span>Abre</span>
-                                <input type="time" value={range!.open} onChange={(event) => setDayTime(day.value, 'open', event.target.value)} />
+                                <span className="ui-input">
+                                  <input type="time" value={range!.open} onChange={(event) => setDayTime(day.value, 'open', event.target.value)} />
+                                </span>
                               </label>
                               <label>
                                 <span>Fecha</span>
-                                <input type="time" value={range!.close} onChange={(event) => setDayTime(day.value, 'close', event.target.value)} />
+                                <span className="ui-input">
+                                  <input type="time" value={range!.close} onChange={(event) => setDayTime(day.value, 'close', event.target.value)} />
+                                </span>
                               </label>
                               {invalid && <small className="hours-invalid">O fechamento precisa ser depois da abertura.</small>}
                             </div>
@@ -553,6 +559,23 @@ export default function SettingsPage() {
                   options={CYCLE_HOURS}
                   onValueChange={(value) => patch({ cycleHour: Number(value) })}
                   hint="Pedidos feitos após esse horário entram no ciclo do dia seguinte."
+                />
+
+                <div className="settings-toggles">
+                  <span className="settings-block-label">Entrega no mesmo dia</span>
+                  <CheckboxField
+                    label="A loja entrega no mesmo dia"
+                    description="Aparece na página do produto, antes do cliente comprar."
+                    checked={data.sameDayEnabled}
+                    onCheckedChange={(checked) => patch({ sameDayEnabled: checked })}
+                  />
+                </div>
+                <TextField
+                  label="Horário limite do mesmo dia"
+                  type="time"
+                  value={data.sameDayCutoff}
+                  onValueChange={(value) => patch({ sameDayCutoff: value })}
+                  hint="Pedidos feitos até este horário são entregues no mesmo dia."
                 />
 
                 <div className="tier-block">
@@ -645,8 +668,7 @@ export default function SettingsPage() {
         .hours-times{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
         .hours-times label{display:grid;gap:6px}
         .hours-times span{font:800 9px Inter,Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a8a86}
-        .hours-times input{height:42px;padding:0 12px;border:1px solid #dcdcd6;border-radius:9px;background:#fff;color:#111;font:600 13px Inter,Arial,sans-serif}
-        .hours-times input:focus{outline:0;border-color:#111;box-shadow:0 0 0 3px rgba(255,196,0,.2)}
+        .hours-times .ui-input{display:flex}
         .hours-invalid{flex-basis:100%;color:#c62828;font:700 10.5px Inter,Arial,sans-serif}
         .hours-closed{font:800 10px Inter,Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#a5a5a0}
         .settings-toggles{display:grid;gap:13px}
@@ -701,7 +723,7 @@ export default function SettingsPage() {
           .hours-head{align-items:stretch;flex-direction:column;gap:10px}
           .hours-head button{width:100%}
           .hours-list li{align-items:stretch;flex-direction:column;gap:12px}
-          .hours-times input{width:100%}
+          .hours-times .ui-input{width:100%}
           .tier-list li{grid-template-columns:repeat(2,minmax(0,1fr))}
           .tier-list li>button{width:100%}
         }

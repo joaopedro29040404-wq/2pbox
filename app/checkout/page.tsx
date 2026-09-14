@@ -73,6 +73,7 @@ function CheckoutForm() {
   const [options, setOptions] = useState<DeliveryOption[]>([]);
   const [provider, setProvider] = useState<Provider>('whatsapp');
   const [quoting, setQuoting] = useState(false);
+  const [quotedFee, setQuotedFee] = useState<number | null>(null);
   const [payableTotal, setPayableTotal] = useState<number | null>(null);
   const [feeBreakdown, setFeeBreakdown] = useState<{ fee: number; serviceFee: number; subtotal: number } | null>(null);
   const [paymentsOnline, setPaymentsOnline] = useState(true);
@@ -80,7 +81,7 @@ function CheckoutForm() {
   const [mpMethods, setMpMethods] = useState({ card: true, debit: false, pix: true });
   const [mpLoaded, setMpLoaded] = useState(false);
   const lastPaymentError = useRef({ message: '', at: 0 });
-  const paysOnline = provider === 'own' || provider === 'express';
+  const paysOnline = provider === 'own' || provider === 'express' || provider === 'app';
 
   useEffect(() => {
     const chosen = String(searchParams.get('entrega') || 'pickup');
@@ -136,6 +137,7 @@ function CheckoutForm() {
       .then((data) => {
         if (!active) return;
         const list = (Array.isArray(data?.options) ? data.options : []).filter((option: DeliveryOption) => option.provider !== 'pickup');
+        setQuotedFee(list.find((option: DeliveryOption) => option.available)?.fee ?? null);
         setOptions(list);
         const first = list.find((option: DeliveryOption) => option.available);
         setProvider((current) => (list.some((option: DeliveryOption) => option.provider === current && option.available) ? current : first ? first.provider : 'whatsapp'));
@@ -586,7 +588,11 @@ function CheckoutForm() {
                           description: option.fee != null && option.fee > 0 ? `${option.description} • ${money(option.fee)}` : option.fee === 0 ? `${option.description} • grátis` : option.description,
                           icon: option.provider === 'app' || option.provider === 'whatsapp' ? <MessageCircle size={19} /> : <Bike size={19} />,
                         }))
-                        .concat([{ value: 'whatsapp', label: 'Combinar pelo WhatsApp', description: 'A loja informa o valor do frete no atendimento', icon: <MessageCircle size={19} /> }])}
+                        .concat(
+                          options.some((option) => option.available)
+                            ? []
+                            : [{ value: 'whatsapp', label: 'Combinar pelo WhatsApp', description: 'A loja informa o valor do frete no atendimento', icon: <MessageCircle size={19} /> }],
+                        )}
                       onValueChange={(value) => setProvider(value as 'whatsapp' | 'own' | 'app')}
                       fullWidth
                     />
@@ -762,8 +768,17 @@ function CheckoutForm() {
           {!paymentReady && (
             <div className="checkout-footer">
               <div>
-                <span>Total dos produtos</span>
-                <strong>{money(total)}</strong>
+                {quotedFee != null && quotedFee > 0 && type !== 'pickup' ? (
+                  <>
+                    <span>Produtos {money(total)} + frete {money(quotedFee)}</span>
+                    <strong>{money(total + quotedFee)}</strong>
+                  </>
+                ) : (
+                  <>
+                    <span>Total dos produtos</span>
+                    <strong>{money(total)}</strong>
+                  </>
+                )}
               </div>
               <button type="button" onClick={submitCheckout} className="primary checkout-submit" disabled={!items.length || submitting}>
                 {submitting ? 'Processando...' : !items.length ? 'Carrinho vazio' : type === 'pickup' || paysOnline ? 'Continuar para pagamento' : 'Calcular frete pelo WhatsApp'}

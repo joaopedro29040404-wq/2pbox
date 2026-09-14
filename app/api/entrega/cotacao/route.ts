@@ -35,6 +35,8 @@ export async function GET() {
   const providers = enabledProviders(operations);
 
   return NextResponse.json({
+    sameDay: { enabled: operations.sameDayEnabled, cutoff: operations.sameDayCutoff },
+    address: storeAddressLabel(operations),
     options: providers.map((provider) => {
       const meta = describe(provider);
       const fee = provider === 'pickup' ? 0 : provider === 'express' ? operations.expressFee : null;
@@ -80,43 +82,32 @@ export async function POST(request: Request) {
       continue;
     }
 
-    if (provider === 'own') {
-      if (!origin) {
-        options.push(unavailable(provider, meta.label, 'Endereço da loja não configurado.'));
-        continue;
-      }
-      if (!destination) {
-        options.push(unavailable(provider, meta.label, 'Selecione o endereço de entrega para calcular.'));
-        continue;
-      }
-
-      const distance = await routeDistance(origin, destination);
-      const quote = distance.km > operations.maxKm ? null : quoteOwnDelivery(distance.km, operations.priceTable, operations.subsidyPercent);
-      options.push(
-        quote
-          ? {
-              provider,
-              label: meta.label,
-              description: `${distance.km.toFixed(1)} km${distance.minutes ? ` · ~${distance.minutes} min` : ''}`,
-              fee: quote.customerFee,
-              distanceKm: distance.km,
-              needsAddress: true,
-              available: true,
-            }
-          : { ...unavailable(provider, meta.label, `Fora do raio de atendimento (${operations.maxKm} km).`), distanceKm: distance.km },
-      );
+    if (!origin) {
+      options.push(unavailable(provider, meta.label, 'Endereço da loja não configurado.'));
+      continue;
+    }
+    if (!destination) {
+      options.push(unavailable(provider, meta.label, 'Informe o endereço de entrega para calcular o frete.'));
       continue;
     }
 
-    options.push({
-      provider,
-      label: meta.label,
-      description: meta.description,
-      fee: null,
-      distanceKm: origin && destination ? (await routeDistance(origin, destination)).km : null,
-      needsAddress: true,
-      available: true,
-    });
+    const distance = await routeDistance(origin, destination);
+    const subsidy = provider === 'own' ? operations.subsidyPercent : 0;
+    const quote = distance.km > operations.maxKm ? null : quoteOwnDelivery(distance.km, operations.priceTable, subsidy);
+
+    options.push(
+      quote
+        ? {
+            provider,
+            label: meta.label,
+            description: `${distance.km.toFixed(1)} km${distance.minutes ? ` · ~${distance.minutes} min` : ''}`,
+            fee: quote.customerFee,
+            distanceKm: distance.km,
+            needsAddress: true,
+            available: true,
+          }
+        : { ...unavailable(provider, meta.label, `Fora do raio de atendimento (${operations.maxKm} km).`), distanceKm: distance.km },
+    );
   }
 
   return NextResponse.json({
@@ -142,6 +133,15 @@ async function resolveDestination(body: any) {
 
 function unavailable(provider: DeliveryProvider, label: string, reason: string): Option {
   return { provider, label, description: reason, fee: null, distanceKm: null, needsAddress: true, available: false, reason };
+}
+
+function storeAddressLabel(operations: StoreOperations) {
+  const { line, number, district, city, state, zip } = operations.address;
+  if (!line && !city) return '';
+
+  const street = [line, number].filter(Boolean).join(', ');
+  const region = [district, [city, state].filter(Boolean).join('/')].filter(Boolean).join(', ');
+  return [street, region, zip].filter(Boolean).join(' · ');
 }
 
 function currency(value: number) {

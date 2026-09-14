@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     subsidy = 0;
   }
 
-  if (provider === 'own') {
+  if (provider === 'own' || provider === 'app') {
     const origin = storeOrigin(operations);
     if (!origin) return NextResponse.json({ error: 'O endereço da loja não está configurado.' }, { status: 409 });
 
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Endereço fora do raio de atendimento (${operations.maxKm} km).`, distanceKm: distance.km }, { status: 422 });
     }
 
-    const quote = quoteOwnDelivery(distance.km, operations.priceTable, operations.subsidyPercent);
+    const quote = quoteOwnDelivery(distance.km, operations.priceTable, provider === 'own' ? operations.subsidyPercent : 0);
     if (!quote) return NextResponse.json({ error: 'Nenhuma faixa de preço cobre essa distância.', distanceKm: distance.km }, { status: 422 });
 
     fee = quote.customerFee;

@@ -33,9 +33,25 @@ console.log('=== SMOKE TEST DO CHECKOUT ===');
 console.log(`base: ${BASE}\n`);
 
 const stocked = await fetch(`${SB}/rest/v1/products?active=eq.true&stock=gt.3&select=id,name,price,stock&limit=1`, { headers: admin }).then((r) => r.json());
-const product = stocked[0];
-record('produto com estoque disponivel', Boolean(product), product ? `${product.name} (estoque ${product.stock})` : 'nenhum encontrado');
+let product = stocked[0];
+let ativadoPeloTeste = false;
+
+if (!product) {
+  const candidato = await fetch(`${SB}/rest/v1/products?active=eq.false&stock=gt.3&select=id,name,price,stock&limit=1`, { headers: admin }).then((r) => r.json());
+  product = candidato[0];
+  if (product) {
+    await fetch(`${SB}/rest/v1/products?id=eq.${product.id}`, { method: 'PATCH', headers: { ...admin, Prefer: 'return=minimal' }, body: JSON.stringify({ active: true }) });
+    ativadoPeloTeste = true;
+  }
+}
+
+record('produto com estoque disponivel', Boolean(product), product ? `${product.name} (estoque ${product.stock})${ativadoPeloTeste ? ' [ativado so para o teste]' : ''}` : 'nenhum encontrado');
 if (!product) process.exit(1);
+
+async function restaurarProduto() {
+  if (!ativadoPeloTeste) return;
+  await fetch(`${SB}/rest/v1/products?id=eq.${product.id}`, { method: 'PATCH', headers: { ...admin, Prefer: 'return=minimal' }, body: JSON.stringify({ active: false }) });
+}
 
 const zero = await fetch(`${SB}/rest/v1/products?active=eq.true&stock=eq.0&select=id,name&limit=1`, { headers: admin }).then((r) => r.json());
 
@@ -118,6 +134,7 @@ if (pickup.ok) {
 }
 
 await cleanup();
+await restaurarProduto();
 console.log(`\n${results.filter((r) => r.ok).length}/${results.length} verificacoes passaram`);
 const failures = results.filter((r) => !r.ok);
 if (failures.length) {

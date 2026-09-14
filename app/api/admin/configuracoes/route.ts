@@ -67,6 +67,8 @@ export async function PUT(request: Request) {
     delivery_max_km: bounded(body.maxKm, 0.5, 200, current.maxKm),
     delivery_price_table: normalizePriceTable(body.priceTable),
     delivery_cycle_hour: Math.round(bounded(body.cycleHour, 0, 23, current.cycleHour)),
+    same_day_enabled: bool(body.sameDayEnabled, current.sameDayEnabled),
+    same_day_cutoff: /^([01]\d|2[0-3]):[0-5]\d$/.test(String(body.sameDayCutoff || '')) ? String(body.sameDayCutoff) : current.sameDayCutoff,
   };
 
   try {
