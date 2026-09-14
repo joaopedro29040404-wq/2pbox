@@ -3,12 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, Heart, MessageCircle, Minus, Plus, ShoppingCart, Store, Truck } from 'lucide-react';
+import { ArrowLeft, Bike, Check, ChevronLeft, ChevronRight, Heart, MessageCircle, Minus, Plus, ShoppingCart, Store, Truck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useCart } from '@/components/cart-provider';
 import { SiteHeader } from '@/components/site-header';
 import { ProductImage, productGallery } from '@/components/ui/product-image';
-import { DeliveryPolicy } from '@/components/delivery-policy';
 import { PageLoader } from '@/components/ui/loader';
 import { useToast } from '@/components/ui/toast';
 import { money } from '@/lib/order-format';
@@ -25,6 +24,15 @@ type Product = {
   categories?: { name: string } | null;
 };
 type AuthUser = { id: string };
+type DeliveryOption = { provider: string; label: string; description: string; fee: number | null };
+type DeliveryInfo = { sameDay: { enabled: boolean; cutoff: string }; address: string; options: DeliveryOption[] };
+
+const DELIVERY_ICONS: Record<string, React.ReactNode> = {
+  pickup: <Store size={19} />,
+  own: <Bike size={19} />,
+  express: <Truck size={19} />,
+  app: <Bike size={19} />,
+};
 
 export default function ProductPage() {
   const params = useParams();
@@ -39,6 +47,20 @@ export default function ProductPage() {
   const [selected, setSelected] = useState(0);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [favorite, setFavorite] = useState(false);
+  const [delivery, setDelivery] = useState<DeliveryInfo | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/entrega/cotacao', { cache: 'no-store' })
+      .then((response) => response.json())
+      .then((data) => {
+        if (active) setDelivery(data as DeliveryInfo);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     const client = supabase;
@@ -188,8 +210,6 @@ export default function ProductPage() {
               {product.stock > 0 ? `Em estoque · ${product.stock} unidade(s)` : 'Produto sem estoque'}
             </div>
 
-            <DeliveryPolicy />
-
             {product.stock > 0 && (
               <div className="purchase-box">
                 <div className="purchase-label">Quantidade</div>
@@ -237,23 +257,38 @@ export default function ProductPage() {
                   <Truck size={12} /> Escolha no carrinho
                 </span>
               </div>
+              {delivery?.sameDay.enabled && (
+                <div className="delivery-same-day">
+                  <Bike size={19} />
+                  <div>
+                    <strong>Entrega no mesmo dia</strong>
+                    <span>Pedidos feitos até {delivery.sameDay.cutoff} são entregues no mesmo dia.</span>
+                  </div>
+                </div>
+              )}
+
               <div className="delivery-options-info">
-                <div>
-                  <Store size={19} />
-                  <div>
-                    <strong>Retirar na loja</strong>
-                    <span>Sem custo de entrega</span>
+                {(delivery?.options.length
+                  ? delivery.options
+                  : [{ provider: 'whatsapp', label: 'Calcular frete no WhatsApp', description: 'Combine o frete e a entrega pelo WhatsApp', fee: null }]
+                ).map((option) => (
+                  <div key={option.provider}>
+                    {DELIVERY_ICONS[option.provider] || <MessageCircle size={19} />}
+                    <div>
+                      <strong>{option.label}</strong>
+                      <span>
+                        {option.provider === 'pickup' && delivery?.address
+                          ? delivery.address
+                          : option.fee != null && option.fee > 0
+                            ? `Frete de R$ ${option.fee.toFixed(2).replace('.', ',')}`
+                            : option.fee === 0
+                              ? option.description
+                              : 'Frete calculado pelo endereço no checkout'}
+                      </span>
+                    </div>
+                    <Check size={15} />
                   </div>
-                  <Check size={15} />
-                </div>
-                <div>
-                  <MessageCircle size={19} />
-                  <div>
-                    <strong>Calcular frete no WhatsApp</strong>
-                    <span>Combine o frete e a entrega pelo WhatsApp</span>
-                  </div>
-                  <Check size={15} />
-                </div>
+                ))}
               </div>
               <div className="delivery-selection-note">
                 <strong>Você escolhe depois.</strong>
@@ -317,6 +352,11 @@ export default function ProductPage() {
         .add-product{display:inline-flex;align-items:center;justify-content:center;gap:9px;height:52px;flex:1;border:0;border-radius:10px;background:#ffc400;color:#111;text-decoration:none;font:900 13px Inter,Arial,sans-serif;cursor:pointer}
         .add-product:hover{background:#111;color:#fff}
         .view-cart-link{display:inline-flex;align-items:center;gap:6px;margin-top:12px;color:#555;text-decoration:underline;text-underline-offset:3px;font:700 11px Inter,Arial,sans-serif}
+        .delivery-same-day{display:flex;align-items:flex-start;gap:11px;margin:16px 0 0;padding:12px 13px;background:#fff7d6;border:1px solid #f0d65b;border-radius:10px}
+        .delivery-same-day svg{flex:none;margin-top:1px;color:#8a6d00}
+        .delivery-same-day div{display:grid;gap:3px}
+        .delivery-same-day strong{font:800 12.5px Inter,Arial,sans-serif;color:#5c5000}
+        .delivery-same-day span{font-size:11.5px;line-height:1.5;color:#8a6d00}
         .delivery-panel{margin-top:28px;border:1px solid #dedede;border-radius:14px;padding:20px;background:#fff}
         .delivery-panel-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}
         .delivery-panel-head h2{font-family:'Barlow Condensed';font-size:25px;text-transform:uppercase;font-style:italic;margin:4px 0 0}
