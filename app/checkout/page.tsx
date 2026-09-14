@@ -34,8 +34,8 @@ import { money } from '@/lib/order-format';
 import { DELIVERY_TYPE_BY_PROVIDER } from '@/lib/store-operations';
 
 type Delivery = 'pickup' | 'whatsapp_shipping';
-type Provider = 'whatsapp' | 'pickup' | 'own' | 'express' | 'app';
-type DeliveryOption = { provider: Provider; label: string; description: string; fee: number | null; distanceKm: number | null; available: boolean };
+type Provider = 'pickup' | 'own' | 'express' | 'app';
+type DeliveryOption = { provider: Provider; label: string; description: string; fee: number | null; baseFee: number | null; subsidy: number | null; distanceKm: number | null; minutes: number | null; available: boolean };
 
 const QUOTE_DEBOUNCE_MS = 600;
 
@@ -65,7 +65,6 @@ function CheckoutForm() {
   const [errors, setErrors] = useState<Errors>({});
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState('');
-  const [done, setDone] = useState(false);
   const [orderId, setOrderId] = useState('');
   const [accessSent, setAccessSent] = useState(false);
   const [storeWhatsApp, setStoreWhatsApp] = useState('5511999999999');
@@ -73,7 +72,7 @@ function CheckoutForm() {
   const [lookingUpCep, setLookingUpCep] = useState(false);
   const [geoAddress, setGeoAddress] = useState<AddressValue>(EMPTY_ADDRESS);
   const [options, setOptions] = useState<DeliveryOption[]>([]);
-  const [provider, setProvider] = useState<Provider>('whatsapp');
+  const [provider, setProvider] = useState<Provider>('own');
   const [quoting, setQuoting] = useState(false);
   const [quotedFee, setQuotedFee] = useState<number | null>(null);
   const [payableTotal, setPayableTotal] = useState<number | null>(null);
@@ -83,13 +82,13 @@ function CheckoutForm() {
   const [mpMethods, setMpMethods] = useState({ card: true, debit: false, pix: true });
   const [mpLoaded, setMpLoaded] = useState(false);
   const lastPaymentError = useRef({ message: '', at: 0 });
-  const paysOnline = provider === 'own' || provider === 'express' || provider === 'app';
+  const paysOnline = true;
 
   useEffect(() => {
     const chosen = String(searchParams.get('entrega') || 'pickup');
-    const known: Provider[] = ['whatsapp', 'pickup', 'own', 'express', 'app'];
-    const selected = (known.includes(chosen as Provider) ? chosen : chosen === 'shipping' ? 'whatsapp' : 'pickup') as Provider;
-    setProvider(selected === 'pickup' ? 'whatsapp' : selected);
+    const known: Provider[] = ['pickup', 'own', 'express', 'app'];
+    const selected = (known.includes(chosen as Provider) ? chosen : 'pickup') as Provider;
+    setProvider(selected === 'pickup' ? 'own' : selected);
     setType(selected === 'pickup' ? 'pickup' : 'whatsapp_shipping');
     const client = supabase;
     if (!client) return;
@@ -150,7 +149,7 @@ function CheckoutForm() {
           setQuotedFee(list.find((option: DeliveryOption) => option.available)?.fee ?? null);
           setOptions(list);
           const first = list.find((option: DeliveryOption) => option.available);
-          setProvider((current) => (list.some((option: DeliveryOption) => option.provider === current && option.available) ? current : first ? first.provider : 'whatsapp'));
+          setProvider((current) => (list.some((option: DeliveryOption) => option.provider === current && option.available) ? current : first ? first.provider : current));
         })
         .catch(() => {
           if (active) setOptions([]);
@@ -383,20 +382,8 @@ function CheckoutForm() {
         }
 
         setStatus('');
-        return;
       }
 
-      const list = items.map((item) => `${item.quantity}x ${item.name}: ${money(item.price * item.quantity)}`).join('\n');
-      const addressText = address
-        ? `\n\nENDEREÇO PARA FRETE\n${address.street}, ${address.number}${address.complement ? `, ${address.complement}` : ''}\n${address.neighborhood}, ${address.city}/${address.state}\nCEP: ${address.postal_code}`
-        : '';
-      const message = `Olá, 2P Box!\n\nQuero calcular o frete para o pedido ${id}.\n\nCliente: ${name}\nTelefone: ${phone}\nE-mail: ${email}\n\n${list}\n\nTotal dos produtos: ${money(total)}\nForma de recebimento: Entrega com cálculo de frete pelo WhatsApp${addressText}${notes ? `\n\nObservações: ${notes}` : ''}`;
-
-      clear({ silent: true });
-      setDone(true);
-      window.setTimeout(() => {
-        window.location.href = `https://wa.me/${toWhatsAppNumber(storeWhatsApp)}?text=${encodeURIComponent(message)}`;
-      }, 700);
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Não foi possível concluir o pedido.';
       setStatus(detail);
@@ -410,49 +397,10 @@ function CheckoutForm() {
   const awaitingContact = (type === 'pickup' || paysOnline) && !paymentsOnline && Boolean(orderId);
   const paymentReady = payableOnline && Boolean(orderId);
   const chargeTotal = payableTotal ?? total;
+  const selectedOption = options.find((option) => option.provider === provider && option.available) || null;
+  const deliveryResolved = type === 'pickup' || Boolean(selectedOption && selectedOption.fee != null);
 
-  if (done) {
-    return (
-      <main className="checkout-shell">
-        <SiteHeader subtitle="PEDIDO RECEBIDO" showCart={false} />
-        <section className="container section checkout-success">
-          <div className="checkout-success-card">
-            <div className="success-icon">
-              <CheckCircle2 size={42} />
-            </div>
-            <p className="eyebrow">TUDO CERTO</p>
-            <h1 className="checkout-title">Pedido recebido!</h1>
-            <p>
-              Seu pedido <strong>#{orderId.slice(0, 8).toUpperCase()}</strong> foi registrado. O WhatsApp será aberto para calcular o frete.
-            </p>
-            {!user && (
-              <div className="guest-access-note">
-                <ShieldCheck size={18} />
-                <div>
-                  <strong>Seu acesso à 2P Box</strong>
-                  <span>
-                    {accessSent
-                      ? 'Enviamos um link de acesso para o seu e-mail. Abra o e-mail para entrar na sua conta sem precisar criar senha agora.'
-                      : 'Seu pedido foi concluído. Você poderá acompanhar pelo e-mail informado.'}
-                  </span>
-                </div>
-              </div>
-            )}
-            <div className="success-actions">
-              <Link href={`/pedido/${encodeURIComponent(orderId)}`} className="primary">
-                Acompanhar pedido
-              </Link>
-              <Link href="/loja" className="secondary">
-                Voltar à loja
-              </Link>
-            </div>
-          </div>
-        </section>
-      </main>
-    );
-  }
-
-  return (
+return (
     <main className="checkout-shell">
       <SiteHeader subtitle="FINALIZAR PEDIDO" />
       <section className="container section checkout-page">
@@ -529,13 +477,13 @@ function CheckoutForm() {
               </div>
             </div>
             <div className="delivery-confirmed">
-              <div className="delivery-confirmed-icon">{type === 'pickup' ? <Store size={22} /> : <MessageCircle size={22} />}</div>
+              <div className="delivery-confirmed-icon">{type === 'pickup' ? <Store size={22} /> : <Bike size={22} />}</div>
               <div>
-                <strong>{type === 'pickup' ? 'Retirada na loja' : 'Calcular frete pelo WhatsApp'}</strong>
+                <strong>{type === 'pickup' ? 'Retirada na loja' : selectedOption?.label || 'Entrega no seu endereço'}</strong>
                 <span>
                   {type === 'pickup'
-                    ? 'Sem endereço e sem frete. Você concluirá o pagamento pelo Mercado Pago.'
-                    : 'O endereço só é solicitado para calcular o frete e será enviado junto com o pedido pelo WhatsApp.'}
+                    ? 'Sem endereço e sem frete. Você conclui o pagamento aqui pelo Mercado Pago.'
+                    : 'Informe o endereço abaixo e calculamos o frete automaticamente. O pagamento é feito aqui mesmo.'}
                 </span>
               </div>
               <LockKeyhole size={16} />
@@ -598,14 +546,9 @@ function CheckoutForm() {
                           value: String(option.provider),
                           label: option.label,
                           description: option.fee != null && option.fee > 0 ? `${option.description} • ${money(option.fee)}` : option.fee === 0 ? `${option.description} • grátis` : option.description,
-                          icon: option.provider === 'app' || option.provider === 'whatsapp' ? <MessageCircle size={19} /> : <Bike size={19} />,
-                        }))
-                        .concat(
-                          options.some((option) => option.available)
-                            ? []
-                            : [{ value: 'whatsapp', label: 'Combinar pelo WhatsApp', description: 'A loja informa o valor do frete no atendimento', icon: <MessageCircle size={19} /> }],
-                        )}
-                      onValueChange={(value) => setProvider(value as 'whatsapp' | 'own' | 'app')}
+                          icon: <Bike size={19} />,
+                        }))}
+                      onValueChange={(value) => setProvider(value as Provider)}
                       fullWidth
                     />
                   )}
@@ -777,13 +720,58 @@ function CheckoutForm() {
             </div>
           )}
 
+          {!paymentReady && type !== 'pickup' && (
+            <div className="checkout-section delivery-summary">
+              <div className="checkout-section-heading">
+                <Bike size={20} />
+                <div>
+                  <h2>Entrega</h2>
+                  <p>Calculada automaticamente pelo seu endereço</p>
+                </div>
+              </div>
+
+              {quoting ? (
+                <InlineLoader label="Calculando o frete..." />
+              ) : selectedOption && selectedOption.fee != null ? (
+                <dl className="summary-grid">
+                  <div>
+                    <dt>Endereço</dt>
+                    <dd>
+                      {street || 'Endereço não informado'}
+                      {number ? `, ${number}` : ''}
+                      {city ? <><br />{city}{state ? ` - ${state}` : ''}</> : null}
+                    </dd>
+                  </div>
+                  {selectedOption.distanceKm != null && (
+                    <div>
+                      <dt>Distância</dt>
+                      <dd>{selectedOption.distanceKm.toFixed(1).replace('.', ',')} km{selectedOption.minutes ? ` · ~${selectedOption.minutes} min` : ''}</dd>
+                    </div>
+                  )}
+                  <div>
+                    <dt>Frete</dt>
+                    <dd className="summary-fee">{selectedOption.fee > 0 ? money(selectedOption.fee) : 'Grátis'}</dd>
+                  </div>
+                  {selectedOption.subsidy != null && selectedOption.subsidy > 0 && (
+                    <div>
+                      <dt>A loja cobre</dt>
+                      <dd className="summary-subsidy">{money(selectedOption.subsidy)} de {money(selectedOption.baseFee ?? 0)}</dd>
+                    </div>
+                  )}
+                </dl>
+              ) : (
+                <p className="summary-pending">Informe o endereço de entrega acima para calcularmos o frete.</p>
+              )}
+            </div>
+          )}
+
           {!paymentReady && (
             <div className="checkout-footer">
               <div>
-                {quotedFee != null && quotedFee > 0 && type !== 'pickup' ? (
+                {selectedOption?.fee != null && selectedOption.fee > 0 && type !== 'pickup' ? (
                   <>
-                    <span>Produtos {money(total)} + frete {money(quotedFee)}</span>
-                    <strong>{money(total + quotedFee)}</strong>
+                    <span>Produtos {money(total)} + frete {money(selectedOption.fee)}</span>
+                    <strong>{money(total + selectedOption.fee)}</strong>
                   </>
                 ) : (
                   <>
@@ -792,8 +780,8 @@ function CheckoutForm() {
                   </>
                 )}
               </div>
-              <button type="button" onClick={submitCheckout} className="primary checkout-submit" disabled={!items.length || submitting}>
-                {submitting ? 'Processando...' : !items.length ? 'Carrinho vazio' : type === 'pickup' || paysOnline ? 'Continuar para pagamento' : 'Calcular frete pelo WhatsApp'}
+              <button type="button" onClick={submitCheckout} className="primary checkout-submit" disabled={!items.length || submitting || !deliveryResolved}>
+                {submitting ? 'Processando...' : !items.length ? 'Carrinho vazio' : !deliveryResolved ? 'Informe o endereço de entrega' : 'Continuar para pagamento'}
               </button>
             </div>
           )}
@@ -835,6 +823,13 @@ function CheckoutForm() {
         .checkout-submit:hover:not(:disabled){background:#111;color:#fff}
         .checkout-submit:disabled{opacity:.55;cursor:not-allowed}
         .payment-section{overflow:visible}
+        .summary-grid{display:grid;gap:14px;margin:0}
+        .summary-grid>div{display:grid;gap:4px}
+        .summary-grid dt{font:800 10px Inter,Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#777}
+        .summary-grid dd{margin:0;font:600 13.5px/1.5 Inter,Arial,sans-serif;color:#111}
+        .summary-fee{font:900 20px 'Barlow Condensed',Inter,sans-serif !important}
+        .summary-subsidy{color:#3f7a4d !important;font-weight:800 !important}
+        .summary-pending{margin:0;padding:13px 15px;background:#fafaf7;border:1px solid #e8e8df;border-radius:10px;color:#777;font-size:12.5px;line-height:1.5}
         .contact-copy{margin:0 0 18px;color:#4d4d4d;font-size:13.5px;line-height:1.65}
         .contact-button{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:52px;padding:0 24px;border:0;border-radius:10px;background:#ffc400;color:#111;text-decoration:none;font:900 12px Inter,Arial,sans-serif;letter-spacing:.04em;text-transform:uppercase}
         .contact-button:hover{background:#111;color:#fff}

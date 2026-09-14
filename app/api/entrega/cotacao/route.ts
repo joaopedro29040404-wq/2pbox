@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { geocodeAddress, isGeoAvailable, resolvePlace, routeDistance } from '@/lib/server/geo';
 import { readStoreOperations, storeOrigin, type StoreOperations } from '@/lib/server/store-settings';
-import { DELIVERY_PROVIDERS, quoteOwnDelivery, type DeliveryProvider } from '@/lib/store-operations';
+import { DELIVERY_PROVIDERS, applySubsidy, quoteOwnDelivery, type DeliveryProvider } from '@/lib/store-operations';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -11,7 +11,10 @@ type Option = {
   label: string;
   description: string;
   fee: number | null;
+  baseFee: number | null;
+  subsidy: number | null;
   distanceKm: number | null;
+  minutes: number | null;
   needsAddress: boolean;
   available: boolean;
   reason?: string;
@@ -67,7 +70,7 @@ export async function POST(request: Request) {
     const meta = describe(provider);
 
     if (provider === 'pickup') {
-      options.push({ provider, label: meta.label, description: meta.description, fee: 0, distanceKm: null, needsAddress: false, available: true });
+      options.push({ provider, label: meta.label, description: meta.description, fee: 0, baseFee: 0, subsidy: 0, distanceKm: null, minutes: null, needsAddress: false, available: true });
       continue;
     }
 
@@ -79,7 +82,10 @@ export async function POST(request: Request) {
               label: meta.label,
               description: `Frete fixo de ${currency(operations.expressFee)}`,
               fee: operations.expressFee,
+              baseFee: operations.expressFee,
+              subsidy: 0,
               distanceKm: null,
+              minutes: null,
               needsAddress: true,
               available: true,
             }
@@ -108,7 +114,10 @@ export async function POST(request: Request) {
             label: meta.label,
             description: `${distance.km.toFixed(1)} km${distance.minutes ? ` · ~${distance.minutes} min` : ''}`,
             fee: quote.customerFee,
+            baseFee: quote.baseFee,
+            subsidy: quote.subsidy,
             distanceKm: distance.km,
+            minutes: distance.minutes,
             needsAddress: true,
             available: true,
           }
@@ -153,7 +162,7 @@ async function resolveDestination(body: any) {
 }
 
 function unavailable(provider: DeliveryProvider, label: string, reason: string): Option {
-  return { provider, label, description: reason, fee: null, distanceKm: null, needsAddress: true, available: false, reason };
+  return { provider, label, description: reason, fee: null, baseFee: null, subsidy: null, distanceKm: null, minutes: null, needsAddress: true, available: false, reason };
 }
 
 function storeAddressLabel(operations: StoreOperations) {

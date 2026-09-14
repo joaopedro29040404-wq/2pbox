@@ -11,20 +11,11 @@ import { money } from '@/lib/order-format';
 
 type DeliveryOption = { provider: string; label: string; description: string; fee: number | null; needsAddress: boolean };
 
-const WHATSAPP_OPTION: DeliveryOption = {
-  provider: 'whatsapp',
-  label: 'Calcular frete no WhatsApp',
-  description: 'Combine o frete conosco',
-  fee: null,
-  needsAddress: true,
-};
-
 const ICONS: Record<string, React.ReactNode> = {
   pickup: <Store size={19} />,
   own: <Bike size={19} />,
   express: <Zap size={19} />,
   app: <Bike size={19} />,
-  whatsapp: <MessageCircle size={19} />,
 };
 
 export default function CarrinhoPage() {
@@ -39,14 +30,11 @@ export default function CarrinhoPage() {
       .then((data) => {
         if (!active) return;
         const list: DeliveryOption[] = Array.isArray(data?.options) ? data.options : [];
-        const withFallback = list.length ? list : [WHATSAPP_OPTION];
-        setOptions(withFallback);
-        setDelivery(withFallback[0].provider);
+        setOptions(list);
+        if (list.length) setDelivery(list[0].provider);
       })
       .catch(() => {
-        if (!active) return;
-        setOptions([WHATSAPP_OPTION]);
-        setDelivery(WHATSAPP_OPTION.provider);
+        if (active) setOptions([]);
       });
     return () => {
       active = false;

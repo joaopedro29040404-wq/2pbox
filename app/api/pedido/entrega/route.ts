@@ -3,7 +3,7 @@ import { geocodeAddress, isGeoAvailable, resolvePlace, routeDistance } from '@/l
 import { readOrder, readOrderItems } from '@/lib/server/orders';
 import { readStoreOperations, storeOrigin } from '@/lib/server/store-settings';
 import { supabaseRest } from '@/lib/server/supabase-admin';
-import { DELIVERY_TYPE_BY_PROVIDER, cycleStartFor, quoteOwnDelivery, type DeliveryProvider } from '@/lib/store-operations';
+import { DELIVERY_TYPE_BY_PROVIDER, applySubsidy, cycleStartFor, quoteOwnDelivery, type DeliveryProvider } from '@/lib/store-operations';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -45,14 +45,17 @@ export async function POST(request: Request) {
 
   let distanceKm: number | null = null;
   let fee = 0;
+  let baseFee = 0;
   let subsidy = 0;
 
   if (provider === 'express') {
     if (operations.expressFee <= 0) {
       return NextResponse.json({ error: 'O frete do envio imediato ainda não foi definido pela loja.' }, { status: 409 });
     }
-    fee = round(operations.expressFee);
-    subsidy = 0;
+    const quote = applySubsidy(operations.expressFee, 0);
+    fee = quote.customerFee;
+    baseFee = quote.baseFee;
+    subsidy = quote.subsidy;
   }
 
   if (provider === 'own' || provider === 'app') {
@@ -72,6 +75,7 @@ export async function POST(request: Request) {
     if (!quote) return NextResponse.json({ error: 'Nenhuma faixa de preço cobre essa distância.', distanceKm: distance.km }, { status: 422 });
 
     fee = quote.customerFee;
+    baseFee = quote.baseFee;
     subsidy = quote.subsidy;
   }
 
@@ -90,6 +94,7 @@ export async function POST(request: Request) {
     delivery_provider: provider,
     delivery_distance_km: distanceKm,
     delivery_fee: fee,
+    delivery_fee_base: baseFee,
     delivery_fee_subsidy: subsidy,
     delivery_cycle_start: cycleStartFor(new Date(), operations.cycleHour).toISOString(),
     items_subtotal: subtotal,
@@ -109,6 +114,7 @@ export async function POST(request: Request) {
       total,
       subtotal,
       fee,
+      baseFee,
       serviceFee,
       subsidy,
       distanceKm,
@@ -117,7 +123,7 @@ export async function POST(request: Request) {
     });
   }
 
-  return NextResponse.json({ total, subtotal, fee, serviceFee, subsidy, distanceKm, freeShipping });
+  return NextResponse.json({ total, subtotal, fee, baseFee, serviceFee, subsidy, distanceKm, freeShipping });
 }
 
 async function destinationFor(body: any) {

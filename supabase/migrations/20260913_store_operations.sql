@@ -72,3 +72,6 @@ alter table public.store_settings
 alter table public.store_settings
   add column if not exists same_day_enabled boolean default false,
   add column if not exists same_day_cutoff text default '16:00';
+
+alter table public.orders
+  add column if not exists delivery_fee_base numeric(10,2);

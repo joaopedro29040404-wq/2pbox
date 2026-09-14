@@ -270,7 +270,7 @@ export default function ProductPage() {
               <div className="delivery-options-info">
                 {(delivery?.options.length
                   ? delivery.options
-                  : [{ provider: 'whatsapp', label: 'Calcular frete no WhatsApp', description: 'Combine o frete e a entrega pelo WhatsApp', fee: null }]
+                  : [{ provider: 'pending', label: 'Formas de entrega em configuração', description: 'A loja está ajustando as opções de recebimento', fee: 0 }]
                 ).map((option) => (
                   <div key={option.provider}>
                     {DELIVERY_ICONS[option.provider] || <MessageCircle size={19} />}

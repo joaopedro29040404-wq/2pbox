@@ -67,10 +67,7 @@ export function quoteOwnDelivery(distanceKm: number, table: DeliveryTier[], subs
   const tier = tiers.find((item) => distanceKm <= item.upToKm);
   if (!tier) return null;
 
-  const subsidy = Math.max(0, Math.min(100, Number(subsidyPercent) || 0));
-  const discount = Math.round(tier.price * (subsidy / 100) * 100) / 100;
-  const customerFee = Math.round((tier.price - discount) * 100) / 100;
-  return { tierKm: tier.upToKm, listPrice: tier.price, subsidy: discount, customerFee };
+  return applySubsidy(tier.price, subsidyPercent, tier.upToKm);
 }
 
 export type DayHours = { open: string; close: string };
@@ -111,6 +108,14 @@ export function businessHoursFromLegacy(days: unknown, opensAt: unknown, closesA
 
 export function openDays(hours: BusinessHours) {
   return WEEK_DAYS.filter((day) => hours[day.value]).map((day) => day.value);
+}
+
+/** O valor definido pelo lojista e a base; o subsidio decide quanto o cliente paga. */
+export function applySubsidy(baseFee: number, subsidyPercent: number, tierKm?: number) {
+  const base = Math.round(Number(baseFee || 0) * 100) / 100;
+  const percent = Math.max(0, Math.min(100, Number(subsidyPercent) || 0));
+  const subsidy = Math.round(base * (percent / 100) * 100) / 100;
+  return { tierKm: tierKm ?? null, baseFee: base, listPrice: base, subsidy, customerFee: Math.round((base - subsidy) * 100) / 100 };
 }
 
 export function isStoreOpen(hours: BusinessHours, now = new Date()) {
