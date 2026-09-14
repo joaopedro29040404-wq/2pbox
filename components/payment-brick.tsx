@@ -3,6 +3,7 @@
 import { CardPayment, initMercadoPago } from '@mercadopago/sdk-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { InlineLoader } from '@/components/ui/loader';
+import { reportClientError } from '@/lib/report-error';
 
 type PaymentResult = { id?: string | number; status?: string; statusDetail?: string; paymentMethodId?: string; mercadoPagoOrderId?: string | null; mercadoPagoPaymentId?: string | null; orderStatus?: string | null; orderStatusDetail?: string | null; paymentStatus?: string | null; paymentStatusDetail?: string | null; message?: string | null; cause?: unknown; httpStatus?: number | null };
 type Props = { amount: number; orderId: string; email: string; cpf?: string; publicKey: string; onResult: (result: PaymentResult) => void; onError: (message: string) => void };
@@ -18,6 +19,8 @@ export default function PaymentBrick({ amount, orderId, email, cpf, publicKey, o
   const errorHandler = useRef(onError);
   const resultHandler = useRef(onResult);
   const submittingRef = useRef(false);
+  const orderIdRef = useRef(orderId);
+  orderIdRef.current = orderId;
   errorHandler.current = onError;
   resultHandler.current = onResult;
 
@@ -76,7 +79,7 @@ export default function PaymentBrick({ amount, orderId, email, cpf, publicKey, o
 
             if (!response.ok) {
               const detail = result.statusDetail || result.error || `Falha no pagamento (HTTP ${response.status}).`;
-              console.error('Mercado Pago rejection diagnostics:', { httpStatus: response.status, ...result });
+              reportClientError('payment-brick', { orderId, type: `http-${response.status}`, cause: result.status || null, message: detail });
               redirectToResult({ ...result, httpStatus: response.status, status: result.status || 'rejected', statusDetail: detail });
               return;
             }
@@ -86,7 +89,7 @@ export default function PaymentBrick({ amount, orderId, email, cpf, publicKey, o
             redirectToResult(transactionResult);
           } catch (error) {
             const message = error instanceof DOMException && error.name === 'AbortError' ? 'O Mercado Pago demorou para responder. Vamos verificar o pagamento na próxima tela.' : error instanceof Error ? error.message : 'Não foi possível processar o pagamento.';
-            console.error('Mercado Pago submit error:', error);
+            reportClientError('payment-brick', { orderId, type: 'submit', message });
             redirectToResult({ status: 'pending', statusDetail: message });
           } finally {
             submittingRef.current = false;
@@ -98,7 +101,7 @@ export default function PaymentBrick({ amount, orderId, email, cpf, publicKey, o
 
   const reportBrickError = useCallback((error: unknown) => {
     const detail = error as { type?: string; cause?: string; message?: string };
-    console.error('Mercado Pago Card Payment Brick:', { type: detail?.type, cause: detail?.cause, message: detail?.message, raw: error });
+    reportClientError('payment-brick', { orderId: orderIdRef.current, type: detail?.type, cause: detail?.cause, message: detail?.message });
 
     if (String(detail?.type || '').toLowerCase() !== 'critical') return;
     errorHandler.current('O formulário de cartão não carregou corretamente. Recarregue a página e tente de novo.');

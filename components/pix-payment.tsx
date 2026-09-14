@@ -5,6 +5,7 @@ import { Check, ClipboardCheck, Copy, QrCode, RefreshCw, ShieldCheck } from 'luc
 import { InlineLoader } from '@/components/ui/loader';
 import { useToast } from '@/components/ui/toast';
 import { money, shortId } from '@/lib/order-format';
+import { reportClientError } from '@/lib/report-error';
 
 type PixData = { qrCode: string | null; qrCodeBase64: string | null; ticketUrl: string | null; expiresAt?: string | null };
 
@@ -71,7 +72,9 @@ export default function PixPayment({ amount, orderId, email, cpf, name, onApprov
       setFailed(false);
     } catch (error) {
       setFailed(true);
-      errorHandler.current(error instanceof Error ? error.message : 'Não foi possível gerar o PIX.');
+      const message = error instanceof Error ? error.message : 'Não foi possível gerar o PIX.';
+      reportClientError('pix', { orderId, type: 'gerar-qr', message });
+      errorHandler.current(message);
     } finally {
       setCreating(false);
     }

@@ -31,6 +31,7 @@ import { InlineLoader, PageLoader } from '@/components/ui/loader';
 import { useToast } from '@/components/ui/toast';
 import { isValidCep, isValidCpf, isValidEmail, isValidPhone, onlyDigits, toWhatsAppNumber } from '@/lib/masks';
 import { money } from '@/lib/order-format';
+import { reportClientError } from '@/lib/report-error';
 import { DELIVERY_TYPE_BY_PROVIDER } from '@/lib/store-operations';
 
 type Delivery = 'pickup' | 'whatsapp_shipping';
@@ -375,7 +376,7 @@ function CheckoutForm() {
         const quoteData = await quote.json().catch(() => null);
         if (!quote.ok) {
           if (chargedDelivery) throw new Error(quoteData?.error || 'Não foi possível calcular a entrega.');
-          console.error('[checkout] cotação de retirada falhou:', quoteData?.error);
+          reportClientError('delivery', { orderId: id, type: 'cotacao-retirada', message: quoteData?.error });
         } else {
           setPayableTotal(Number(quoteData.total));
           setFeeBreakdown({ fee: Number(quoteData.fee || 0), serviceFee: Number(quoteData.serviceFee || 0), subtotal: Number(quoteData.subtotal || 0) });
