@@ -1,7 +1,7 @@
 'use client';
 
 import { CardPayment, initMercadoPago } from '@mercadopago/sdk-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { InlineLoader } from '@/components/ui/loader';
 
 type PaymentResult = { id?: string | number; status?: string; statusDetail?: string; paymentMethodId?: string; mercadoPagoOrderId?: string | null; mercadoPagoPaymentId?: string | null; orderStatus?: string | null; orderStatusDetail?: string | null; paymentStatus?: string | null; paymentStatusDetail?: string | null; message?: string | null; cause?: unknown; httpStatus?: number | null };
@@ -10,11 +10,16 @@ declare global { interface Window { MP_DEVICE_SESSION_ID?: string } }
 
 let initialized = '';
 
+const noop = () => undefined;
+
 export default function PaymentBrick({ amount, orderId, email, cpf, publicKey, onResult, onError }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [ready, setReady] = useState(false);
   const errorHandler = useRef(onError);
+  const resultHandler = useRef(onResult);
+  const submittingRef = useRef(false);
   errorHandler.current = onError;
+  resultHandler.current = onResult;
 
   useEffect(() => {
     const key = String(publicKey || '').trim();
@@ -31,13 +36,16 @@ export default function PaymentBrick({ amount, orderId, email, cpf, publicKey, o
 
   const payerEmail = email.trim().toLowerCase();
   const payerCpf = (cpf || '').replace(/\D/g, '');
-  const payer = {
-    ...(payerEmail ? { email: payerEmail } : {}),
-    ...(payerCpf.length === 11 ? { identification: { type: 'CPF', number: payerCpf } } : {}),
-  };
-  const hasPayer = Object.keys(payer).length > 0;
 
-  const redirectToResult = (paymentResult: PaymentResult) => {
+  const initialization = useMemo(() => {
+    const payer = {
+      ...(payerEmail ? { email: payerEmail } : {}),
+      ...(payerCpf.length === 11 ? { identification: { type: 'CPF', number: payerCpf } } : {}),
+    };
+    return { amount, ...(Object.keys(payer).length ? { payer } : {}) };
+  }, [amount, payerEmail, payerCpf]);
+
+  const redirectToResult = useCallback((paymentResult: PaymentResult) => {
     const query = new URLSearchParams({ payment: paymentResult.status || 'pending', statusDetail: paymentResult.statusDetail || 'Não informado pelo Mercado Pago' });
     if (paymentResult.id) query.set('paymentId', String(paymentResult.id));
     if (paymentResult.mercadoPagoOrderId) query.set('mpOrderId', String(paymentResult.mercadoPagoOrderId));
@@ -45,7 +53,56 @@ export default function PaymentBrick({ amount, orderId, email, cpf, publicKey, o
     if (paymentResult.paymentStatus) query.set('paymentStatus', String(paymentResult.paymentStatus));
     if (paymentResult.orderStatus) query.set('orderStatus', String(paymentResult.orderStatus));
     window.location.replace(`/pagamento/${encodeURIComponent(orderId)}?${query.toString()}`);
-  };
+  }, [orderId]);
+
+  const submitPayment = useCallback(
+    async (formData: any, additionalData: any) => {
+      if (submittingRef.current) return;
+      submittingRef.current = true;
+      setSubmitting(true);
+
+      try {
+            const enrichedFormData = { ...formData, ...(payerEmail ? { email: payerEmail } : {}) };
+            const controller = new AbortController();
+            const timeout = window.setTimeout(() => controller.abort(), 20000);
+            let response: Response;
+            try {
+              const deviceId = String(window.MP_DEVICE_SESSION_ID || '').trim();
+              response = await fetch('/api/mercadopago/create-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ formData: enrichedFormData, orderId, total: amount, deviceId: deviceId || undefined, additionalData: additionalData || null }), signal: controller.signal, cache: 'no-store' });
+            } finally { window.clearTimeout(timeout); }
+            let result: PaymentResult & { error?: string };
+            try { result = await response.json(); } catch { result = { status: 'rejected', statusDetail: 'Resposta inválida do servidor.' }; }
+            try { localStorage.setItem('2p_guest_order_email', payerEmail); localStorage.setItem('2p_last_order_id', orderId); } catch {}
+
+            if (!response.ok) {
+              const detail = result.statusDetail || result.error || `Falha no pagamento (HTTP ${response.status}).`;
+              console.error('Mercado Pago rejection diagnostics:', { httpStatus: response.status, ...result });
+              redirectToResult({ ...result, httpStatus: response.status, status: result.status || 'rejected', statusDetail: detail });
+              return;
+            }
+
+            const transactionResult: PaymentResult = { ...result, status: result.status || result.paymentStatus || 'pending', statusDetail: result.statusDetail || result.paymentStatusDetail || undefined, httpStatus: response.status };
+            resultHandler.current(transactionResult);
+            redirectToResult(transactionResult);
+          } catch (error) {
+            const message = error instanceof DOMException && error.name === 'AbortError' ? 'O Mercado Pago demorou para responder. Vamos verificar o pagamento na próxima tela.' : error instanceof Error ? error.message : 'Não foi possível processar o pagamento.';
+            console.error('Mercado Pago submit error:', error);
+            redirectToResult({ status: 'pending', statusDetail: message });
+          } finally {
+            submittingRef.current = false;
+            setSubmitting(false);
+          }
+    },
+    [amount, orderId, payerEmail],
+  );
+
+  const reportBrickError = useCallback((error: unknown) => {
+    const detail = error as { type?: string; cause?: string; message?: string };
+    console.error('Mercado Pago Card Payment Brick:', { type: detail?.type, cause: detail?.cause, message: detail?.message, raw: error });
+
+    if (String(detail?.type || '').toLowerCase() !== 'critical') return;
+    errorHandler.current('O formulário de cartão não carregou corretamente. Recarregue a página e tente de novo.');
+  }, []);
 
   if (!ready) {
     return (
@@ -57,48 +114,10 @@ export default function PaymentBrick({ amount, orderId, email, cpf, publicKey, o
 
   return <div className="payment-brick-wrap">
     <CardPayment
-      initialization={{ amount, ...(hasPayer ? { payer } : {}) }}
-      onSubmit={async (formData, additionalData) => {
-        if (submitting) return;
-        setSubmitting(true);
-        try {
-          const enrichedFormData = { ...formData, ...(payerEmail ? { email: payerEmail } : {}) };
-          const controller = new AbortController();
-          const timeout = window.setTimeout(() => controller.abort(), 20000);
-          let response: Response;
-          try {
-            const deviceId = String(window.MP_DEVICE_SESSION_ID || '').trim();
-            response = await fetch('/api/mercadopago/create-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ formData: enrichedFormData, orderId, total: amount, deviceId: deviceId || undefined, additionalData: additionalData || null }), signal: controller.signal, cache: 'no-store' });
-          } finally { window.clearTimeout(timeout); }
-          let result: PaymentResult & { error?: string };
-          try { result = await response.json(); } catch { result = { status: 'rejected', statusDetail: 'Resposta inválida do servidor.' }; }
-          try { localStorage.setItem('2p_guest_order_email', payerEmail); localStorage.setItem('2p_last_order_id', orderId); } catch {}
-
-          if (!response.ok) {
-            const detail = result.statusDetail || result.error || `Falha no pagamento (HTTP ${response.status}).`;
-            console.error('Mercado Pago rejection diagnostics:', { httpStatus: response.status, ...result });
-            redirectToResult({ ...result, httpStatus: response.status, status: result.status || 'rejected', statusDetail: detail });
-            return;
-          }
-
-          const transactionResult: PaymentResult = { ...result, status: result.status || result.paymentStatus || 'pending', statusDetail: result.statusDetail || result.paymentStatusDetail || undefined, httpStatus: response.status };
-          onResult(transactionResult);
-          redirectToResult(transactionResult);
-        } catch (error) {
-          const message = error instanceof DOMException && error.name === 'AbortError' ? 'O Mercado Pago demorou para responder. Vamos verificar o pagamento na próxima tela.' : error instanceof Error ? error.message : 'Não foi possível processar o pagamento.';
-          console.error('Mercado Pago submit error:', error);
-          redirectToResult({ status: 'pending', statusDetail: message });
-        } finally { setSubmitting(false); }
-      }}
-      onReady={() => undefined}
-      onError={(error) => {
-        const detail = error as { type?: string; cause?: string; message?: string };
-        console.error('Mercado Pago Card Payment Brick:', { type: detail?.type, cause: detail?.cause, message: detail?.message, raw: error });
-
-        if (String(detail?.type || '').toLowerCase() !== 'critical') return;
-
-        errorHandler.current('O formulário de cartão não carregou corretamente. Recarregue a página e tente de novo.');
-      }}
+      initialization={initialization}
+      onSubmit={submitPayment}
+      onReady={noop}
+      onError={reportBrickError}
     />
     {submitting && <div className="payment-processing" role="status" aria-live="polite">Processando pagamento… não feche esta tela.</div>}
     <div className="payment-mobile-note">Pagamento protegido pelo Mercado Pago. Os dados do cartão são tratados pelo Brick oficial e não ficam armazenados na 2P Box.</div>

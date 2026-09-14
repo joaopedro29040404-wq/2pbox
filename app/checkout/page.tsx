@@ -76,6 +76,7 @@ function CheckoutForm() {
   const [quoting, setQuoting] = useState(false);
   const [quotedFee, setQuotedFee] = useState<number | null>(null);
   const [payableTotal, setPayableTotal] = useState<number | null>(null);
+  const [amountSettled, setAmountSettled] = useState(false);
   const [feeBreakdown, setFeeBreakdown] = useState<{ fee: number; serviceFee: number; subtotal: number } | null>(null);
   const [paymentsOnline, setPaymentsOnline] = useState(true);
   const [mpPublicKey, setMpPublicKey] = useState('');
@@ -381,6 +382,9 @@ function CheckoutForm() {
           if (quoteData.warning && chargedDelivery) toast.warning('Entrega registrada parcialmente', quoteData.warning);
         }
 
+        // O Brick do Mercado Pago nao aceita ter o amount trocado depois de
+        // montado, entao o pagamento so aparece com o valor ja fechado.
+        setAmountSettled(true);
         setStatus('');
       }
 
@@ -395,7 +399,7 @@ function CheckoutForm() {
 
   const payableOnline = (type === 'pickup' || paysOnline) && paymentsOnline;
   const awaitingContact = (type === 'pickup' || paysOnline) && !paymentsOnline && Boolean(orderId);
-  const paymentReady = payableOnline && Boolean(orderId);
+  const paymentReady = payableOnline && Boolean(orderId) && amountSettled;
   const chargeTotal = payableTotal ?? total;
   const selectedOption = options.find((option) => option.provider === provider && option.available) || null;
   const deliveryResolved = type === 'pickup' || Boolean(selectedOption && selectedOption.fee != null);
