@@ -106,19 +106,8 @@ function constrainPromotionCard(card: HTMLElement) {
   }
 }
 
-function renderHomePromotions(rows: PromotionRow[]) {
-  const categorySection = document.querySelector<HTMLElement>('#categorias');
-  if (!categorySection) return;
-
-  let section = document.querySelector<HTMLElement>('#home-promotions');
-  if (!section) {
-    section = document.createElement('section');
-    section.id = 'home-promotions';
-    section.className = 'home-section home-promotions-section';
-    categorySection.insertAdjacentElement('afterend', section);
-  }
-
-  const products = rows
+function validPromotions(rows: PromotionRow[]) {
+  return rows
     .map((row) => {
       const product = row.product;
       const original = Number(product?.price);
@@ -127,133 +116,167 @@ function renderHomePromotions(rows: PromotionRow[]) {
       return { ...row, product, original, promo };
     })
     .filter(Boolean) as Array<PromotionRow & { product: PromotionProduct; original: number; promo: number }>;
+}
 
-  if (!products.length) {
-    section.remove();
-    return;
+function renderHomePromotionCards(products: Array<PromotionRow & { product: PromotionProduct; original: number; promo: number }>) {
+  return products.map(({ product, original, promo }) => {
+    const discount = Math.round(((original - promo) / original) * 100);
+    const image = product.images?.[0] || product.image_url || '';
+    return `
+      <a href="/produto/${encodeURIComponent(product.slug)}" class="home-product-card home-promotion-product-card">
+        <div class="home-product-image home-promotion-product-image">
+          ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(product.name)}" loading="lazy" />` : '<div class="home-promotion-placeholder">2P BOX</div>'}
+          <span class="home-promotion-badge">OFERTA</span>
+          <span class="home-promotion-discount">-${discount}%</span>
+        </div>
+        <div class="home-product-info">
+          <small>2P BOX</small>
+          <h3>${escapeHtml(product.name)}</h3>
+          <div class="home-promotion-prices">
+            <s>${money(original)}</s>
+            <strong>${money(promo)}</strong>
+          </div>
+        </div>
+      </a>
+    `;
+  }).join('');
+}
+
+function setupHomeProductTabs(rows: PromotionRow[]) {
+  const catalog = document.querySelector<HTMLElement>('#catalogo');
+  const head = catalog?.querySelector<HTMLElement>('.home-section-head');
+  const grid = catalog?.querySelector<HTMLElement>('.home-product-grid');
+  if (!catalog || !head || !grid) return;
+
+  const promotions = validPromotions(rows);
+  let tabs = head.querySelector<HTMLElement>('[data-home-product-tabs]');
+  if (!tabs) {
+    tabs = document.createElement('div');
+    tabs.dataset.homeProductTabs = 'true';
+    tabs.className = 'home-product-tabs';
+    const heading = head.firstElementChild;
+    if (heading) heading.appendChild(tabs);
   }
 
-  const signature = products.map(({ product, promo }) => `${product.id}:${promo}`).join('|');
-  if (section.dataset.promotionSignature === signature) return;
-  section.dataset.promotionSignature = signature;
+  if (tabs.dataset.ready !== 'true') {
+    grid.dataset.allProductsHtml = grid.innerHTML;
+    tabs.dataset.ready = 'true';
+  }
 
-  section.innerHTML = `
-    <div class="home-container">
-      <div class="home-section-head home-promotions-head">
-        <div>
-          <p class="home-eyebrow">OFERTAS ESPECIAIS</p>
-          <h2>PROMOÇÕES</h2>
-          <p class="home-promotions-subtitle">Aproveite os produtos com preços especiais por tempo limitado.</p>
-        </div>
-        <span class="home-promotions-count">${products.length} ${products.length === 1 ? 'oferta ativa' : 'ofertas ativas'}</span>
-      </div>
-      <div class="home-promotions-grid">
-        ${products.map(({ product, original, promo }) => {
-          const discount = Math.round(((original - promo) / original) * 100);
-          const image = product.images?.[0] || product.image_url || '';
-          return `
-            <a href="/produto/${encodeURIComponent(product.slug)}" class="home-promotion-card">
-              <div class="home-promotion-image">
-                ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(product.name)}" loading="lazy" />` : '<div class="home-promotion-placeholder">2P BOX</div>'}
-                <span class="home-promotion-badge">OFERTA</span>
-                <span class="home-promotion-discount">-${discount}%</span>
-              </div>
-              <div class="home-promotion-info">
-                <small>2P BOX</small>
-                <h3>${escapeHtml(product.name)}</h3>
-                <div class="home-promotion-prices">
-                  <s>${money(original)}</s>
-                  <strong>${money(promo)}</strong>
-                </div>
-              </div>
-            </a>
-          `;
-        }).join('')}
-      </div>
-    </div>
+  tabs.innerHTML = `
+    <button type="button" class="home-product-tab ${tabs.dataset.active !== 'offers' ? 'is-active' : ''}" data-product-view="all">TODOS</button>
+    <button type="button" class="home-product-tab ${tabs.dataset.active === 'offers' ? 'is-active' : ''}" data-product-view="offers">🔥 OFERTAS${promotions.length ? ` <span>${promotions.length}</span>` : ''}</button>
   `;
+
+  tabs.querySelectorAll<HTMLButtonElement>('.home-product-tab').forEach((button) => {
+    button.onclick = () => {
+      const view = button.dataset.productView === 'offers' ? 'offers' : 'all';
+      tabs!.dataset.active = view;
+      tabs!.querySelectorAll('.home-product-tab').forEach((item) => item.classList.toggle('is-active', item === button));
+
+      if (view === 'offers') {
+        grid!.innerHTML = promotions.length
+          ? renderHomePromotionCards(promotions)
+          : '<div class="home-promotions-empty">Nenhuma oferta ativa no momento.</div>';
+      } else {
+        grid!.innerHTML = grid!.dataset.allProductsHtml || '';
+      }
+
+      applyPromotionStyling(rows);
+    };
+  });
+
+  const active = tabs.dataset.active === 'offers' ? 'offers' : 'all';
+  if (active === 'offers') {
+    grid.innerHTML = promotions.length
+      ? renderHomePromotionCards(promotions)
+      : '<div class="home-promotions-empty">Nenhuma oferta ativa no momento.</div>';
+  }
+}
+
+function applyPromotionStyling(rows: PromotionRow[]) {
+  if (!rows.length) return;
+
+  for (const row of rows) {
+    const product = row.product;
+    const slug = String(product?.slug || '').trim();
+    const original = Number(product?.price);
+    const promo = Number(row.promotional_price);
+    if (!slug || !Number.isFinite(original) || !Number.isFinite(promo) || promo <= 0 || promo >= original) continue;
+
+    const links = Array.from(document.querySelectorAll<HTMLAnchorElement>(`a[href="/produto/${slug}"]`));
+    for (const link of links) {
+      const card = link.classList.contains('home-product-card')
+        ? link
+        : (link.closest('.product') as HTMLElement | null) ||
+          (link.closest('[class*="product-card"]') as HTMLElement | null) ||
+          null;
+      if (!card) continue;
+
+      constrainPromotionCard(card);
+      if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
+
+      if (!card.querySelector('[data-marketing-promotion-badge]') && !card.classList.contains('home-promotion-product-card')) {
+        const badge = document.createElement('span');
+        badge.dataset.marketingPromotionBadge = 'true';
+        badge.textContent = 'OFERTA';
+        badge.style.cssText = `position:absolute;top:10px;left:10px;z-index:3;background:${PROMO_YELLOW};color:#111;border-radius:999px;padding:7px 11px;font:900 10px Inter,Arial,sans-serif;letter-spacing:.06em;box-shadow:0 3px 10px rgba(0,0,0,.12)`;
+        card.appendChild(badge);
+      }
+
+      if (card.classList.contains('product')) {
+        const info = card.querySelector<HTMLElement>('.product-buy');
+        if (info) {
+          info.style.minWidth = '0';
+          info.style.maxWidth = '100%';
+          renderCatalogPrice(info, original, promo);
+        }
+        continue;
+      }
+
+      if (card.classList.contains('home-promotion-product-card')) continue;
+
+      const info = card.querySelector<HTMLElement>('.home-product-info') || card.querySelector<HTMLElement>('[class*="product-info"]');
+      if (!info) continue;
+      renderPrice(info, original, promo);
+    }
+  }
+
+  const match = window.location.pathname.match(/^\/produto\/([^/]+)$/);
+  if (match) {
+    const slug = decodeURIComponent(match[1]);
+    const row = rows.find((item) => item.product?.slug === slug);
+    const priceNode = document.querySelector<HTMLElement>('.product-price');
+    if (row && priceNode && priceNode.dataset.marketingPromotionApplied !== 'true') {
+      const product = row.product;
+      if (!product) return;
+      priceNode.dataset.marketingPromotionApplied = 'true';
+      priceNode.innerHTML = '';
+      priceNode.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:1px;margin-bottom:18px;line-height:1.05';
+
+      const old = document.createElement('s');
+      old.textContent = money(Number(product.price));
+      old.style.cssText = 'color:#999;font:700 14px Inter,Arial,sans-serif;white-space:nowrap';
+
+      const current = document.createElement('strong');
+      current.textContent = money(Number(row.promotional_price));
+      current.style.cssText = `color:${PROMO_YELLOW};font:900 36px Inter,Arial,sans-serif;letter-spacing:-.02em;white-space:nowrap`;
+
+      priceNode.append(old, current);
+    }
+  }
 }
 
 export function MarketingPromotions() {
   useEffect(() => {
     let cancelled = false;
     let rows: PromotionRow[] = [];
+    let cleanup: (() => void) | undefined;
 
-    function applyPromotions() {
+    function apply() {
       if (cancelled) return;
-
-      renderHomePromotions(rows);
-      if (!rows.length) return;
-
-      for (const row of rows) {
-        const product = row.product;
-        const slug = String(product?.slug || '').trim();
-        const original = Number(product?.price);
-        const promo = Number(row.promotional_price);
-        if (!slug || !Number.isFinite(original) || !Number.isFinite(promo) || promo <= 0 || promo >= original) continue;
-
-        const links = Array.from(document.querySelectorAll<HTMLAnchorElement>(`a[href="/produto/${slug}"]`));
-        for (const link of links) {
-          const card = link.classList.contains('home-product-card') || link.classList.contains('home-promotion-card')
-            ? link
-            : (link.closest('.product') as HTMLElement | null) ||
-              (link.closest('[class*="product-card"]') as HTMLElement | null) ||
-              null;
-          if (!card) continue;
-
-          constrainPromotionCard(card);
-
-          if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
-
-          if (!card.querySelector('[data-marketing-promotion-badge]') && !card.classList.contains('home-promotion-card')) {
-            const badge = document.createElement('span');
-            badge.dataset.marketingPromotionBadge = 'true';
-            badge.textContent = 'OFERTA';
-            badge.style.cssText = `position:absolute;top:10px;left:10px;z-index:3;background:${PROMO_YELLOW};color:#111;border-radius:999px;padding:7px 11px;font:900 10px Inter,Arial,sans-serif;letter-spacing:.06em;box-shadow:0 3px 10px rgba(0,0,0,.12)`;
-            card.appendChild(badge);
-          }
-
-          if (card.classList.contains('product')) {
-            const info = card.querySelector<HTMLElement>('.product-buy');
-            if (info) {
-              info.style.minWidth = '0';
-              info.style.maxWidth = '100%';
-              renderCatalogPrice(info, original, promo);
-            }
-            continue;
-          }
-
-          if (card.classList.contains('home-promotion-card')) continue;
-
-          const info = card.querySelector<HTMLElement>('.home-product-info') || card.querySelector<HTMLElement>('[class*="product-info"]');
-          if (!info) continue;
-          renderPrice(info, original, promo);
-        }
-      }
-
-      const match = window.location.pathname.match(/^\/produto\/([^/]+)$/);
-      if (match) {
-        const slug = decodeURIComponent(match[1]);
-        const row = rows.find((item) => item.product?.slug === slug);
-        const priceNode = document.querySelector<HTMLElement>('.product-price');
-        if (row && priceNode && priceNode.dataset.marketingPromotionApplied !== 'true') {
-          const product = row.product;
-          if (!product) return;
-          priceNode.dataset.marketingPromotionApplied = 'true';
-          priceNode.innerHTML = '';
-          priceNode.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:1px;margin-bottom:18px;line-height:1.05';
-
-          const old = document.createElement('s');
-          old.textContent = money(Number(product.price));
-          old.style.cssText = 'color:#999;font:700 14px Inter,Arial,sans-serif;white-space:nowrap';
-
-          const current = document.createElement('strong');
-          current.textContent = money(Number(row.promotional_price));
-          current.style.cssText = `color:${PROMO_YELLOW};font:900 36px Inter,Arial,sans-serif;letter-spacing:-.02em;white-space:nowrap`;
-
-          priceNode.append(old, current);
-        }
-      }
+      setupHomeProductTabs(rows);
+      applyPromotionStyling(rows);
     }
 
     async function load() {
@@ -265,8 +288,11 @@ export function MarketingPromotions() {
         .eq('active', true)
         .lte('starts_at', now)
         .gte('ends_at', now);
-      if (cancelled || error || !Array.isArray(promotions) || promotions.length === 0) {
-        renderHomePromotions([]);
+
+      if (cancelled) return;
+      if (error || !Array.isArray(promotions) || promotions.length === 0) {
+        rows = [];
+        apply();
         return;
       }
 
@@ -283,57 +309,46 @@ export function MarketingPromotions() {
         .map((row) => ({ ...row, product: byId.get(String(row.product_id)) || null }))
         .filter((row) => row.product) as PromotionRow[];
 
-      applyPromotions();
-      const observer = new MutationObserver(() => applyPromotions());
+      apply();
+      const observer = new MutationObserver(() => apply());
       observer.observe(document.body, { childList: true, subtree: true });
-      return () => observer.disconnect();
+      cleanup = () => observer.disconnect();
     }
 
-    let cleanup: (() => void) | undefined;
-    void load().then((dispose) => { cleanup = dispose; });
-    return () => { cancelled = true; cleanup?.(); document.querySelector('#home-promotions')?.remove(); };
+    void load();
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
   }, []);
 
   return (
     <style jsx global>{`
-      .home-promotions-section{background:#fff;border-top:1px solid #e7e7e7;border-bottom:1px solid #e7e7e7;padding:72px 0}
-      .home-promotions-head{margin-bottom:28px;align-items:flex-end}
-      .home-promotions-subtitle{margin:10px 0 0;color:#777;font-size:13px;line-height:1.5}
-      .home-promotions-count{display:inline-flex;align-items:center;min-height:34px;padding:0 13px;border:1px solid #e5e5e5;border-radius:999px;color:#777;background:#fff;font-size:10px;font-weight:800;letter-spacing:.04em;white-space:nowrap}
-      .home-promotions-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
-      .home-promotion-card{position:relative;display:flex;min-width:0;overflow:hidden;flex-direction:column;background:#fff;border:1px solid #e1e1e1;border-radius:14px;color:#111;text-decoration:none;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
-      .home-promotion-card:hover{transform:translateY(-3px);border-color:#d7c170;box-shadow:0 12px 28px rgba(0,0,0,.08)}
-      .home-promotion-image{position:relative;aspect-ratio:1/1;overflow:hidden;background:#f5f5f3}
-      .home-promotion-image img{display:block;width:100%;height:100%;object-fit:contain;transition:transform .25s ease}
-      .home-promotion-card:hover .home-promotion-image img{transform:scale(1.035)}
-      .home-promotion-placeholder{display:grid;width:100%;height:100%;place-items:center;color:#aaa;font-size:13px;font-weight:900;letter-spacing:.12em}
+      .home-product-tabs{display:flex;align-items:center;gap:6px;margin-top:16px}
+      .home-product-tab{appearance:none;border:1px solid #dedede;background:#fff;color:#666;border-radius:999px;padding:9px 14px;cursor:pointer;font:900 9px Inter,Arial,sans-serif;letter-spacing:.09em;transition:all .18s ease}
+      .home-product-tab:hover{border-color:#111;color:#111}
+      .home-product-tab.is-active{background:#111;border-color:#111;color:#fff}
+      .home-product-tab.is-active[data-product-view="offers"]{background:${PROMO_YELLOW};border-color:${PROMO_YELLOW};color:#111}
+      .home-product-tab span{margin-left:3px;opacity:.72}
+      .home-promotion-product-image{position:relative}
+      .home-promotion-product-image img{display:block;width:100%;height:100%;object-fit:contain}
       .home-promotion-badge,.home-promotion-discount{position:absolute;z-index:2;top:11px;border-radius:999px;font-size:9px;font-weight:900;letter-spacing:.05em}
-      .home-promotion-badge{left:11px;padding:7px 10px;background:#ffc400;color:#111;box-shadow:0 3px 10px rgba(0,0,0,.12)}
+      .home-promotion-badge{left:11px;padding:7px 10px;background:${PROMO_YELLOW};color:#111;box-shadow:0 3px 10px rgba(0,0,0,.12)}
       .home-promotion-discount{right:11px;padding:7px 9px;background:#111;color:#fff}
-      .home-promotion-info{display:flex;min-width:0;flex:1;flex-direction:column;padding:16px}
-      .home-promotion-info small{color:#999;font-size:8px;font-weight:900;letter-spacing:.08em}
-      .home-promotion-info h3{display:-webkit-box;min-height:42px;margin:7px 0 13px;overflow:hidden;font-family:'Barlow Condensed',sans-serif;font-size:22px;line-height:.96;font-weight:800;text-transform:uppercase;-webkit-box-orient:vertical;-webkit-line-clamp:2}
       .home-promotion-prices{display:flex;flex-direction:column;gap:2px;margin-top:auto;line-height:1}
       .home-promotion-prices s{color:#999;font-size:11px;font-weight:700}
-      .home-promotion-prices strong{color:#111;font-size:20px;font-weight:900;letter-spacing:-.02em}
+      .home-promotion-prices strong{color:${PROMO_YELLOW};font-size:20px;font-weight:900;letter-spacing:-.02em}
+      .home-promotions-empty{grid-column:1/-1;padding:38px 20px;border:1px dashed #ddd;border-radius:14px;background:#fff;text-align:center;color:#777;font-size:13px}
       @media(max-width:900px){
-        .home-promotions-section{padding:58px 0}
-        .home-promotions-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
-        .home-promotions-head{align-items:flex-start}
-        .home-promotions-count{margin-top:3px}
+        .home-product-tabs{margin-top:13px}
       }
       @media(max-width:520px){
-        .home-promotions-section{padding:48px 0}
-        .home-promotions-head{display:block}
-        .home-promotions-head h2{font-size:38px}
-        .home-promotions-count{margin-top:14px}
-        .home-promotions-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-        .home-promotion-info{padding:12px}
-        .home-promotion-info h3{min-height:38px;font-size:18px;margin:6px 0 10px}
-        .home-promotion-prices strong{font-size:17px}
+        .home-product-tabs{gap:5px}
+        .home-product-tab{padding:8px 11px;font-size:8px}
         .home-promotion-badge,.home-promotion-discount{top:8px;font-size:8px}
         .home-promotion-badge{left:8px;padding:6px 8px}
         .home-promotion-discount{right:8px;padding:6px 7px}
+        .home-promotion-prices strong{font-size:17px}
       }
     `}</style>
   );
