@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { geocodeAddress, isGeoAvailable, resolvePlace, routeDistance } from '@/lib/server/geo';
 import { readStoreOperations, storeOrigin, type StoreOperations } from '@/lib/server/store-settings';
-import { DELIVERY_PROVIDERS, getStandardDeliveryMessage, quoteOwnDelivery, type DeliveryProvider } from '@/lib/store-operations';
+import { DELIVERY_PROVIDERS, getStandardDeliveryDateLabel, getStandardDeliveryMessage, quoteOwnDelivery, type DeliveryProvider } from '@/lib/store-operations';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -37,12 +37,18 @@ function describe(provider: DeliveryProvider) { return DELIVERY_PROVIDERS.find((
 export async function GET() {
   const operations = await readStoreOperations();
   const providers = enabledProviders(operations);
+  const standardMessage = getStandardDeliveryMessage(operations.sameDayCutoff);
   return NextResponse.json({
-    sameDay: { enabled: operations.sameDayEnabled, cutoff: operations.sameDayCutoff, message: getStandardDeliveryMessage(operations.sameDayCutoff) },
+    sameDay: {
+      enabled: operations.sameDayEnabled,
+      cutoff: operations.sameDayCutoff,
+      message: standardMessage,
+      window: getStandardDeliveryDateLabel(operations.sameDayCutoff),
+    },
     address: storeAddressLabel(operations),
     options: providers.filter((provider) => provider !== 'express' || operations.expressPriceTable.length > 0).map((provider) => {
       const meta = describe(provider);
-      return { provider, label: meta.label, description: provider === 'own' ? getStandardDeliveryMessage(operations.sameDayCutoff) : meta.description, fee: provider === 'pickup' ? 0 : null, needsAddress: meta.needsAddress };
+      return { provider, label: meta.label, description: provider === 'own' ? standardMessage : meta.description, fee: provider === 'pickup' ? 0 : null, needsAddress: meta.needsAddress };
     }),
     storeConfigured: Boolean(storeOrigin(operations)),
   });
