@@ -187,14 +187,14 @@ export function getStandardDeliveryMessage(cutoff = '16:00', now = new Date()) {
   const cutoffMinutes = toMinutes(cutoff) ?? 960;
   const parts = zonedParts(now);
   const currentMinutes = parts.hour * 60 + parts.minute;
-  return currentMinutes < cutoffMinutes ? 'Seu pedido chega hoje, entre 16h e 21h.' : 'Seu pedido chega amanhã, entre 16h e 21h.';
+  return currentMinutes <= cutoffMinutes ? 'Seu pedido chega hoje, entre 16h e 21h.' : 'Seu pedido chega amanhã, entre 16h e 21h.';
 }
 
 export function getStandardDeliveryDateLabel(cutoff = '16:00', now = new Date()) {
   const cutoffMinutes = toMinutes(cutoff) ?? 960;
   const parts = zonedParts(now);
   const currentMinutes = parts.hour * 60 + parts.minute;
-  return currentMinutes < cutoffMinutes ? 'Hoje, entre 16h e 21h' : 'Amanhã, entre 16h e 21h';
+  return currentMinutes <= cutoffMinutes ? 'Hoje, entre 16h e 21h' : 'Amanhã, entre 16h e 21h';
 }
 
 function offsetMinutes(date: Date) {
