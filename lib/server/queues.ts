@@ -37,6 +37,7 @@ export type EmailTemplateId =
   | 'order_status_updated'
   | 'order_details'
   | 'order_access_code'
+  | 'guest_order_access'
   | 'cart_reminder';
 
 export type EmailJob = {

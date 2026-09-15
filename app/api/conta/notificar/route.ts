@@ -8,7 +8,7 @@ import { findAuthUserByEmail, getAdminSupabase } from '@/lib/server/supabase-adm
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const ACTIONS = new Set(['account_created', 'password_reset', 'order_details']);
+const ACTIONS = new Set(['account_created', 'password_reset', 'order_details', 'guest_order_access']);
 const WELCOME_WINDOW_MS = 30 * 60 * 1000;
 const ACCEPTED = { ok: true } as const;
 
@@ -27,6 +27,24 @@ async function buildRecoveryLink(email: string) {
   return data?.properties?.action_link || null;
 }
 
+async function buildGuestOrderAccessLink(email: string, name: string) {
+  const admin = getAdminSupabase();
+  if (!admin) return null;
+  const { data, error } = await admin.auth.admin.generateLink({
+    type: 'magiclink',
+    email,
+    options: {
+      redirectTo: `${getSiteUrl()}/conta`,
+      data: { full_name: name },
+    },
+  });
+  if (error) {
+    console.error('[conta/notificar] magiclink falhou:', error.message);
+    return null;
+  }
+  return data?.properties?.action_link || null;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -35,6 +53,37 @@ export async function POST(request: Request) {
 
     if (!ACTIONS.has(action)) return NextResponse.json({ error: 'Ação inválida.' }, { status: 400 });
     if (!email.includes('@')) return NextResponse.json({ error: 'E-mail inválido.' }, { status: 400 });
+
+    if (action === 'guest_order_access') {
+      const orderId = String(body?.orderId || '').trim();
+      if (!orderId) return NextResponse.json({ error: 'Pedido é obrigatório.' }, { status: 400 });
+
+      const context = await readOrderWithItems(orderId);
+      if (!context) return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
+
+      const orderEmail = String(context.order.customer_email || '').trim().toLowerCase();
+      if (orderEmail !== email) return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
+
+      const allowed = await markProcessed(`notify:guest_order_access:${email}:${orderId}`, 60);
+      if (!allowed) return NextResponse.json(ACCEPTED);
+
+      const accessUrl = await buildGuestOrderAccessLink(email, String(body?.name || context.order.customer_name || '').trim());
+      if (!accessUrl) return NextResponse.json({ error: 'Não foi possível gerar o acesso seguro ao pedido.' }, { status: 500 });
+
+      await enqueueEmail({
+        template: 'guest_order_access',
+        to: email,
+        data: {
+          name: body?.name || context.order.customer_name || '',
+          orderId,
+          accessUrl,
+        },
+        dedupeKey: `guest_order_access:${orderId}`,
+      });
+
+      await markProcessed(`notify:account_created:${email}`, WELCOME_WINDOW_MS / 1000);
+      return NextResponse.json(ACCEPTED);
+    }
 
     const allowed = await markProcessed(`notify:${action}:${email}`, 60);
     if (!allowed) return NextResponse.json(ACCEPTED);

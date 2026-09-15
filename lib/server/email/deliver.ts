@@ -2,6 +2,7 @@ import type { EmailJob } from '../queues';
 import { markProcessed } from '../redis';
 import { supabaseRest } from '../supabase-admin';
 import { sendEmail } from './send';
+import { renderGuestOrderAccess } from './guest-order-access';
 import { renderTemplate } from './templates';
 
 async function recordEvent(job: EmailJob, status: 'sent' | 'failed', detail: string | null, providerId: string | null) {
@@ -40,7 +41,10 @@ export async function deliverEmailJob(job: EmailJob) {
   if (!firstTime) return { skipped: true as const, reason: 'duplicado' };
   if (await alreadyDelivered(dedupeKey)) return { skipped: true as const, reason: 'ja-enviado' };
 
-  const { subject, html } = renderTemplate(job.template, job.data || {});
+  const rendered = job.template === 'guest_order_access'
+    ? renderGuestOrderAccess(job.data || {})
+    : renderTemplate(job.template, job.data || {});
+  const { subject, html } = rendered;
 
   try {
     const result = await sendEmail({ to: job.to, subject, html, tags: { template: job.template } });
