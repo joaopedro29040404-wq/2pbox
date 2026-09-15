@@ -36,6 +36,27 @@ function renderPrice(container: HTMLElement, original: number, promo: number) {
   container.appendChild(price);
 }
 
+function renderCatalogPrice(container: HTMLElement, original: number, promo: number) {
+  if (container.querySelector('[data-marketing-promotion-price]')) return;
+
+  const price = document.createElement('div');
+  price.dataset.marketingPromotionPrice = 'true';
+  price.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:1px;line-height:1.05;min-width:0';
+
+  const old = document.createElement('s');
+  old.textContent = money(original);
+  old.style.cssText = 'color:#999;font:700 11px Inter,Arial,sans-serif';
+
+  const current = document.createElement('strong');
+  current.textContent = money(promo);
+  current.style.cssText = `color:${PROMO_YELLOW};font:900 19px Inter,Arial,sans-serif;letter-spacing:-.02em;white-space:nowrap`;
+
+  price.append(old, current);
+  const button = container.querySelector<HTMLElement>('.catalog-add-button');
+  if (button) container.insertBefore(price, button);
+  else container.appendChild(price);
+}
+
 export function MarketingPromotions() {
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +76,9 @@ export function MarketingPromotions() {
         for (const link of links) {
           const card = link.classList.contains('home-product-card')
             ? link
-            : (link.closest('[class*="product-card"]') as HTMLElement | null) || null;
+            : (link.closest('.product') as HTMLElement | null) ||
+              (link.closest('[class*="product-card"]') as HTMLElement | null) ||
+              null;
           if (!card) continue;
 
           if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
@@ -66,6 +89,12 @@ export function MarketingPromotions() {
             badge.textContent = 'OFERTA';
             badge.style.cssText = `position:absolute;top:10px;left:10px;z-index:3;background:${PROMO_YELLOW};color:#111;border-radius:999px;padding:7px 11px;font:900 10px Inter,Arial,sans-serif;letter-spacing:.06em;box-shadow:0 3px 10px rgba(0,0,0,.12)`;
             card.appendChild(badge);
+          }
+
+          if (card.classList.contains('product')) {
+            const info = card.querySelector<HTMLElement>('.product-buy');
+            if (info) renderCatalogPrice(info, original, promo);
+            continue;
           }
 
           const info = card.querySelector<HTMLElement>('.home-product-info') || card.querySelector<HTMLElement>('[class*="product-info"]');
