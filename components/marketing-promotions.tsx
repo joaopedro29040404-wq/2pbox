@@ -3,8 +3,31 @@
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
+const PROMO_YELLOW = '#ffc400';
+
 function money(value: number) {
   return `R$ ${Number(value).toFixed(2).replace('.', ',')}`;
+}
+
+function renderPrice(container: HTMLElement, original: number, promo: number) {
+  container.querySelectorAll('[data-marketing-promotion-price]').forEach((node) => node.remove());
+  const nativePrice = container.querySelector<HTMLElement>('[data-product-price]');
+  if (nativePrice) nativePrice.remove();
+
+  const price = document.createElement('div');
+  price.dataset.marketingPromotionPrice = 'true';
+  price.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:1px;margin-top:8px;line-height:1.05';
+
+  const old = document.createElement('s');
+  old.textContent = money(original);
+  old.style.cssText = 'color:#999;font:700 12px Inter,Arial,sans-serif';
+
+  const current = document.createElement('strong');
+  current.textContent = money(promo);
+  current.style.cssText = `color:${PROMO_YELLOW};font:900 30px Inter,Arial,sans-serif;letter-spacing:-.02em`;
+
+  price.append(old, current);
+  container.appendChild(price);
 }
 
 export function MarketingPromotions() {
@@ -14,6 +37,7 @@ export function MarketingPromotions() {
 
     function applyPromotions() {
       if (cancelled || !rows.length) return;
+
       for (const row of rows) {
         const product = Array.isArray(row.products) ? row.products[0] : row.products;
         const slug = String(product?.slug || '').trim();
@@ -23,28 +47,30 @@ export function MarketingPromotions() {
 
         const links = Array.from(document.querySelectorAll<HTMLAnchorElement>(`a[href="/produto/${slug}"]`));
         for (const link of links) {
-          if (link.dataset.marketingPromotionApplied === 'true') continue;
-          link.dataset.marketingPromotionApplied = 'true';
-          const card = link.classList.contains('home-product-card') ? link : (link.closest('[class*="product-card"]') as HTMLElement | null) || link;
+          const card = link.classList.contains('home-product-card')
+            ? link
+            : (link.closest('[class*="product-card"]') as HTMLElement | null) || null;
+          if (!card) continue;
+
           if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
 
-          const badge = document.createElement('span');
-          badge.textContent = 'OFERTA';
-          badge.style.cssText = 'position:absolute;top:10px;left:10px;z-index:3;background:#ffc400;color:#111;border-radius:999px;padding:5px 8px;font:900 9px Inter,Arial,sans-serif;letter-spacing:.08em;box-shadow:0 3px 10px rgba(0,0,0,.12)';
-          card.appendChild(badge);
+          if (!card.querySelector('[data-marketing-promotion-badge]')) {
+            const badge = document.createElement('span');
+            badge.dataset.marketingPromotionBadge = 'true';
+            badge.textContent = 'OFERTA';
+            badge.style.cssText = `position:absolute;top:10px;left:10px;z-index:3;background:${PROMO_YELLOW};color:#111;border-radius:999px;padding:7px 11px;font:900 10px Inter,Arial,sans-serif;letter-spacing:.06em;box-shadow:0 3px 10px rgba(0,0,0,.12)`;
+            card.appendChild(badge);
+          }
 
-          const price = document.createElement('div');
-          price.style.cssText = 'margin-top:5px;display:flex;align-items:baseline;gap:7px;flex-wrap:wrap';
-          const old = document.createElement('s');
-          old.textContent = money(original);
-          old.style.cssText = 'color:#999;font:600 11px Inter,Arial,sans-serif';
-          const current = document.createElement('strong');
-          current.textContent = money(promo);
-          current.style.cssText = 'color:#138a43;font-weight:900';
-          price.append(old, current);
-          const existingPrice = Array.from(card.querySelectorAll<HTMLElement>('strong')).find((element) => element.textContent?.trim() === money(original));
-          if (existingPrice) existingPrice.replaceWith(price);
-          else card.appendChild(price);
+          const info = card.querySelector<HTMLElement>('.home-product-info') || card.querySelector<HTMLElement>('[class*="product-info"]');
+          if (!info) continue;
+
+          info.querySelectorAll('[data-marketing-promotion-price]').forEach((node) => node.remove());
+          const nativeStrong = info.querySelector<HTMLElement>('strong');
+          if (nativeStrong) {
+            nativeStrong.dataset.productPrice = 'true';
+          }
+          renderPrice(info, original, promo);
         }
       }
 
@@ -55,20 +81,35 @@ export function MarketingPromotions() {
           const product = Array.isArray(item.products) ? item.products[0] : item.products;
           return product?.slug === slug;
         });
-        if (row) {
+
+        const priceNode = document.querySelector<HTMLElement>('.product-price');
+        if (row && priceNode) {
           const product = Array.isArray(row.products) ? row.products[0] : row.products;
-          const priceNode = document.querySelector<HTMLElement>('.product-price');
-          if (priceNode && priceNode.dataset.marketingPromotionApplied !== 'true') {
-            priceNode.dataset.marketingPromotionApplied = 'true';
-            priceNode.innerHTML = `<s style="color:#999;font-size:.6em;margin-right:8px">${money(Number(product.price))}</s><strong style="color:#138a43">${money(Number(row.promotional_price))}</strong>`;
-          }
+          priceNode.dataset.marketingPromotionApplied = 'true';
+          priceNode.innerHTML = '';
+          priceNode.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:1px;margin-bottom:18px;line-height:1.05';
+
+          const old = document.createElement('s');
+          old.textContent = money(Number(product.price));
+          old.style.cssText = 'color:#999;font:700 14px Inter,Arial,sans-serif';
+
+          const current = document.createElement('strong');
+          current.textContent = money(Number(row.promotional_price));
+          current.style.cssText = `color:${PROMO_YELLOW};font:900 36px Inter,Arial,sans-serif;letter-spacing:-.02em`;
+
+          priceNode.append(old, current);
         }
       }
     }
 
     async function load() {
       if (!supabase) return;
-      const { data } = await supabase.from('promotions').select('product_id,promotional_price,products(slug,name,price)').eq('active', true).lte('starts_at', new Date().toISOString()).gte('ends_at', new Date().toISOString());
+      const { data } = await supabase
+        .from('promotions')
+        .select('product_id,promotional_price,products(slug,name,price)')
+        .eq('active', true)
+        .lte('starts_at', new Date().toISOString())
+        .gte('ends_at', new Date().toISOString());
       if (cancelled || !Array.isArray(data)) return;
       rows = data as any[];
       applyPromotions();
