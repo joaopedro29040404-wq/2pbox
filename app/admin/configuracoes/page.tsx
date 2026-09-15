@@ -19,6 +19,7 @@ import {
   Trash2,
   Truck,
   Unlink,
+  Zap,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { SiteHeader } from '@/components/site-header';
@@ -55,6 +56,8 @@ type Operations = {
   ownDeliveryEnabled: boolean;
   expressEnabled: boolean;
   expressFee: number;
+  expressPriceTable: DeliveryTier[];
+  expressMaxKm: number;
   appDeliveryEnabled: boolean;
   subsidyPercent: number;
   maxKm: number;
@@ -81,10 +84,19 @@ const SECTIONS = [
   { key: 'shipping', label: 'Frete e retirada', icon: Truck },
   { key: 'fees', label: 'Taxas', icon: Percent },
   { key: 'delivery', label: 'Entregas', icon: Bike },
+  { key: 'express', label: 'Envio imediato', icon: Zap },
   { key: 'integrations', label: 'Integrações', icon: CreditCard },
 ] as const;
 
 type SectionKey = (typeof SECTIONS)[number]['key'];
+
+const DEFAULT_EXPRESS_TABLE: DeliveryTier[] = [
+  { upToKm: 2, price: 18 },
+  { upToKm: 5, price: 22 },
+  { upToKm: 10, price: 30 },
+  { upToKm: 15, price: 40 },
+  { upToKm: 20, price: 50 },
+];
 
 const MP_HEALTH_MESSAGES: Record<string, string> = {
   'mercadopago-desconectado': 'Nenhuma conta Mercado Pago conectada: o checkout está oferecendo contato por WhatsApp no lugar do pagamento online.',
@@ -221,6 +233,23 @@ export default function SettingsPage() {
     patch({ priceTable: data.priceTable.filter((_, position) => position !== index) });
   }
 
+  function updateExpressTier(index: number, changes: Partial<DeliveryTier>) {
+    if (!data) return;
+    patch({ expressPriceTable: data.expressPriceTable.map((tier, position) => (position === index ? { ...tier, ...changes } : tier)) });
+  }
+
+  function addExpressTier() {
+    if (!data) return;
+    const current = data.expressPriceTable.length ? data.expressPriceTable : DEFAULT_EXPRESS_TABLE;
+    const last = current[current.length - 1];
+    patch({ expressPriceTable: [...current, { upToKm: last ? last.upToKm + 2 : 2, price: last ? last.price + 5 : 18 }] });
+  }
+
+  function removeExpressTier(index: number) {
+    if (!data) return;
+    patch({ expressPriceTable: data.expressPriceTable.filter((_, position) => position !== index) });
+  }
+
   async function connectMercadoPago() {
     setMpBusy(true);
     try {
@@ -258,10 +287,18 @@ export default function SettingsPage() {
     try {
       const shippingLabel = SHIPPING_MODES.find((mode) => mode.value === data.shippingMode)?.label || '';
       const pickupLabel = PICKUP_MODES.find((mode) => mode.value === data.pickupMode)?.label || '';
+      const body: Record<string, unknown> = { ...data, shippingLabel, pickupLabel };
+      if (section !== 'express') {
+        delete body.expressPriceTable;
+        delete body.expressMaxKm;
+      } else {
+        body.expressPriceTable = data.expressPriceTable.length ? data.expressPriceTable : DEFAULT_EXPRESS_TABLE;
+        body.expressMaxKm = data.expressMaxKm;
+      }
       const response = await fetch('/api/admin/configuracoes', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...data, shippingLabel, pickupLabel }),
+        body: JSON.stringify(body),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || 'Não foi possível salvar.');
@@ -309,6 +346,7 @@ export default function SettingsPage() {
   const openCount = Object.keys(data.businessHours).length;
   const active = SECTIONS.find((item) => item.key === section) || SECTIONS[0];
   const ActiveIcon = active.icon;
+  const expressTable = data.expressPriceTable.length ? data.expressPriceTable : DEFAULT_EXPRESS_TABLE;
 
   return (
     <main className="settings-page">
@@ -531,11 +569,7 @@ export default function SettingsPage() {
                   <CheckboxField label="Entrega no mesmo dia" description="Motoboy da loja, cobrado pela tabela de distância." checked={data.ownDeliveryEnabled} onCheckedChange={(checked) => patch({ ownDeliveryEnabled: checked })} />
                   <CheckboxField
                     label="Envio imediato"
-                    description={
-                      data.expressEnabled && data.expressFee <= 0
-                        ? 'Defina o frete na aba Entregas: com o valor zerado a modalidade não é oferecida ao cliente.'
-                        : 'Frete fixo definido pela loja, sem subsídio.'
-                    }
+                    description="Frete por distância configurado na aba Envio imediato, sem subsídio."
                     checked={data.expressEnabled}
                     onCheckedChange={(checked) => patch({ expressEnabled: checked })}
                   />
@@ -560,7 +594,6 @@ export default function SettingsPage() {
             {section === 'delivery' && (
               <div className="settings-grid">
                 <TextField label="Subsídio da loja (%)" type="number" step="1" min="0" max="100" value={String(data.subsidyPercent)} onValueChange={(value) => patch({ subsidyPercent: Number(value) || 0 })} hint="Parte do frete que a loja absorve na entrega no mesmo dia. Não se aplica ao envio imediato." />
-                <TextField label="Frete do envio imediato (R$)" type="number" step="0.01" min="0" value={String(data.expressFee)} onValueChange={(value) => patch({ expressFee: Number(value) || 0 })} hint="Valor fixo cobrado do cliente. O cliente paga o valor cheio, sem subsídio da loja." />
                 <TextField label="Raio máximo (km)" type="number" step="0.5" min="0.5" value={String(data.maxKm)} onValueChange={(value) => patch({ maxKm: Number(value) || 0 })} hint="Acima disso a entrega própria não é oferecida." />
                 <SelectField
                   label="Virada do ciclo de entregas"
@@ -620,6 +653,48 @@ export default function SettingsPage() {
                       })}
                     </ul>
                   )}
+                </div>
+              </div>
+            )}
+
+            {section === 'express' && (
+              <div className="settings-grid">
+                <TextField
+                  label="Raio máximo (km)"
+                  type="number"
+                  step="0.5"
+                  min="0.5"
+                  value={String(data.expressMaxKm)}
+                  onValueChange={(value) => patch({ expressMaxKm: Number(value) || 0 })}
+                  hint="Acima desse raio o envio imediato não é oferecido ao cliente."
+                />
+                <div className="settings-note">
+                  Esta tabela é exclusiva do <strong>envio imediato</strong>. A tabela do motoboy próprio permanece independente e pode ter valores e raio diferentes.
+                </div>
+                <div className="tier-block">
+                  <div className="tier-head">
+                    <span className="settings-block-label">Tabela de preços por distância</span>
+                    <button type="button" onClick={addExpressTier}>
+                      <Plus size={14} /> Adicionar faixa
+                    </button>
+                  </div>
+
+                  <ul className="tier-list">
+                    {expressTable.map((tier, index) => (
+                      <li key={index}>
+                        <TextField label="Até (km)" type="number" step="0.5" min="0.5" value={String(tier.upToKm)} onValueChange={(value) => updateExpressTier(index, { upToKm: Number(value) || 0 })} />
+                        <TextField label="Valor (R$)" type="number" step="0.01" min="0" value={String(tier.price)} onValueChange={(value) => updateExpressTier(index, { price: Number(value) || 0 })} />
+                        <div className="tier-result">
+                          <span>Cliente paga</span>
+                          <strong>R$ {tier.price.toFixed(2).replace('.', ',')}</strong>
+                          <small>sem subsídio da loja</small>
+                        </div>
+                        <button type="button" onClick={() => removeExpressTier(index)} aria-label="Remover faixa">
+                          <Trash2 size={15} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               </div>
             )}
@@ -770,6 +845,8 @@ function sectionTitle(section: SectionKey) {
       return 'Taxas do pedido';
     case 'delivery':
       return 'Operação de entregas';
+    case 'express':
+      return 'Envio imediato';
     default:
       return 'Integrações';
   }
