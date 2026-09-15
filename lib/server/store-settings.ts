@@ -20,6 +20,8 @@ export type StoreOperations = {
   expressFee: number;
   expressPriceTable: DeliveryTier[];
   expressMaxKm: number;
+  expressStartTime: string;
+  expressEndTime: string;
   appDeliveryEnabled: boolean;
   subsidyPercent: number;
   maxKm: number;
@@ -82,13 +84,15 @@ function mapRow(row: any): StoreOperations {
     expressFee: num(data.delivery_express_fee, 0),
     expressPriceTable: expressTable,
     expressMaxKm: num(data.delivery_express_max_km, 12),
+    expressStartTime: validTime(data.delivery_express_start_time, '09:00'),
+    expressEndTime: validTime(data.delivery_express_end_time, '18:00'),
     appDeliveryEnabled: Boolean(data.delivery_app_enabled),
     subsidyPercent: num(data.delivery_subsidy_percent, 30),
     maxKm: num(data.delivery_max_km, 12),
     priceTable: table.length ? table : DEFAULT_PRICE_TABLE,
     cycleHour: Math.min(23, Math.max(0, Math.round(num(data.delivery_cycle_hour, 16)))),
     sameDayEnabled: Boolean(data.same_day_enabled),
-    sameDayCutoff: /^([01]\d|2[0-3]):[0-5]\d$/.test(String(data.same_day_cutoff || '')) ? String(data.same_day_cutoff) : '16:00',
+    sameDayCutoff: validTime(data.same_day_cutoff, '16:00'),
   };
 }
 
@@ -96,6 +100,10 @@ export function storeOrigin(operations: StoreOperations) {
   const { lat, lng } = operations.address;
   if (lat == null || lng == null) return null;
   return { lat, lng };
+}
+
+function validTime(value: unknown, fallback: string) {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value || '')) ? String(value) : fallback;
 }
 
 function num(value: unknown, fallback: number) {

@@ -25,6 +25,9 @@ export async function PUT(request: Request) {
   const hours = body.businessHours === undefined ? current.businessHours : normalizeBusinessHours(body.businessHours);
   const days = openDays(hours);
   const firstDay = days.length ? hours[days[0]]! : null;
+  const expressStartTime = validTime(body.expressStartTime, current.expressStartTime);
+  const expressEndTime = validTime(body.expressEndTime, current.expressEndTime);
+  if (expressStartTime >= expressEndTime) return NextResponse.json({ error: 'O horário final do envio imediato precisa ser depois do horário inicial.' }, { status: 400 });
   const legacy = {
     name: text(body.name, current.name) || '2P Box', whatsapp: text(body.whatsapp, current.whatsapp), hours: describeHours(hours),
     pickup: text(body.pickupLabel, '') || 'Retirada na loja', shipping: text(body.shippingLabel, '') || 'Frete via WhatsApp', updated_at: new Date().toISOString(),
@@ -42,6 +45,7 @@ export async function PUT(request: Request) {
     delivery_express_enabled: bool(body.expressEnabled, current.expressEnabled), delivery_express_fee: bounded(body.expressFee, 0, 10000, current.expressFee),
     delivery_express_price_table: body.expressPriceTable === undefined ? current.expressPriceTable : normalizePriceTable(body.expressPriceTable),
     delivery_express_max_km: bounded(body.expressMaxKm, 0.5, 200, current.expressMaxKm),
+    delivery_express_start_time: expressStartTime, delivery_express_end_time: expressEndTime,
     delivery_app_enabled: bool(body.appDeliveryEnabled, current.appDeliveryEnabled), delivery_subsidy_percent: bounded(body.subsidyPercent, 0, 100, current.subsidyPercent),
     delivery_max_km: bounded(body.maxKm, 0.5, 200, current.maxKm), delivery_price_table: body.priceTable === undefined ? current.priceTable : normalizePriceTable(body.priceTable),
     delivery_cycle_hour: Math.round(bounded(body.cycleHour, 0, 23, current.cycleHour)),
@@ -82,3 +86,4 @@ function text(value: unknown, fallback: string) { if (value == null) return fall
 function bounded(value: unknown, min: number, max: number, fallback: number) { const parsed = Number(value); if (!Number.isFinite(parsed)) return fallback; return Math.min(max, Math.max(min, parsed)); }
 function bool(value: unknown, fallback: boolean) { return typeof value === 'boolean' ? value : fallback; }
 function coordinate(value: unknown) { const parsed = Number(value); return Number.isFinite(parsed) && parsed !== 0 ? parsed : null; }
+function validTime(value: unknown, fallback: string) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value || '')) ? String(value) : fallback; }

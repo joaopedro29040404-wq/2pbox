@@ -1,18 +1,33 @@
 import { NextResponse } from 'next/server';
 import { geocodeAddress, isGeoAvailable, resolvePlace, routeDistance } from '@/lib/server/geo';
 import { readStoreOperations, storeOrigin, type StoreOperations } from '@/lib/server/store-settings';
-import { DELIVERY_PROVIDERS, applySubsidy, quoteOwnDelivery, type DeliveryProvider } from '@/lib/store-operations';
+import { DELIVERY_PROVIDERS, quoteOwnDelivery, type DeliveryProvider } from '@/lib/store-operations';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 type Option = { provider: DeliveryProvider; label: string; description: string; fee: number | null; baseFee: number | null; subsidy: number | null; distanceKm: number | null; minutes: number | null; needsAddress: boolean; available: boolean; reason?: string };
 
+function isExpressAvailableNow(operations: StoreOperations) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
+  const hour = Number(parts.find((part) => part.type === 'hour')?.value || 0);
+  const minute = Number(parts.find((part) => part.type === 'minute')?.value || 0);
+  const current = hour * 60 + minute;
+  const start = timeToMinutes(operations.expressStartTime);
+  const end = timeToMinutes(operations.expressEndTime);
+  return current >= start && current < end;
+}
+
+function timeToMinutes(value: string) {
+  const [hour, minute] = value.split(':').map(Number);
+  return hour * 60 + minute;
+}
+
 function enabledProviders(operations: StoreOperations): DeliveryProvider[] {
   const active: DeliveryProvider[] = [];
   if (operations.pickupEnabled && operations.pickupMode !== 'disabled') active.push('pickup');
   if (operations.ownDeliveryEnabled) active.push('own');
-  if (operations.expressEnabled) active.push('express');
+  if (operations.expressEnabled && isExpressAvailableNow(operations)) active.push('express');
   if (operations.appDeliveryEnabled) active.push('app');
   return active;
 }
@@ -47,15 +62,8 @@ export async function POST(request: Request) {
       options.push({ provider, label: meta.label, description: meta.description, fee: 0, baseFee: 0, subsidy: 0, distanceKm: null, minutes: null, needsAddress: false, available: true });
       continue;
     }
-
-    if (!origin) {
-      options.push(unavailable(provider, meta.label, 'Endereço da loja não configurado.'));
-      continue;
-    }
-    if (!destination) {
-      options.push(unavailable(provider, meta.label, 'Informe o endereço de entrega para calcular o frete.'));
-      continue;
-    }
+    if (!origin) { options.push(unavailable(provider, meta.label, 'Endereço da loja não configurado.')); continue; }
+    if (!destination) { options.push(unavailable(provider, meta.label, 'Informe o endereço de entrega para calcular o frete.')); continue; }
 
     const distance = await routeDistance(origin, destination);
     const maxKm = provider === 'express' ? operations.expressMaxKm : operations.maxKm;
@@ -63,39 +71,20 @@ export async function POST(request: Request) {
     const subsidy = provider === 'own' ? operations.subsidyPercent : 0;
     const quote = distance.km > maxKm ? null : quoteOwnDelivery(distance.km, table, subsidy);
 
-    options.push(
-      quote
-        ? {
-            provider,
-            label: meta.label,
-            description: `${distance.km.toFixed(1)} km`,
-            fee: quote.customerFee,
-            baseFee: quote.baseFee,
-            subsidy: quote.subsidy,
-            distanceKm: distance.km,
-            minutes: distance.minutes,
-            needsAddress: true,
-            available: true,
-          }
-        : {
-            ...unavailable(
-              provider,
-              meta.label,
-              table.length === 0
-                ? 'A tabela de preços desta modalidade ainda não foi configurada pela loja.'
-                : `Fora do raio de atendimento (${maxKm} km).`,
-            ),
-            distanceKm: distance.km,
-          },
-    );
+    options.push(quote ? {
+      provider, label: meta.label, description: `${distance.km.toFixed(1)} km`, fee: quote.customerFee, baseFee: quote.baseFee,
+      subsidy: quote.subsidy, distanceKm: distance.km, minutes: distance.minutes, needsAddress: true, available: true,
+    } : {
+      ...unavailable(provider, meta.label, table.length === 0 ? 'A tabela de preços desta modalidade ainda não foi configurada pela loja.' : `Fora do raio de atendimento (${maxKm} km).`),
+      distanceKm: distance.km,
+    });
   }
 
   return NextResponse.json({ options, geoAvailable: isGeoAvailable(), storeConfigured: Boolean(origin), subsidyPercent: operations.subsidyPercent });
 }
 
 async function resolveDestination(body: any) {
-  const lat = Number(body?.lat);
-  const lng = Number(body?.lng);
+  const lat = Number(body?.lat); const lng = Number(body?.lng);
   if (Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0) return { lat, lng };
   if (!isGeoAvailable()) return null;
   const placeId = String(body?.placeId || '').trim();
@@ -104,9 +93,7 @@ async function resolveDestination(body: any) {
     if (address?.lat != null && address?.lng != null) return { lat: address.lat, lng: address.lng };
   }
   const typed = body?.address;
-  if (typed && typeof typed === 'object') {
-    return geocodeAddress({ street: typed.street ?? typed.line, number: typed.number, district: typed.neighborhood ?? typed.district, city: typed.city, state: typed.state, zip: typed.postal_code ?? typed.zip });
-  }
+  if (typed && typeof typed === 'object') return geocodeAddress({ street: typed.street ?? typed.line, number: typed.number, district: typed.neighborhood ?? typed.district, city: typed.city, state: typed.state, zip: typed.postal_code ?? typed.zip });
   return null;
 }
 

@@ -58,6 +58,8 @@ type Operations = {
   expressFee: number;
   expressPriceTable: DeliveryTier[];
   expressMaxKm: number;
+  expressStartTime: string;
+  expressEndTime: string;
   appDeliveryEnabled: boolean;
   subsidyPercent: number;
   maxKm: number;
@@ -281,6 +283,10 @@ export default function SettingsPage() {
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!data || saving) return;
+    if (section === 'express' && data.expressStartTime >= data.expressEndTime) {
+      toast.error('Horário inválido', 'O horário final precisa ser depois do horário inicial.');
+      return;
+    }
 
     setSaving(true);
     setSaved(false);
@@ -291,9 +297,13 @@ export default function SettingsPage() {
       if (section !== 'express') {
         delete body.expressPriceTable;
         delete body.expressMaxKm;
+        delete body.expressStartTime;
+        delete body.expressEndTime;
       } else {
         body.expressPriceTable = data.expressPriceTable.length ? data.expressPriceTable : DEFAULT_EXPRESS_TABLE;
         body.expressMaxKm = data.expressMaxKm;
+        body.expressStartTime = data.expressStartTime;
+        body.expressEndTime = data.expressEndTime;
       }
       const response = await fetch('/api/admin/configuracoes', {
         method: 'PUT',
@@ -659,6 +669,20 @@ export default function SettingsPage() {
 
             {section === 'express' && (
               <div className="settings-grid">
+                <TextField
+                  label="Horário inicial"
+                  type="time"
+                  value={data.expressStartTime}
+                  onValueChange={(value) => patch({ expressStartTime: value })}
+                  hint="Padrão: 09:00. A partir deste horário o envio imediato aparece para o cliente."
+                />
+                <TextField
+                  label="Horário final"
+                  type="time"
+                  value={data.expressEndTime}
+                  onValueChange={(value) => patch({ expressEndTime: value })}
+                  hint="Padrão: 18:00. A partir deste horário a opção deixa de aparecer para o cliente."
+                />
                 <TextField
                   label="Raio máximo (km)"
                   type="number"

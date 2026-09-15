@@ -10,6 +10,16 @@ export const runtime = 'nodejs';
 
 const PROVIDERS = new Set(['pickup', 'own', 'express', 'app']);
 
+function isExpressAvailableNow(startTime: string, endTime: string) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
+  const hour = Number(parts.find((part) => part.type === 'hour')?.value || 0);
+  const minute = Number(parts.find((part) => part.type === 'minute')?.value || 0);
+  const current = hour * 60 + minute;
+  const [startHour, startMinute] = startTime.split(':').map(Number);
+  const [endHour, endMinute] = endTime.split(':').map(Number);
+  return current >= startHour * 60 + startMinute && current < endHour * 60 + endMinute;
+}
+
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   if (!body) return NextResponse.json({ error: 'Dados inválidos.' }, { status: 400 });
@@ -27,6 +37,7 @@ export async function POST(request: Request) {
   const operations = await readStoreOperations();
   if (provider === 'own' && !operations.ownDeliveryEnabled) return NextResponse.json({ error: 'A entrega no mesmo dia está desativada.' }, { status: 409 });
   if (provider === 'express' && !operations.expressEnabled) return NextResponse.json({ error: 'O envio imediato está desativado.' }, { status: 409 });
+  if (provider === 'express' && !isExpressAvailableNow(operations.expressStartTime, operations.expressEndTime)) return NextResponse.json({ error: `O envio imediato funciona das ${operations.expressStartTime} às ${operations.expressEndTime}.` }, { status: 409 });
   if (provider === 'app' && !operations.appDeliveryEnabled) return NextResponse.json({ error: 'O motofrete está desativado.' }, { status: 409 });
   if (provider === 'pickup' && !operations.pickupEnabled) return NextResponse.json({ error: 'A retirada está desativada.' }, { status: 409 });
 
@@ -42,26 +53,19 @@ export async function POST(request: Request) {
     if (!origin) return NextResponse.json({ error: 'O endereço da loja não está configurado.' }, { status: 409 });
     const destination = await destinationFor(body);
     if (!destination) return NextResponse.json({ error: 'Selecione o endereço de entrega na busca para calcular a distância.' }, { status: 400 });
-
     const distance = await routeDistance(origin, destination);
     distanceKm = distance.km;
     const maxKm = provider === 'express' ? operations.expressMaxKm : operations.maxKm;
     const table = provider === 'express' ? operations.expressPriceTable : operations.priceTable;
     if (distance.km > maxKm) return NextResponse.json({ error: `Endereço fora do raio de atendimento (${maxKm} km).`, distanceKm: distance.km }, { status: 422 });
-
     const quote = quoteOwnDelivery(distance.km, table, provider === 'own' ? operations.subsidyPercent : 0);
     if (!quote) return NextResponse.json({ error: 'Nenhuma faixa de preço cobre essa distância.', distanceKm: distance.km }, { status: 422 });
-    fee = quote.customerFee;
-    baseFee = quote.baseFee;
-    subsidy = quote.subsidy;
+    fee = quote.customerFee; baseFee = quote.baseFee; subsidy = quote.subsidy;
   }
 
   const freeFrom = operations.freeShippingFrom;
   const freeShipping = freeFrom != null && freeFrom > 0 && subtotal >= freeFrom;
-  if (freeShipping && fee > 0) {
-    subsidy = round(subsidy + fee);
-    fee = 0;
-  }
+  if (freeShipping && fee > 0) { subsidy = round(subsidy + fee); fee = 0; }
   const serviceFee = round(subtotal * (operations.serviceFeePercent / 100) + operations.serviceFeeFixed);
   const total = round(subtotal + fee + serviceFee);
   const payload: Record<string, unknown> = {
@@ -95,8 +99,5 @@ async function destinationFor(body: any) {
   if (typed && typeof typed === 'object') return geocodeAddress({ street: typed.street ?? typed.line, number: typed.number, district: typed.neighborhood ?? typed.district, city: typed.city, state: typed.state, zip: typed.postal_code ?? typed.zip });
   return null;
 }
-
-function patch(orderId: string, payload: Record<string, unknown>) {
-  return supabaseRest(`orders?id=eq.${encodeURIComponent(orderId)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(payload) });
-}
+function patch(orderId: string, payload: Record<string, unknown>) { return supabaseRest(`orders?id=eq.${encodeURIComponent(orderId)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(payload) }); }
 function round(value: number) { return Math.round(Number(value || 0) * 100) / 100; }
