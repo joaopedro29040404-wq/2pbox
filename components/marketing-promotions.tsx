@@ -65,6 +65,8 @@ function constrainPromotionCard(card: HTMLElement) {
   card.style.maxWidth = '100%';
   card.style.overflow = 'hidden';
 
+  card.querySelectorAll<HTMLElement>('.low-stock').forEach((badge) => badge.remove());
+
   const info = card.querySelector<HTMLElement>('.product-body, .home-product-info, [class*="product-info"]');
   if (info) {
     info.style.minWidth = '0';
