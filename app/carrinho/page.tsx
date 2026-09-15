@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Bike, LoaderCircle, MessageCircle, Minus, Plus, ShoppingBag, Store, Trash2, Zap } from 'lucide-react';
+import { ArrowRight, Bike, Gift, LoaderCircle, MessageCircle, Minus, Plus, ShoppingBag, Store, Trash2, Zap } from 'lucide-react';
 import { useCart } from '@/components/cart-provider';
 import { SiteHeader } from '@/components/site-header';
 import { RadioGroup } from '@/components/ui/field';
@@ -35,6 +35,7 @@ export default function CarrinhoPage() {
   const [cepError, setCepError] = useState('');
   const [calculatingFreight, setCalculatingFreight] = useState(false);
   const [freightCalculated, setFreightCalculated] = useState(false);
+  const [freeShippingFrom, setFreeShippingFrom] = useState<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -44,6 +45,7 @@ export default function CarrinhoPage() {
         if (!active) return;
         const list: DeliveryOption[] = Array.isArray(data?.options) ? data.options : [];
         setOptions(list);
+        setFreeShippingFrom(Number.isFinite(Number(data?.freeShippingFrom)) && Number(data.freeShippingFrom) > 0 ? Number(data.freeShippingFrom) : null);
         if (list.length) setDelivery(list[0].provider);
       })
       .catch(() => {
@@ -76,6 +78,7 @@ export default function CarrinhoPage() {
 
       const list: DeliveryOption[] = Array.isArray(data?.options) ? data.options : [];
       setOptions(list);
+      setFreeShippingFrom(Number.isFinite(Number(data?.freeShippingFrom)) && Number(data.freeShippingFrom) > 0 ? Number(data.freeShippingFrom) : null);
       setFreightCalculated(true);
 
       const current = list.find((option) => option.provider === delivery);
@@ -94,6 +97,9 @@ export default function CarrinhoPage() {
   const selected = options.find((option) => option.provider === delivery);
   const selectedFee = selected?.fee ?? null;
   const orderTotal = total + (selectedFee || 0);
+  const freeShippingActive = freeShippingFrom != null && total >= freeShippingFrom;
+  const freeShippingRemaining = freeShippingFrom != null ? Math.max(0, freeShippingFrom - total) : 0;
+  const freeShippingProgress = freeShippingFrom != null ? Math.min(100, Math.round((total / freeShippingFrom) * 100)) : 0;
 
   return (
     <main className="cart-page-shell">
@@ -177,6 +183,26 @@ export default function CarrinhoPage() {
                 <span>Produtos</span>
                 <strong>{money(total)}</strong>
               </div>
+
+              {freeShippingFrom != null && (
+                <div className={`free-shipping-cart ${freeShippingActive ? 'is-active' : ''}`}>
+                  <div className="free-shipping-cart-top">
+                    <div className="free-shipping-cart-icon">
+                      {freeShippingActive ? <Gift size={18} /> : <Bike size={18} />}
+                    </div>
+                    <div>
+                      <strong>{freeShippingActive ? 'FRETE GRÁTIS LIBERADO' : 'GANHE FRETE GRÁTIS'}</strong>
+                      <span>{freeShippingActive ? 'Seu pedido atingiu o valor mínimo.' : `Faltam ${money(freeShippingRemaining)} para liberar na entrega padrão.`}</span>
+                    </div>
+                  </div>
+                  {!freeShippingActive && (
+                    <>
+                      <div className="free-shipping-progress"><span style={{ width: `${freeShippingProgress}%` }} /></div>
+                      <div className="free-shipping-cart-footer">A partir de {money(freeShippingFrom)} em compras</div>
+                    </>
+                  )}
+                </div>
+              )}
 
               <div className="freight-calculator">
                 <div className="freight-calculator-heading">
@@ -290,6 +316,17 @@ export default function CarrinhoPage() {
         .summary-heading h2{font-family:'Barlow Condensed';font-size:28px;text-transform:uppercase;margin:0;font-style:italic}
         .summary-line{display:flex;justify-content:space-between;gap:15px;padding:12px 0;font-size:14px;border-bottom:1px solid #eee}
         .summary-muted{color:#686868;text-align:right;font-size:12px}
+        .free-shipping-cart{margin:14px 0 4px;padding:13px 14px;border:1px solid #ead37a;border-radius:12px;background:linear-gradient(135deg,#fffaf0,#fff7d6)}
+        .free-shipping-cart.is-active{border-color:#86c99b;background:#f0fbf3}
+        .free-shipping-cart-top{display:flex;align-items:center;gap:10px}
+        .free-shipping-cart-icon{width:34px;height:34px;flex:0 0 34px;border-radius:9px;background:#ffc400;display:grid;place-items:center;color:#111}
+        .free-shipping-cart.is-active .free-shipping-cart-icon{background:#2e9b5b;color:#fff}
+        .free-shipping-cart-top>div:last-child{display:grid;gap:3px;min-width:0}
+        .free-shipping-cart strong{font:900 10.5px Inter,Arial,sans-serif;letter-spacing:.04em}
+        .free-shipping-cart span{font-size:10px;line-height:1.4;color:#666}
+        .free-shipping-progress{height:5px;margin-top:11px;background:#eadfb8;border-radius:99px;overflow:hidden}
+        .free-shipping-progress span{display:block;height:100%;border-radius:inherit;background:#ffc400;transition:width .25s ease}
+        .free-shipping-cart-footer{font-size:9px;color:#8a6d00;margin-top:6px;text-align:right}
         .freight-calculator{padding:18px 0 12px;border-bottom:1px solid #eee}
         .freight-calculator-heading{margin-bottom:10px}
         .freight-calculator-heading strong{display:block;font-size:14px;text-transform:uppercase;letter-spacing:.04em}
@@ -339,6 +376,7 @@ export default function CarrinhoPage() {
           .empty-cart h2{font-size:32px}
           .cep-row{grid-template-columns:1fr}
           .cep-row button{width:100%}
+          .free-shipping-cart{margin-top:12px;padding:12px}
         }
       `}</style>
     </main>

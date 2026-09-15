@@ -25,7 +25,7 @@ type Product = {
 };
 type AuthUser = { id: string };
 type DeliveryOption = { provider: string; label: string; description: string; fee: number | null };
-type DeliveryInfo = { sameDay: { enabled: boolean; cutoff: string }; address: string; options: DeliveryOption[] };
+type DeliveryInfo = { sameDay: { enabled: boolean; cutoff: string }; address: string; freeShippingFrom?: number | null; options: DeliveryOption[] };
 
 const DELIVERY_ICONS: Record<string, React.ReactNode> = {
   pickup: <Store size={19} />,
@@ -119,6 +119,9 @@ export default function ProductPage() {
 
   const gallery = productGallery(product);
   const image = gallery[selected] || gallery[0] || null;
+  const freeShippingFrom = delivery?.freeShippingFrom ?? null;
+  const productValue = Number(product.price) * quantity;
+  const productUnlocksFreeShipping = freeShippingFrom != null && productValue >= Number(freeShippingFrom);
 
   function addProduct() {
     if (!product) return;
@@ -267,6 +270,18 @@ export default function ProductPage() {
                 </div>
               )}
 
+              {freeShippingFrom != null && (
+                <div className={`free-shipping-highlight ${productUnlocksFreeShipping ? 'is-active' : ''}`}>
+                  <div className="free-shipping-highlight-icon">
+                    <Truck size={20} />
+                  </div>
+                  <div className="free-shipping-highlight-content">
+                    <strong>{productUnlocksFreeShipping ? 'FRETE GRÁTIS LIBERADO' : 'FRETE GRÁTIS NA ENTREGA PADRÃO'}</strong>
+                    <span>{productUnlocksFreeShipping ? 'Este produto já atinge o valor mínimo para liberar o benefício.' : `Compras a partir de ${money(Number(freeShippingFrom))}.`}</span>
+                  </div>
+                </div>
+              )}
+
               <div className="delivery-options-info">
                 {(delivery?.options.length
                   ? delivery.options
@@ -361,7 +376,14 @@ export default function ProductPage() {
         .delivery-panel-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}
         .delivery-panel-head h2{font-family:'Barlow Condensed';font-size:25px;text-transform:uppercase;font-style:italic;margin:4px 0 0}
         .delivery-panel-head>span{display:inline-flex;align-items:center;gap:5px;font:900 9px Inter,Arial,sans-serif;text-transform:uppercase;letter-spacing:.08em;background:#f7f7f7;border:1px solid #eee;border-radius:20px;padding:8px 10px;white-space:nowrap}
-        .delivery-options-info{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+        .free-shipping-highlight{display:flex;align-items:center;gap:12px;margin-top:14px;padding:13px 14px;border:1px solid #ead37a;border-radius:11px;background:linear-gradient(135deg,#fffaf0,#fff7d6)}
+        .free-shipping-highlight.is-active{border-color:#86c99b;background:#f0fbf3}
+        .free-shipping-highlight-icon{width:38px;height:38px;flex:0 0 38px;border-radius:10px;background:#ffc400;display:grid;place-items:center;color:#111}
+        .free-shipping-highlight.is-active .free-shipping-highlight-icon{background:#2e9b5b;color:#fff}
+        .free-shipping-highlight-content{display:grid;gap:3px;min-width:0}
+        .free-shipping-highlight-content strong{font:900 11px Inter,Arial,sans-serif;letter-spacing:.05em}
+        .free-shipping-highlight-content span{font-size:10px;line-height:1.45;color:#666}
+        .delivery-options-info{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
         .delivery-options-info>div{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;padding:14px;background:#fafafa;border:1px solid #eee;border-radius:9px}
         .delivery-options-info>div>svg:first-child{flex:none;margin-top:1px;color:#111}
         .delivery-options-info div div{display:grid;gap:4px}
@@ -400,6 +422,7 @@ export default function ProductPage() {
           .delivery-panel{padding:16px;margin-top:22px}
           .delivery-panel-head h2{font-size:22px}
           .delivery-options-info,.product-trust{grid-template-columns:1fr}
+          .free-shipping-highlight{padding:12px}
           .favorite-btn{width:38px;height:38px}
         }
       `}</style>
