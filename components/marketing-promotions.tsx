@@ -133,6 +133,10 @@ function renderHomePromotions(rows: PromotionRow[]) {
     return;
   }
 
+  const signature = products.map(({ product, promo }) => `${product.id}:${promo}`).join('|');
+  if (section.dataset.promotionSignature === signature) return;
+  section.dataset.promotionSignature = signature;
+
   section.innerHTML = `
     <div class="home-container">
       <div class="home-section-head home-promotions-head">
