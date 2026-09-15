@@ -13,22 +13,13 @@ export type StoreOperations = {
   serviceFeeFixed: number;
   minOrderTotal: number;
   freeShippingFrom: number | null;
-  address: {
-    line: string;
-    number: string;
-    complement: string;
-    district: string;
-    city: string;
-    state: string;
-    zip: string;
-    placeId: string | null;
-    lat: number | null;
-    lng: number | null;
-  };
+  address: { line: string; number: string; complement: string; district: string; city: string; state: string; zip: string; placeId: string | null; lat: number | null; lng: number | null };
   pickupEnabled: boolean;
   ownDeliveryEnabled: boolean;
   expressEnabled: boolean;
   expressFee: number;
+  expressPriceTable: DeliveryTier[];
+  expressMaxKm: number;
   appDeliveryEnabled: boolean;
   subsidyPercent: number;
   maxKm: number;
@@ -43,16 +34,13 @@ const CACHE_MS = 30_000;
 
 export async function readStoreOperations(options: { fresh?: boolean } = {}): Promise<StoreOperations> {
   if (!options.fresh && cache && Date.now() - cache.at < CACHE_MS) return cache.value;
-
   const row = await fetchRow();
   const value = mapRow(row);
   cache = { value, at: Date.now() };
   return value;
 }
 
-export function invalidateStoreOperations() {
-  cache = null;
-}
+export function invalidateStoreOperations() { cache = null; }
 
 async function fetchRow() {
   const rows = await supabaseRest('store_settings?select=*&order=updated_at.desc.nullslast&limit=1').catch(() => null);
@@ -62,14 +50,13 @@ async function fetchRow() {
 function mapRow(row: any): StoreOperations {
   const data = row || {};
   const table = normalizePriceTable(data.delivery_price_table);
+  const expressTable = normalizePriceTable(data.delivery_express_price_table);
   const stored = normalizeBusinessHours(data.business_hours);
-  const hours = Object.keys(stored).length
-    ? stored
-    : businessHoursFromLegacy(
-        Array.isArray(data.business_days) && data.business_days.length ? data.business_days : ['mon', 'tue', 'wed', 'thu', 'fri'],
-        data.opens_at,
-        data.closes_at,
-      );
+  const hours = Object.keys(stored).length ? stored : businessHoursFromLegacy(
+    Array.isArray(data.business_days) && data.business_days.length ? data.business_days : ['mon', 'tue', 'wed', 'thu', 'fri'],
+    data.opens_at,
+    data.closes_at,
+  );
 
   return {
     id: data.id ? String(data.id) : null,
@@ -84,21 +71,17 @@ function mapRow(row: any): StoreOperations {
     minOrderTotal: num(data.min_order_total, 0),
     freeShippingFrom: data.free_shipping_from == null ? null : num(data.free_shipping_from, 0),
     address: {
-      line: String(data.address_line || ''),
-      number: String(data.address_number || ''),
-      complement: String(data.address_complement || ''),
-      district: String(data.address_district || ''),
-      city: String(data.address_city || ''),
-      state: String(data.address_state || ''),
-      zip: String(data.address_zip || ''),
-      placeId: data.address_place_id ? String(data.address_place_id) : null,
-      lat: data.address_lat == null ? null : num(data.address_lat, 0),
-      lng: data.address_lng == null ? null : num(data.address_lng, 0),
+      line: String(data.address_line || ''), number: String(data.address_number || ''), complement: String(data.address_complement || ''),
+      district: String(data.address_district || ''), city: String(data.address_city || ''), state: String(data.address_state || ''),
+      zip: String(data.address_zip || ''), placeId: data.address_place_id ? String(data.address_place_id) : null,
+      lat: data.address_lat == null ? null : num(data.address_lat, 0), lng: data.address_lng == null ? null : num(data.address_lng, 0),
     },
     pickupEnabled: data.delivery_pickup_enabled !== false,
     ownDeliveryEnabled: Boolean(data.delivery_own_enabled),
     expressEnabled: Boolean(data.delivery_express_enabled),
     expressFee: num(data.delivery_express_fee, 0),
+    expressPriceTable: expressTable,
+    expressMaxKm: num(data.delivery_express_max_km, 12),
     appDeliveryEnabled: Boolean(data.delivery_app_enabled),
     subsidyPercent: num(data.delivery_subsidy_percent, 30),
     maxKm: num(data.delivery_max_km, 12),
