@@ -39,6 +39,9 @@ function renderPrice(container: HTMLElement, original: number, promo: number) {
 function renderCatalogPrice(container: HTMLElement, original: number, promo: number) {
   if (container.querySelector('[data-marketing-promotion-price]')) return;
 
+  const nativePrice = container.querySelector<HTMLElement>(':scope > strong');
+  if (nativePrice) nativePrice.remove();
+
   const price = document.createElement('div');
   price.dataset.marketingPromotionPrice = 'true';
   price.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:1px;line-height:1.05;min-width:0';
