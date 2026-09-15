@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Bike, MessageCircle, Minus, Plus, ShoppingBag, Store, Trash2, Zap } from 'lucide-react';
+import { ArrowRight, Bike, LoaderCircle, MessageCircle, Minus, Plus, ShoppingBag, Store, Trash2, Zap } from 'lucide-react';
 import { useCart } from '@/components/cart-provider';
 import { SiteHeader } from '@/components/site-header';
 import { RadioGroup } from '@/components/ui/field';
 import { ProductImage } from '@/components/ui/product-image';
 import { money } from '@/lib/order-format';
 
-type DeliveryOption = { provider: string; label: string; description: string; fee: number | null; needsAddress: boolean };
+type DeliveryOption = { provider: string; label: string; description: string; fee: number | null; needsAddress: boolean; available?: boolean; reason?: string };
 
 const ICONS: Record<string, React.ReactNode> = {
   pickup: <Store size={19} />,
@@ -18,10 +18,23 @@ const ICONS: Record<string, React.ReactNode> = {
   app: <Bike size={19} />,
 };
 
+function normalizeCep(value: string) {
+  return value.replace(/\D/g, '').slice(0, 8);
+}
+
+function formatCep(value: string) {
+  const digits = normalizeCep(value);
+  return digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+}
+
 export default function CarrinhoPage() {
   const { items, setQty, remove, total, count, clear } = useCart();
   const [options, setOptions] = useState<DeliveryOption[]>([]);
   const [delivery, setDelivery] = useState('pickup');
+  const [cep, setCep] = useState('');
+  const [cepError, setCepError] = useState('');
+  const [calculatingFreight, setCalculatingFreight] = useState(false);
+  const [freightCalculated, setFreightCalculated] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -41,7 +54,46 @@ export default function CarrinhoPage() {
     };
   }, []);
 
+  const calculateFreight = async () => {
+    const normalized = normalizeCep(cep);
+    if (normalized.length !== 8) {
+      setCepError('Informe um CEP válido com 8 dígitos.');
+      setFreightCalculated(false);
+      return;
+    }
+
+    setCalculatingFreight(true);
+    setCepError('');
+    try {
+      const response = await fetch('/api/entrega/cotacao', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({ address: { postal_code: normalized } }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'Não foi possível calcular o frete.');
+
+      const list: DeliveryOption[] = Array.isArray(data?.options) ? data.options : [];
+      setOptions(list);
+      setFreightCalculated(true);
+
+      const current = list.find((option) => option.provider === delivery);
+      if (!current || current.available === false || (current.fee == null && current.provider !== 'pickup')) {
+        const firstAvailable = list.find((option) => option.available !== false && (option.provider === 'pickup' || option.fee != null));
+        if (firstAvailable) setDelivery(firstAvailable.provider);
+      }
+    } catch (error) {
+      setCepError(error instanceof Error ? error.message : 'Não foi possível calcular o frete.');
+      setFreightCalculated(false);
+    } finally {
+      setCalculatingFreight(false);
+    }
+  };
+
   const selected = options.find((option) => option.provider === delivery);
+  const selectedFee = selected?.fee ?? null;
+  const orderTotal = total + (selectedFee || 0);
 
   return (
     <main className="cart-page-shell">
@@ -126,6 +178,40 @@ export default function CarrinhoPage() {
                 <strong>{money(total)}</strong>
               </div>
 
+              <div className="freight-calculator">
+                <div className="freight-calculator-heading">
+                  <div>
+                    <strong>Calcule o frete</strong>
+                    <span>Digite seu CEP para consultar o valor da entrega.</span>
+                  </div>
+                </div>
+                <div className="cep-row">
+                  <input
+                    value={formatCep(cep)}
+                    onChange={(event) => {
+                      setCep(normalizeCep(event.target.value));
+                      setCepError('');
+                      setFreightCalculated(false);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        void calculateFreight();
+                      }
+                    }}
+                    inputMode="numeric"
+                    autoComplete="postal-code"
+                    maxLength={9}
+                    placeholder="00000-000"
+                    aria-label="CEP"
+                  />
+                  <button type="button" onClick={() => void calculateFreight()} disabled={calculatingFreight || normalizeCep(cep).length !== 8}>
+                    {calculatingFreight ? <LoaderCircle size={16} className="spin" /> : 'Calcular'}
+                  </button>
+                </div>
+                {cepError ? <p className="cep-feedback error">{cepError}</p> : freightCalculated ? <p className="cep-feedback success">Frete calculado para o CEP informado.</p> : null}
+              </div>
+
               <div className="delivery-choice">
                 <RadioGroup
                   name="delivery"
@@ -134,8 +220,9 @@ export default function CarrinhoPage() {
                   options={options.map((option) => ({
                     value: option.provider,
                     label: option.label,
-                    description: option.fee && option.fee > 0 ? `${option.description} · ${money(option.fee)}` : option.fee === 0 ? option.description : option.description,
+                    description: option.available === false ? option.description : option.fee != null && option.fee > 0 ? `${option.description} · ${money(option.fee)}` : option.fee === 0 ? option.description : option.description,
                     icon: ICONS[option.provider] || <MessageCircle size={19} />,
+                    disabled: option.available === false || (freightCalculated && option.provider !== 'pickup' && option.fee == null),
                   }))}
                   onValueChange={setDelivery}
                 />
@@ -143,12 +230,14 @@ export default function CarrinhoPage() {
 
               <div className="summary-line">
                 <span>Entrega</span>
-                <span className="summary-muted">{selected ? (selected.fee && selected.fee > 0 ? `${selected.label} · ${money(selected.fee)}` : selected.label) : 'Escolha uma opção'}</span>
+                <span className="summary-muted">
+                  {selected ? (selectedFee != null && selectedFee > 0 ? `${selected.label} · ${money(selectedFee)}` : selected.label) : 'Escolha uma opção'}
+                </span>
               </div>
 
               <div className="summary-total">
-                <span>Total dos produtos</span>
-                <strong>{money(total)}</strong>
+                <span>Total do pedido</span>
+                <strong>{money(orderTotal)}</strong>
               </div>
 
               <Link className="primary checkout-btn" href={`/checkout?entrega=${delivery}`}>
@@ -201,6 +290,21 @@ export default function CarrinhoPage() {
         .summary-heading h2{font-family:'Barlow Condensed';font-size:28px;text-transform:uppercase;margin:0;font-style:italic}
         .summary-line{display:flex;justify-content:space-between;gap:15px;padding:12px 0;font-size:14px;border-bottom:1px solid #eee}
         .summary-muted{color:#686868;text-align:right;font-size:12px}
+        .freight-calculator{padding:18px 0 12px;border-bottom:1px solid #eee}
+        .freight-calculator-heading{margin-bottom:10px}
+        .freight-calculator-heading strong{display:block;font-size:14px;text-transform:uppercase;letter-spacing:.04em}
+        .freight-calculator-heading span{display:block;color:#686868;font-size:11px;line-height:1.4;margin-top:4px}
+        .cep-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+        .cep-row input{width:100%;height:42px;border:1px solid #ddd;border-radius:8px;padding:0 12px;font:600 13px Inter,Arial,sans-serif;outline:none}
+        .cep-row input:focus{border-color:#b18b00;box-shadow:0 0 0 3px rgba(255,196,0,.16)}
+        .cep-row button{height:42px;border:0;border-radius:8px;padding:0 13px;background:#111;color:#fff;font:800 11px Inter,Arial,sans-serif;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px}
+        .cep-row button:hover:not(:disabled){background:#ffc400;color:#111}
+        .cep-row button:disabled{opacity:.45;cursor:not-allowed}
+        .cep-feedback{font-size:11px;margin:7px 0 0;line-height:1.35}
+        .cep-feedback.error{color:#c62828}
+        .cep-feedback.success{color:#3d6b22}
+        .spin{animation:cart-spin .8s linear infinite}
+        @keyframes cart-spin{to{transform:rotate(360deg)}}
         .delivery-choice{padding:18px 0 10px}
         .summary-total{display:flex;justify-content:space-between;align-items:flex-end;gap:15px;padding:20px 0 18px;border-top:1px solid #111;margin-top:2px}
         .summary-total strong{font-size:28px}
@@ -233,6 +337,8 @@ export default function CarrinhoPage() {
           .summary-total strong{font-size:25px}
           .empty-cart{padding:38px 20px}
           .empty-cart h2{font-size:32px}
+          .cep-row{grid-template-columns:1fr}
+          .cep-row button{width:100%}
         }
       `}</style>
     </main>
