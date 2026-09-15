@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BarChart3, Box, ChevronRight, LayoutDashboard, Package, Settings, ShoppingCart, Tags, TrendingUp } from 'lucide-react';
+import { BarChart3, Box, ChevronRight, LayoutDashboard, Package, Settings, ShoppingCart, Tags, TrendingUp, Megaphone } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { SiteHeader } from '@/components/site-header';
 import { money } from '@/lib/order-format';
@@ -14,6 +14,7 @@ const MENU = [
   { href: '/admin/produtos', title: 'Produtos', text: 'Catálogo, estoque, preços, fotos e conteúdo.', icon: Package, tone: 'yellow' },
   { href: '/admin/categorias', title: 'Categorias', text: 'Organize e mantenha seu catálogo limpo.', icon: Tags, tone: 'soft' },
   { href: '/admin/pedidos', title: 'Pedidos', text: 'Acompanhe vendas, pagamentos e status.', icon: ShoppingCart, tone: 'soft' },
+  { href: '/admin/marketing', title: 'Marketing', text: 'Promoções, cupons e campanhas de venda.', icon: Megaphone, tone: 'yellow' },
   { href: '/admin/configuracoes', title: 'Configurações', text: 'Dados da loja, retirada, contato e atendimento.', icon: Settings, tone: 'soft' },
 ];
 
@@ -81,9 +82,7 @@ export default function AdminPage() {
             <article className="admin-stat" key={label}>
               <div className="admin-stat-top">
                 <span>{label}</span>
-                <b>
-                  <Icon size={17} />
-                </b>
+                <b><Icon size={17} /></b>
               </div>
               <strong>{value}</strong>
               <small>{hint}</small>
@@ -102,27 +101,18 @@ export default function AdminPage() {
         <div className="admin-menu-grid">
           {MENU.map(({ href, title, text, icon: Icon, tone }) => (
             <Link href={href} className="admin-menu-card" key={href}>
-              <div className={`admin-menu-icon ${tone}`}>
-                <Icon size={21} />
-              </div>
-              <div className="admin-menu-copy">
-                <h3>{title}</h3>
-                <p>{text}</p>
-              </div>
+              <div className={`admin-menu-icon ${tone}`}><Icon size={21} /></div>
+              <div className="admin-menu-copy"><h3>{title}</h3><p>{text}</p></div>
               <ChevronRight className="admin-menu-arrow" size={19} />
             </Link>
           ))}
         </div>
 
         <div className="admin-info-panel">
-          <div className="admin-info-icon">
-            <LayoutDashboard size={22} />
-          </div>
+          <div className="admin-info-icon"><LayoutDashboard size={22} /></div>
           <div>
             <strong>Central de gestão</strong>
-            <p>
-              Pagamentos do Mercado Pago são reconciliados pelo worker de mensageria e cada mudança de status dispara o e-mail transacional para o cliente.
-            </p>
+            <p>Pagamentos do Mercado Pago são reconciliados pelo worker de mensageria e cada mudança de status dispara o e-mail transacional para o cliente.</p>
           </div>
           <Box size={70} className="admin-info-mark" />
         </div>
@@ -150,38 +140,12 @@ export default function AdminPage() {
         .admin-menu-card{min-height:126px;background:#fff;border:1px solid #e2e2de;border-radius:16px;padding:19px;display:flex;align-items:flex-start;gap:14px;text-decoration:none;color:#111;position:relative;transition:transform .18s,box-shadow .18s,border-color .18s}
         .admin-menu-card:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(0,0,0,.07);border-color:#d1d1cb}
         .admin-menu-icon{width:43px;height:43px;border-radius:12px;display:grid;place-items:center;flex:none}
-        .admin-menu-icon.yellow{background:#ffc400}
-        .admin-menu-icon.soft{background:#f2f2ee}
-        .admin-menu-copy{min-width:0;padding-right:20px}
-        .admin-menu-copy h3{margin:1px 0 6px;font-family:'Barlow Condensed',sans-serif;font-size:25px;text-transform:uppercase}
-        .admin-menu-copy p{margin:0;color:#777;font-size:12px;line-height:1.5;max-width:390px}
+        .admin-menu-icon.yellow{background:#ffc400}.admin-menu-icon.soft{background:#f2f2ee}
+        .admin-menu-copy{min-width:0;padding-right:20px}.admin-menu-copy h3{margin:1px 0 6px;font-family:'Barlow Condensed',sans-serif;font-size:25px;text-transform:uppercase}.admin-menu-copy p{margin:0;color:#777;font-size:12px;line-height:1.5;max-width:390px}
         .admin-menu-arrow{position:absolute;right:17px;top:20px;color:#aaa}
-        .admin-info-panel{margin-top:28px;padding:19px 21px;border-radius:16px;background:#111;color:#fff;display:flex;align-items:center;gap:14px;position:relative;overflow:hidden}
-        .admin-info-icon{width:42px;height:42px;border-radius:11px;background:#ffc400;color:#111;display:grid;place-items:center;flex:none}
-        .admin-info-panel strong{font-size:13px}
-        .admin-info-panel p{margin:5px 0 0;color:#aaa;font-size:11px;line-height:1.5;max-width:700px}
-        .admin-info-mark{position:absolute;right:-8px;opacity:.06;color:#ffc400}
-        @media(max-width:900px){
-          .admin-dashboard-content{width:min(100% - 28px,760px)}
-          .admin-stat-grid{grid-template-columns:1fr 1fr}
-          .admin-welcome{align-items:flex-start;flex-direction:column}
-          .admin-menu-grid{grid-template-columns:1fr}
-        }
-        @media(max-width:560px){
-          .admin-dashboard-content{padding:30px 0 50px}
-          .admin-welcome{margin-bottom:22px}
-          .admin-welcome h1{font-size:50px}
-          .admin-welcome>div:first-child>p:last-child{font-size:12px;margin-top:11px}
-          .admin-stat-grid{gap:8px;margin-bottom:30px}
-          .admin-stat{padding:13px;border-radius:13px}
-          .admin-stat-top{font-size:9px}
-          .admin-stat>strong{font-size:28px;margin:15px 0 4px}
-          .admin-section-title h2{font-size:28px}
-          .admin-menu-card{min-height:104px;padding:15px}
-          .admin-menu-copy h3{font-size:22px}
-          .admin-info-panel{align-items:flex-start;padding:16px}
-          .admin-info-mark{display:none}
-        }
+        .admin-info-panel{margin-top:28px;padding:19px 21px;border-radius:16px;background:#111;color:#fff;display:flex;align-items:center;gap:14px;position:relative;overflow:hidden}.admin-info-icon{width:42px;height:42px;border-radius:11px;background:#ffc400;color:#111;display:grid;place-items:center;flex:none}.admin-info-panel strong{font-size:13px}.admin-info-panel p{margin:5px 0 0;color:#aaa;font-size:11px;line-height:1.5;max-width:700px}.admin-info-mark{position:absolute;right:-8px;opacity:.06;color:#ffc400}
+        @media(max-width:900px){.admin-dashboard-content{width:min(100% - 28px,760px)}.admin-stat-grid{grid-template-columns:1fr 1fr}.admin-welcome{align-items:flex-start;flex-direction:column}.admin-menu-grid{grid-template-columns:1fr}}
+        @media(max-width:560px){.admin-dashboard-content{padding:30px 0 50px}.admin-welcome{margin-bottom:22px}.admin-welcome h1{font-size:50px}.admin-welcome>div:first-child>p:last-child{font-size:12px;margin-top:11px}.admin-stat-grid{gap:8px;margin-bottom:30px}.admin-stat{padding:13px;border-radius:13px}.admin-stat-top{font-size:9px}.admin-stat>strong{font-size:28px;margin:15px 0 4px}.admin-section-title h2{font-size:28px}.admin-menu-card{min-height:104px;padding:15px}.admin-menu-copy h3{font-size:22px}.admin-info-panel{align-items:flex-start;padding:16px}.admin-info-mark{display:none}}
       `}</style>
     </main>
   );
