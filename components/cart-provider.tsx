@@ -4,180 +4,27 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/ui/toast';
 
-export type CartItem = {
-  id: string;
-  name: string;
-  price: number;
-  quantity: number;
-  stock: number;
-  image_url?: string;
-};
-
-type AddOptions = { quantity?: number; silent?: boolean };
-type AddOutcome = 'added' | 'updated' | 'limited' | 'unavailable';
-
-type CartContextValue = {
-  items: CartItem[];
-  count: number;
-  total: number;
-  add: (product: Omit<CartItem, 'quantity'>, options?: AddOptions) => void;
-  remove: (id: string) => void;
-  setQty: (id: string, quantity: number) => void;
-  clear: (options?: { silent?: boolean }) => void;
-};
-
-const STORAGE_KEY = '2pbox-cart';
-const CartContext = createContext<CartContextValue | null>(null);
-
-function money(value: number) {
-  return `R$ ${Number(value).toFixed(2).replace('.', ',')}`;
+export type CartItem = { id:string; name:string; price:number; quantity:number; stock:number; image_url?:string };
+type AddOptions={quantity?:number;silent?:boolean}; type AddOutcome='added'|'updated'|'limited'|'unavailable';
+type CouponState={code:string;discount:number;message:string};
+type CartContextValue={items:CartItem[];count:number;total:number;subtotal:number;coupon:CouponState|null;applyCoupon:(code:string)=>Promise<boolean>;removeCoupon:()=>void;add:(product:Omit<CartItem,'quantity'>,options?:AddOptions)=>void;remove:(id:string)=>void;setQty:(id:string,quantity:number)=>void;clear:(options?:{silent?:boolean})=>void};
+const STORAGE_KEY='2pbox-cart'; const COUPON_KEY='2pbox-coupon'; const CartContext=createContext<CartContextValue|null>(null);
+function money(value:number){return `R$ ${Number(value).toFixed(2).replace('.',',')}`;}
+export function CartProvider({children}:{children:React.ReactNode}){
+ const [items,setItems]=useState<CartItem[]>([]); const [coupon,setCoupon]=useState<CouponState|null>(null); const [hydrated,setHydrated]=useState(false); const toast=useToast(); const snapshotTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
+ useEffect(()=>{try{const stored=localStorage.getItem(STORAGE_KEY);if(stored)setItems(JSON.parse(stored));const savedCoupon=localStorage.getItem(COUPON_KEY);if(savedCoupon)setCoupon(JSON.parse(savedCoupon));}catch{}setHydrated(true);},[]);
+ useEffect(()=>{if(!hydrated)return;try{localStorage.setItem(STORAGE_KEY,JSON.stringify(items));if(coupon)localStorage.setItem(COUPON_KEY,JSON.stringify(coupon));else localStorage.removeItem(COUPON_KEY);}catch{}},[items,coupon,hydrated]);
+ const subtotal=useMemo(()=>items.reduce((sum,item)=>sum+item.price*item.quantity,0),[items]);
+ useEffect(()=>{if(!hydrated)return;if(coupon&&coupon.discount>subtotal)setCoupon(null);},[subtotal,hydrated,coupon]);
+ useEffect(()=>{if(!hydrated)return;if(snapshotTimer.current)clearTimeout(snapshotTimer.current);snapshotTimer.current=setTimeout(async()=>{let email='',name='';try{email=localStorage.getItem('2p_guest_order_email')?.trim().toLowerCase()||'';name=localStorage.getItem('2p_checkout_name')||'';}catch{}if(!email&&supabase){const {data}=await supabase.auth.getUser();email=data.user?.email?.trim().toLowerCase()||'';name=name||data.user?.user_metadata?.full_name||'';}if(!email)return;await fetch('/api/carrinho/snapshot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,name,items:items.map(item=>({id:item.id,name:item.name,price:item.price,quantity:item.quantity})),total:subtotal-Math.min(coupon?.discount||0,subtotal)}),keepalive:true}).catch(()=>undefined);},2500);return()=>{if(snapshotTimer.current)clearTimeout(snapshotTimer.current);};},[items,hydrated,subtotal,coupon]);
+ const add=useCallback((product:Omit<CartItem,'quantity'>,options:AddOptions={})=>{const requested=Math.max(1,Number(options.quantity||1));const result:{outcome:AddOutcome;quantity:number}={outcome:'added',quantity:requested};if(Number(product.stock)<=0){result.outcome='unavailable';result.quantity=0;}setItems(current=>{if(Number(product.stock)<=0)return current;const existing=current.find(item=>item.id===product.id);if(!existing){const quantity=Math.min(requested,product.stock);result.quantity=quantity;result.outcome=quantity<requested?'limited':'added';return[...current,{...product,quantity}];}const target=Math.min(existing.quantity+requested,product.stock);result.quantity=target;result.outcome=target===existing.quantity?'limited':'updated';return current.map(item=>item.id===product.id?{...item,...product,quantity:target}:item);});if(options.silent)return;if(result.outcome==='unavailable'){toast.warning('Produto sem estoque',`${product.name} está indisponível no momento.`);return;}if(result.outcome==='limited'){toast.warning('Estoque máximo atingido',`Só temos ${product.stock} unidade(s) de ${product.name}.`);return;}toast.success(result.outcome==='added'?'Adicionado ao carrinho':'Quantidade atualizada',`${product.name} · ${result.quantity}× · ${money(product.price*result.quantity)}`);},[toast]);
+ const remove=useCallback((id:string)=>{setItems(current=>{const target=current.find(item=>item.id===id);if(target)toast.info('Item removido',`${target.name} saiu do seu carrinho.`);return current.filter(item=>item.id!==id);});},[toast]);
+ const setQty=useCallback((id:string,quantity:number)=>setItems(current=>current.map(item=>item.id===id?{...item,quantity:Math.max(1,Math.min(quantity,item.stock))}:item)),[]);
+ const applyCoupon=useCallback(async(code:string)=>{if(!supabase)return false;const normalized=code.trim().toUpperCase();if(!normalized)return false;const {data,error}=await supabase.rpc('validate_coupon',{p_code:normalized,p_subtotal:subtotal});if(error){toast.error('Não foi possível validar o cupom',error.message);return false;}const row=Array.isArray(data)?data[0]:data;if(!row?.valid){toast.error('Cupom não aplicado',row?.message||'Cupom inválido.');return false;}const state={code:String(row.normalized_code||normalized),discount:Number(row.discount_amount||0),message:String(row.message||'Cupom aplicado com sucesso.')};setCoupon(state);toast.success('Cupom aplicado',`${state.code} · desconto de ${money(state.discount)}`);return true;},[subtotal,toast]);
+ const removeCoupon=useCallback(()=>{setCoupon(null);toast.info('Cupom removido');},[toast]);
+ const clear=useCallback((options:{silent?:boolean}={})=>{setItems([]);setCoupon(null);if(!options.silent)toast.info('Carrinho esvaziado','Todos os itens foram removidos.');},[toast]);
+ const total=Math.max(0,subtotal-Math.min(coupon?.discount||0,subtotal));
+ const value=useMemo<CartContextValue>(()=>({items,count:items.reduce((sum,item)=>sum+item.quantity,0),total,subtotal,coupon,applyCoupon,removeCoupon,add,remove,setQty,clear}),[items,total,subtotal,coupon,applyCoupon,removeCoupon,add,remove,setQty,clear]);
+ return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
-
-export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>([]);
-  const [hydrated, setHydrated] = useState(false);
-  const toast = useToast();
-  const snapshotTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) setItems(JSON.parse(stored));
-    } catch {}
-    setHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    } catch {}
-  }, [items, hydrated]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    if (snapshotTimer.current) clearTimeout(snapshotTimer.current);
-
-    snapshotTimer.current = setTimeout(async () => {
-      let email = '';
-      let name = '';
-      try {
-        email = localStorage.getItem('2p_guest_order_email')?.trim().toLowerCase() || '';
-        name = localStorage.getItem('2p_checkout_name') || '';
-      } catch {}
-
-      if (!email && supabase) {
-        const { data } = await supabase.auth.getUser();
-        email = data.user?.email?.trim().toLowerCase() || '';
-        name = name || data.user?.user_metadata?.full_name || '';
-      }
-      if (!email) return;
-
-      await fetch('/api/carrinho/snapshot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          name,
-          items: items.map((item) => ({ id: item.id, name: item.name, price: item.price, quantity: item.quantity })),
-        }),
-        keepalive: true,
-      }).catch(() => undefined);
-    }, 2500);
-
-    return () => {
-      if (snapshotTimer.current) clearTimeout(snapshotTimer.current);
-    };
-  }, [items, hydrated]);
-
-  const add = useCallback(
-    (product: Omit<CartItem, 'quantity'>, options: AddOptions = {}) => {
-      const requested = Math.max(1, Number(options.quantity || 1));
-      const result: { outcome: AddOutcome; quantity: number } = { outcome: 'added', quantity: requested };
-
-      if (Number(product.stock) <= 0) {
-        result.outcome = 'unavailable';
-        result.quantity = 0;
-      }
-
-      setItems((current) => {
-        if (Number(product.stock) <= 0) return current;
-
-        const existing = current.find((item) => item.id === product.id);
-        if (!existing) {
-          const quantity = Math.min(requested, product.stock);
-          result.quantity = quantity;
-          result.outcome = quantity < requested ? 'limited' : 'added';
-          return [...current, { ...product, quantity }];
-        }
-        const target = Math.min(existing.quantity + requested, product.stock);
-        result.quantity = target;
-        result.outcome = target === existing.quantity ? 'limited' : 'updated';
-        return current.map((item) =>
-          item.id === product.id ? { ...item, quantity: target, stock: product.stock, image_url: product.image_url ?? item.image_url } : item,
-        );
-      });
-
-      if (options.silent) return;
-      if (result.outcome === 'unavailable') {
-        toast.warning('Produto sem estoque', `${product.name} está indisponível no momento.`);
-        return;
-      }
-      if (result.outcome === 'limited') {
-        toast.warning('Estoque máximo atingido', `Só temos ${product.stock} unidade(s) de ${product.name}.`);
-        return;
-      }
-      toast.success(
-        result.outcome === 'added' ? 'Adicionado ao carrinho' : 'Quantidade atualizada',
-        `${product.name} · ${result.quantity}× · ${money(product.price * result.quantity)}`,
-      );
-    },
-    [toast],
-  );
-
-  const remove = useCallback(
-    (id: string) => {
-      setItems((current) => {
-        const target = current.find((item) => item.id === id);
-        if (target) toast.info('Item removido', `${target.name} saiu do seu carrinho.`);
-        return current.filter((item) => item.id !== id);
-      });
-    },
-    [toast],
-  );
-
-  const setQty = useCallback((id: string, quantity: number) => {
-    setItems((current) =>
-      current.map((item) => (item.id === id ? { ...item, quantity: Math.max(1, Math.min(quantity, item.stock)) } : item)),
-    );
-  }, []);
-
-  const clear = useCallback(
-    (options: { silent?: boolean } = {}) => {
-      setItems([]);
-      if (!options.silent) toast.info('Carrinho esvaziado', 'Todos os itens foram removidos.');
-    },
-    [toast],
-  );
-
-  const value = useMemo<CartContextValue>(
-    () => ({
-      items,
-      count: items.reduce((sum, item) => sum + item.quantity, 0),
-      total: items.reduce((sum, item) => sum + item.price * item.quantity, 0),
-      add,
-      remove,
-      setQty,
-      clear,
-    }),
-    [items, add, remove, setQty, clear],
-  );
-
-  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
-}
-
-export function useCart() {
-  const context = useContext(CartContext);
-  if (!context) throw new Error('useCart precisa estar dentro de CartProvider');
-  return context;
-}
+export function useCart(){const context=useContext(CartContext);if(!context)throw new Error('useCart precisa estar dentro de CartProvider');return context;}
