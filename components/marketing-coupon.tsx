@@ -42,7 +42,7 @@ export function MarketingCoupon() {
     if (!normalized) return setMessage('Digite um código de cupom.');
     setLoading(true);
     setMessage('');
-    const valid = await applyCoupon(normalized);
+    const valid: boolean = await applyCoupon(normalized);
     setLoading(false);
     if (!valid) {
       setMessage('Cupom inválido, expirado ou não elegível para este carrinho.');
