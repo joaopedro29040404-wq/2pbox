@@ -75,3 +75,6 @@ alter table public.store_settings
 
 alter table public.orders
   add column if not exists delivery_fee_base numeric(10,2);
+
+alter table public.orders
+  add column if not exists split_applied boolean;
