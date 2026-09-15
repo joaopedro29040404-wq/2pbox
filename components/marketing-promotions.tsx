@@ -10,32 +10,23 @@ function money(value: number) {
 export function MarketingPromotions() {
   useEffect(() => {
     let cancelled = false;
+    let rows: any[] = [];
 
-    async function apply() {
-      if (!supabase) return;
-      const { data } = await supabase
-        .from('promotions')
-        .select('product_id,promotional_price,products(slug,name,price)')
-        .eq('active', true)
-        .lte('starts_at', new Date().toISOString())
-        .gte('ends_at', new Date().toISOString());
-      if (cancelled || !Array.isArray(data)) return;
-
-      for (const row of data as any[]) {
+    function applyPromotions() {
+      if (cancelled || !rows.length) return;
+      for (const row of rows) {
         const product = Array.isArray(row.products) ? row.products[0] : row.products;
         const slug = String(product?.slug || '').trim();
         const original = Number(product?.price);
         const promo = Number(row.promotional_price);
         if (!slug || !Number.isFinite(original) || !Number.isFinite(promo) || promo <= 0 || promo >= original) continue;
 
-        const href = `/produto/${slug}`;
-        const links = Array.from(document.querySelectorAll<HTMLAnchorElement>(`a[href="${href}"]`));
+        const links = Array.from(document.querySelectorAll<HTMLAnchorElement>(`a[href="/produto/${slug}"]`));
         for (const link of links) {
           if (link.dataset.marketingPromotionApplied === 'true') continue;
           link.dataset.marketingPromotionApplied = 'true';
           const card = link.classList.contains('home-product-card') ? link : (link.closest('[class*="product-card"]') as HTMLElement | null) || link;
-          const position = getComputedStyle(card).position;
-          if (position === 'static') card.style.position = 'relative';
+          if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
 
           const badge = document.createElement('span');
           badge.textContent = 'OFERTA';
@@ -57,11 +48,10 @@ export function MarketingPromotions() {
         }
       }
 
-      const path = window.location.pathname;
-      const match = path.match(/^\/produto\/([^/]+)$/);
+      const match = window.location.pathname.match(/^\/produto\/([^/]+)$/);
       if (match) {
         const slug = decodeURIComponent(match[1]);
-        const row = (data as any[]).find((item) => {
+        const row = rows.find((item) => {
           const product = Array.isArray(item.products) ? item.products[0] : item.products;
           return product?.slug === slug;
         });
@@ -76,10 +66,20 @@ export function MarketingPromotions() {
       }
     }
 
-    void apply();
-    const observer = new MutationObserver(() => void apply());
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => { cancelled = true; observer.disconnect(); };
+    async function load() {
+      if (!supabase) return;
+      const { data } = await supabase.from('promotions').select('product_id,promotional_price,products(slug,name,price)').eq('active', true).lte('starts_at', new Date().toISOString()).gte('ends_at', new Date().toISOString());
+      if (cancelled || !Array.isArray(data)) return;
+      rows = data as any[];
+      applyPromotions();
+      const observer = new MutationObserver(() => applyPromotions());
+      observer.observe(document.body, { childList: true, subtree: true });
+      return () => observer.disconnect();
+    }
+
+    let cleanup: (() => void) | undefined;
+    void load().then((dispose) => { cleanup = dispose; });
+    return () => { cancelled = true; cleanup?.(); };
   }, []);
 
   return null;
