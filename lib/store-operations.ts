@@ -14,7 +14,7 @@ const DAY_INDEX: Record<WeekDay, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu
 
 export const SHIPPING_MODES = [
   { value: 'whatsapp', label: 'Combinar pelo WhatsApp' },
-  { value: 'own', label: 'Entrega no mesmo dia (motoboy da loja)' },
+  { value: 'own', label: 'Entrega padrão (motoboy da loja)' },
   { value: 'express', label: 'Envio imediato (frete fixo)' },
   { value: 'app', label: 'Aplicativo de motofrete' },
   { value: 'pickup_only', label: 'Somente retirada' },
@@ -29,8 +29,8 @@ export const PICKUP_MODES = [
 
 export const DELIVERY_PROVIDERS = [
   { value: 'pickup', label: 'Retirada na loja', description: 'Sem custo de entrega', needsAddress: false },
-  { value: 'own', label: 'Entrega no mesmo dia', description: 'Motoboy da loja, valor por distância', needsAddress: true },
-  { value: 'express', label: 'Envio imediato', description: 'Sai agora, com frete fixo da loja', needsAddress: true },
+  { value: 'own', label: 'Entrega padrão', description: 'Motoboy da loja, valor por distância', needsAddress: true },
+  { value: 'express', label: 'Envio imediato', description: 'Seu pedido sai para entrega agora!', needsAddress: true },
   { value: 'app', label: 'Motofrete por aplicativo', description: 'A loja chama o motofrete e informa o valor', needsAddress: true },
 ] as const;
 
@@ -181,6 +181,20 @@ function zonedParts(date: Date) {
     if (part.type !== 'literal') parts[part.type] = Number(part.value);
   }
   return { year: parts.year, month: parts.month, day: parts.day, hour: parts.hour % 24, minute: parts.minute, second: parts.second };
+}
+
+export function getStandardDeliveryMessage(cutoff = '16:00', now = new Date()) {
+  const cutoffMinutes = toMinutes(cutoff) ?? 960;
+  const parts = zonedParts(now);
+  const currentMinutes = parts.hour * 60 + parts.minute;
+  return currentMinutes < cutoffMinutes ? 'Seu pedido chega hoje, entre 16h e 21h.' : 'Seu pedido chega amanhã, entre 16h e 21h.';
+}
+
+export function getStandardDeliveryDateLabel(cutoff = '16:00', now = new Date()) {
+  const cutoffMinutes = toMinutes(cutoff) ?? 960;
+  const parts = zonedParts(now);
+  const currentMinutes = parts.hour * 60 + parts.minute;
+  return currentMinutes < cutoffMinutes ? 'Hoje, entre 16h e 21h' : 'Amanhã, entre 16h e 21h';
 }
 
 function offsetMinutes(date: Date) {
