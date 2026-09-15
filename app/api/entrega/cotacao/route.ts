@@ -34,21 +34,8 @@ function enabledProviders(operations: StoreOperations): DeliveryProvider[] {
 
 function describe(provider: DeliveryProvider) { return DELIVERY_PROVIDERS.find((item) => item.value === provider)!; }
 
-function freeShippingNotice(value: number | null | undefined) {
-  return Number.isFinite(Number(value)) && Number(value) > 0 ? `Frete grátis em compras a partir de R$ ${Number(value).toFixed(2).replace('.', ',')}.` : '';
-}
-
 function freeShippingActive(value: number | null | undefined, subtotal: number | null) {
   return value != null && subtotal != null && subtotal >= Number(value);
-}
-
-function freeShippingLabel(active: boolean) {
-  return active ? 'Entrega padrão · FRETE GRÁTIS' : describe('own').label;
-}
-
-function freeShippingDescription(value: number | null | undefined, active: boolean, standardMessage: string) {
-  if (active) return '🎉 FRETE GRÁTIS LIBERADO! Você atingiu o valor mínimo para a entrega padrão.';
-  return [standardMessage, freeShippingNotice(value)].filter(Boolean).join(' ');
 }
 
 function readCartSubtotal(request: Request) {
@@ -61,7 +48,6 @@ export async function GET(request: Request) {
   const operations = await readStoreOperations();
   const providers = enabledProviders(operations);
   const standardMessage = getStandardDeliveryMessage(operations.sameDayCutoff);
-  const freeNotice = freeShippingNotice(operations.freeShippingFrom);
   const cartSubtotal = readCartSubtotal(request);
   const freeStandardDelivery = freeShippingActive(operations.freeShippingFrom, cartSubtotal);
   const isProductRequest = request.headers.get('referer')?.includes('/produto/') ?? false;
@@ -79,8 +65,8 @@ export async function GET(request: Request) {
       const isOwn = provider === 'own';
       return {
         provider,
-        label: isOwn ? freeShippingLabel(freeStandardDelivery) : meta.label,
-        description: isOwn ? freeShippingDescription(operations.freeShippingFrom, freeStandardDelivery, standardMessage) : meta.description,
+        label: meta.label,
+        description: isOwn ? standardMessage : meta.description,
         fee: provider === 'pickup' ? 0 : isOwn && (isProductRequest || freeStandardDelivery) ? 0 : null,
         needsAddress: meta.needsAddress,
       };
@@ -116,9 +102,9 @@ export async function POST(request: Request) {
 
     options.push(quote ? {
       provider,
-      label: provider === 'own' ? freeShippingLabel(freeStandardDelivery) : meta.label,
+      label: meta.label,
       description: provider === 'own'
-        ? freeShippingDescription(operations.freeShippingFrom, freeStandardDelivery, getStandardDeliveryMessage(operations.sameDayCutoff))
+        ? getStandardDeliveryMessage(operations.sameDayCutoff)
         : `${distance.km.toFixed(1)} km`,
       fee: provider === 'own' && freeStandardDelivery ? 0 : quote.customerFee,
       baseFee: quote.baseFee,
