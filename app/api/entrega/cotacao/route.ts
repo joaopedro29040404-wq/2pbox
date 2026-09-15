@@ -45,6 +45,7 @@ export async function GET() {
       message: standardMessage,
       window: getStandardDeliveryDateLabel(operations.sameDayCutoff),
     },
+    freeShippingFrom: operations.freeShippingFrom,
     address: storeAddressLabel(operations),
     options: providers.filter((provider) => provider !== 'express' || operations.expressPriceTable.length > 0).map((provider) => {
       const meta = describe(provider);
@@ -94,7 +95,7 @@ export async function POST(request: Request) {
     });
   }
 
-  return NextResponse.json({ options, geoAvailable: isGeoAvailable(), storeConfigured: Boolean(origin), subsidyPercent: operations.subsidyPercent });
+  return NextResponse.json({ options, geoAvailable: isGeoAvailable(), storeConfigured: Boolean(origin), subsidyPercent: operations.subsidyPercent, freeShippingFrom: operations.freeShippingFrom });
 }
 
 async function resolveDestination(body: any) {

@@ -64,7 +64,7 @@ export async function POST(request: Request) {
   }
 
   const freeFrom = operations.freeShippingFrom;
-  const freeShipping = freeFrom != null && freeFrom > 0 && subtotal >= freeFrom;
+  const freeShipping = provider === 'own' && freeFrom != null && freeFrom > 0 && subtotal >= freeFrom;
   if (freeShipping && fee > 0) { subsidy = round(subsidy + fee); fee = 0; }
   const serviceFee = round(subtotal * (operations.serviceFeePercent / 100) + operations.serviceFeeFixed);
   const total = round(subtotal + fee + serviceFee);
@@ -81,9 +81,9 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : '';
     if (!/column|PGRST204|schema cache|orders_delivery_type/i.test(message)) throw error;
     await patch(orderId, { total, updated_at: new Date().toISOString() });
-    return NextResponse.json({ total, subtotal, fee, baseFee, serviceFee, subsidy, distanceKm, freeShipping, warning: 'As migrations de entrega ainda não foram aplicadas: apenas o total foi atualizado.' });
+    return NextResponse.json({ total, subtotal, fee, baseFee, serviceFee, subsidy, distanceKm, freeShipping, freeShippingFrom: freeFrom, warning: 'As migrations de entrega ainda não foram aplicadas: apenas o total foi atualizado.' });
   }
-  return NextResponse.json({ total, subtotal, fee, baseFee, serviceFee, subsidy, distanceKm, freeShipping });
+  return NextResponse.json({ total, subtotal, fee, baseFee, serviceFee, subsidy, distanceKm, freeShipping, freeShippingFrom: freeFrom });
 }
 
 async function destinationFor(body: any) {

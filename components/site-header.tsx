@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { ArrowUpRight, LogIn, LogOut, Menu, ShoppingBag, UserRound, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useCart } from '@/components/cart-provider';
@@ -43,9 +44,11 @@ export function SiteHeader({
 }: SiteHeaderProps) {
   const isAdmin = variant === 'admin';
   const navLinks = links ?? (isAdmin ? ADMIN_LINKS : STORE_LINKS);
+  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [name, setName] = useState<string | null>(null);
   const [signedIn, setSignedIn] = useState(false);
+  const [freeShippingFrom, setFreeShippingFrom] = useState<number | null>(null);
   const toast = useToast();
 
   useEffect(() => {
@@ -70,6 +73,27 @@ export function SiteHeader({
       listener.subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (isAdmin || !pathname?.startsWith('/produto/')) {
+      setFreeShippingFrom(null);
+      return;
+    }
+    let active = true;
+    fetch('/api/entrega/cotacao', { cache: 'no-store' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!active) return;
+        const value = Number(data?.freeShippingFrom);
+        setFreeShippingFrom(Number.isFinite(value) && value > 0 ? value : null);
+      })
+      .catch(() => {
+        if (active) setFreeShippingFrom(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isAdmin, pathname]);
 
   async function signOut() {
     const client = supabase;
@@ -152,6 +176,20 @@ export function SiteHeader({
           </div>
         </div>
       </header>
+
+      {!isAdmin && pathname?.startsWith('/produto/') && freeShippingFrom != null && (
+        <div className="product-free-shipping-notice">
+          <strong>Frete grátis na entrega padrão</strong>
+          <span>A partir de R$ {freeShippingFrom.toFixed(2).replace('.', ',')} em compras.</span>
+        </div>
+      )}
+
+      <style jsx global>{`
+        .product-free-shipping-notice{display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 18px;background:#fff7d6;border-bottom:1px solid #f0d65b;color:#5c5000;font:700 12px Inter,Arial,sans-serif;text-align:center}
+        .product-free-shipping-notice strong{font-weight:900}
+        .product-free-shipping-notice span{font-weight:600}
+        @media(max-width:520px){.product-free-shipping-notice{flex-direction:column;gap:2px;padding:9px 14px;font-size:11px}}
+      `}</style>
     </>
   );
 }
