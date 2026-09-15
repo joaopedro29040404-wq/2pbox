@@ -21,6 +21,7 @@ const ADMIN_LINKS: NavLink[] = [
   { href: '/admin/pedidos', label: 'Pedidos' },
   { href: '/admin/entregas', label: 'Entregas' },
   { href: '/admin/configuracoes', label: 'Configurações' },
+  { href: '/admin/configuracoes/envio-imediato', label: 'Envio imediato' },
 ];
 
 export type SiteHeaderProps = {
