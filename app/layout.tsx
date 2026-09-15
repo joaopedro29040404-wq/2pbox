@@ -3,6 +3,7 @@ import './globals.css';
 import './ui.css';
 import './twop-home.css';
 import './twop-home-carousel.css';
+import './product-delivery.css';
 import { CartProvider } from '@/components/cart-provider';
 import { ToastProvider } from '@/components/ui/toast';
 import { WhatsAppFloat } from '@/components/whatsapp-float';
