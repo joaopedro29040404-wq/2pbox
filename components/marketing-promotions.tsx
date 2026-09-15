@@ -161,37 +161,41 @@ function setupHomeProductTabs(rows: PromotionRow[]) {
   if (tabs.dataset.ready !== 'true') {
     grid.dataset.allProductsHtml = grid.innerHTML;
     tabs.dataset.ready = 'true';
-  }
+    tabs.innerHTML = `
+      <button type="button" class="home-product-tab is-active" data-product-view="all">TODOS</button>
+      <button type="button" class="home-product-tab" data-product-view="offers">🔥 OFERTAS <span data-offers-count></span></button>
+    `;
 
-  tabs.innerHTML = `
-    <button type="button" class="home-product-tab ${tabs.dataset.active !== 'offers' ? 'is-active' : ''}" data-product-view="all">TODOS</button>
-    <button type="button" class="home-product-tab ${tabs.dataset.active === 'offers' ? 'is-active' : ''}" data-product-view="offers">🔥 OFERTAS${promotions.length ? ` <span>${promotions.length}</span>` : ''}</button>
-  `;
+    tabs.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement | null;
+      const button = target?.closest<HTMLButtonElement>('[data-product-view]');
+      if (!button || !tabs) return;
 
-  tabs.querySelectorAll<HTMLButtonElement>('.home-product-tab').forEach((button) => {
-    button.onclick = () => {
       const view = button.dataset.productView === 'offers' ? 'offers' : 'all';
-      tabs!.dataset.active = view;
-      tabs!.querySelectorAll('.home-product-tab').forEach((item) => item.classList.toggle('is-active', item === button));
+      tabs.dataset.active = view;
+      tabs.querySelectorAll<HTMLButtonElement>('.home-product-tab').forEach((item) => {
+        item.classList.toggle('is-active', item === button);
+      });
 
       if (view === 'offers') {
-        grid!.innerHTML = promotions.length
+        grid.innerHTML = promotions.length
           ? renderHomePromotionCards(promotions)
           : '<div class="home-promotions-empty">Nenhuma oferta ativa no momento.</div>';
       } else {
-        grid!.innerHTML = grid!.dataset.allProductsHtml || '';
+        grid.innerHTML = grid.dataset.allProductsHtml || '';
       }
 
       applyPromotionStyling(rows);
-    };
-  });
+    });
+  }
+
+  const count = tabs.querySelector<HTMLElement>('[data-offers-count]');
+  if (count) count.textContent = promotions.length ? String(promotions.length) : '';
 
   const active = tabs.dataset.active === 'offers' ? 'offers' : 'all';
-  if (active === 'offers') {
-    grid.innerHTML = promotions.length
-      ? renderHomePromotionCards(promotions)
-      : '<div class="home-promotions-empty">Nenhuma oferta ativa no momento.</div>';
-  }
+  tabs.querySelectorAll<HTMLButtonElement>('.home-product-tab').forEach((button) => {
+    button.classList.toggle('is-active', button.dataset.productView === active);
+  });
 }
 
 function applyPromotionStyling(rows: PromotionRow[]) {
@@ -310,7 +314,15 @@ export function MarketingPromotions() {
         .filter((row) => row.product) as PromotionRow[];
 
       apply();
-      const observer = new MutationObserver(() => apply());
+      let scheduled = false;
+      const observer = new MutationObserver(() => {
+        if (scheduled) return;
+        scheduled = true;
+        requestAnimationFrame(() => {
+          scheduled = false;
+          apply();
+        });
+      });
       observer.observe(document.body, { childList: true, subtree: true });
       cleanup = () => observer.disconnect();
     }
