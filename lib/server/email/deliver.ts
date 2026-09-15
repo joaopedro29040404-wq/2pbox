@@ -2,6 +2,7 @@ import type { EmailJob } from '../queues';
 import { markProcessed } from '../redis';
 import { supabaseRest } from '../supabase-admin';
 import { sendEmail } from './send';
+import { renderAccountCreatedConfirmation } from './account-created-confirmation';
 import { renderGuestOrderAccess } from './guest-order-access';
 import { renderTemplate } from './templates';
 
@@ -43,7 +44,9 @@ export async function deliverEmailJob(job: EmailJob) {
 
   const rendered = job.template === 'guest_order_access'
     ? renderGuestOrderAccess(job.data || {})
-    : renderTemplate(job.template, job.data || {});
+    : job.template === 'account_created' && job.data?.confirmUrl
+      ? renderAccountCreatedConfirmation(job.data || {})
+      : renderTemplate(job.template, job.data || {});
   const { subject, html } = rendered;
 
   try {

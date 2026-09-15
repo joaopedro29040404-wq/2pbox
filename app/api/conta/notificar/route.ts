@@ -8,7 +8,7 @@ import { findAuthUserByEmail, getAdminSupabase } from '@/lib/server/supabase-adm
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const ACTIONS = new Set(['account_created', 'password_reset', 'order_details', 'guest_order_access']);
+const ACTIONS = new Set(['account_created', 'account_signup', 'password_reset', 'order_details', 'guest_order_access']);
 const WELCOME_WINDOW_MS = 30 * 60 * 1000;
 const ACCEPTED = { ok: true } as const;
 
@@ -45,6 +45,35 @@ async function buildGuestOrderAccessLink(email: string, name: string) {
   return data?.properties?.action_link || null;
 }
 
+async function buildAccountSignupLink(email: string, password: string, name: string, phone: string, cpf: string) {
+  const admin = getAdminSupabase();
+  if (!admin) return null;
+
+  const { data, error } = await admin.auth.admin.generateLink({
+    type: 'signup',
+    email,
+    password,
+    options: {
+      redirectTo: `${getSiteUrl()}/conta`,
+      data: {
+        full_name: name,
+        phone,
+        cpf: cpf || null,
+      },
+    },
+  });
+
+  if (error) {
+    console.error('[conta/notificar] signup generateLink falhou:', error.message);
+    return { error: error.message };
+  }
+
+  return {
+    actionLink: data?.properties?.action_link || null,
+    userId: data?.user?.id || null,
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -53,6 +82,46 @@ export async function POST(request: Request) {
 
     if (!ACTIONS.has(action)) return NextResponse.json({ error: 'Ação inválida.' }, { status: 400 });
     if (!email.includes('@')) return NextResponse.json({ error: 'E-mail inválido.' }, { status: 400 });
+
+    if (action === 'account_signup') {
+      const password = String(body?.password || '');
+      const name = String(body?.name || '').trim();
+      const phone = String(body?.phone || '').trim();
+      const cpf = String(body?.cpf || '').trim();
+
+      if (password.length < 6) return NextResponse.json({ error: 'A senha precisa ter ao menos 6 caracteres.' }, { status: 400 });
+      if (!name || !phone) return NextResponse.json({ error: 'Nome e telefone são obrigatórios.' }, { status: 400 });
+
+      const allowed = await markProcessed(`notify:account_signup:${email}`, 60);
+      if (!allowed) return NextResponse.json(ACCEPTED);
+
+      const result = await buildAccountSignupLink(email, password, name, phone, cpf);
+      if (!result || result.error) {
+        const message = String(result?.error || 'Não foi possível criar a conta.');
+        if (/already|registered|exists|duplicate/i.test(message)) {
+          return NextResponse.json({ error: 'Este e-mail já possui uma conta. Entre para continuar.' }, { status: 409 });
+        }
+        return NextResponse.json({ error: 'Não foi possível criar a conta. Tente novamente.' }, { status: 500 });
+      }
+
+      if (!result.actionLink) {
+        return NextResponse.json({ error: 'Não foi possível gerar a confirmação da conta.' }, { status: 500 });
+      }
+
+      await enqueueEmail({
+        template: 'account_created',
+        to: email,
+        data: {
+          name,
+          email,
+          confirmUrl: result.actionLink,
+        },
+        dedupeKey: `account_created:${result.userId || email}`,
+      });
+
+      await markProcessed(`notify:account_created:${email}`, WELCOME_WINDOW_MS / 1000);
+      return NextResponse.json(ACCEPTED);
+    }
 
     if (action === 'guest_order_access') {
       const orderId = String(body?.orderId || '').trim();

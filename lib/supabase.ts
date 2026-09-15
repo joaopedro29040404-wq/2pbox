@@ -12,6 +12,7 @@ const client = (
 if (client) {
   const auth = client.auth as any;
   const originalSignInWithOtp = auth.signInWithOtp.bind(auth);
+  const originalSignUp = auth.signUp.bind(auth);
 
   auth.signInWithOtp = async (credentials: any) => {
     const isGuestCheckout =
@@ -55,6 +56,47 @@ if (client) {
       return {
         data: { user: null, session: null, messageId: null },
         error: { message: error instanceof Error ? error.message : 'Não foi possível enviar o acesso ao pedido.' },
+      };
+    }
+  };
+
+  auth.signUp = async (credentials: any) => {
+    const email = String(credentials?.email || '').trim().toLowerCase();
+    const password = String(credentials?.password || '');
+    const data = credentials?.options?.data || {};
+
+    if (typeof window === 'undefined' || !email || !password) {
+      return originalSignUp(credentials);
+    }
+
+    try {
+      const response = await fetch('/api/conta/notificar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'account_signup',
+          email,
+          password,
+          name: String(data.full_name || '').trim(),
+          phone: String(data.phone || '').trim(),
+          cpf: String(data.cpf || '').trim(),
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        return {
+          data: { user: null, session: null },
+          error: { message: payload?.error || 'Não foi possível criar a conta.' },
+        };
+      }
+
+      return { data: { user: null, session: null }, error: null };
+    } catch (error) {
+      return {
+        data: { user: null, session: null },
+        error: { message: error instanceof Error ? error.message : 'Não foi possível criar a conta.' },
       };
     }
   };
