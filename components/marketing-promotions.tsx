@@ -125,7 +125,7 @@ function renderHomePromotionCards(products: Array<PromotionRow & { product: Prom
     return `
       <a href="/produto/${encodeURIComponent(product.slug)}" class="home-product-card home-promotion-product-card">
         <div class="home-product-image home-promotion-product-image">
-          ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(product.name)}" loading="lazy" />` : '<div class="home-promotion-placeholder">2P BOX</div>'}
+          ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(product.name)}" loading="eager" />` : '<div class="home-promotion-placeholder">2P BOX</div>'}
           <span class="home-promotion-badge">OFERTA</span>
           <span class="home-promotion-discount">-${discount}%</span>
         </div>
@@ -159,7 +159,6 @@ function setupHomeProductTabs(rows: PromotionRow[]) {
   }
 
   if (tabs.dataset.ready !== 'true') {
-    grid.dataset.allProductsHtml = grid.innerHTML;
     tabs.dataset.ready = 'true';
     tabs.innerHTML = `
       <button type="button" class="home-product-tab is-active" data-product-view="all">TODOS</button>
@@ -177,12 +176,30 @@ function setupHomeProductTabs(rows: PromotionRow[]) {
         item.classList.toggle('is-active', item === button);
       });
 
+      const existingOfferCards = Array.from(grid.querySelectorAll<HTMLElement>('.home-promotion-product-card'));
+      const nativeCards = Array.from(grid.children).filter(
+        (child) => !(child as HTMLElement).classList.contains('home-promotion-product-card')
+      ) as HTMLElement[];
+
       if (view === 'offers') {
-        grid.innerHTML = promotions.length
-          ? renderHomePromotionCards(promotions)
-          : '<div class="home-promotions-empty">Nenhuma oferta ativa no momento.</div>';
+        nativeCards.forEach((card) => {
+          card.hidden = true;
+        });
+        existingOfferCards.forEach((card) => card.remove());
+        grid.insertAdjacentHTML(
+          'beforeend',
+          promotions.length
+            ? renderHomePromotionCards(promotions)
+            : '<div class="home-promotions-empty home-promotion-product-card">Nenhuma oferta ativa no momento.</div>'
+        );
+        grid.querySelectorAll<HTMLElement>('.home-promotion-product-card').forEach((card) => {
+          card.hidden = false;
+        });
       } else {
-        grid.innerHTML = grid.dataset.allProductsHtml || '';
+        existingOfferCards.forEach((card) => card.remove());
+        nativeCards.forEach((card) => {
+          card.hidden = false;
+        });
       }
 
       applyPromotionStyling(rows);
@@ -276,11 +293,18 @@ export function MarketingPromotions() {
     let cancelled = false;
     let rows: PromotionRow[] = [];
     let cleanup: (() => void) | undefined;
+    let frame = 0;
 
     function apply() {
       if (cancelled) return;
-      setupHomeProductTabs(rows);
-      applyPromotionStyling(rows);
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (!cancelled) {
+          setupHomeProductTabs(rows);
+          applyPromotionStyling(rows);
+        }
+      });
     }
 
     async function load() {
@@ -314,23 +338,19 @@ export function MarketingPromotions() {
         .filter((row) => row.product) as PromotionRow[];
 
       apply();
-      let scheduled = false;
-      const observer = new MutationObserver(() => {
-        if (scheduled) return;
-        scheduled = true;
-        requestAnimationFrame(() => {
-          scheduled = false;
-          apply();
-        });
-      });
+      const observer = new MutationObserver(() => apply());
       observer.observe(document.body, { childList: true, subtree: true });
-      cleanup = () => observer.disconnect();
+      cleanup = () => {
+        observer.disconnect();
+        if (frame) cancelAnimationFrame(frame);
+      };
     }
 
     void load();
     return () => {
       cancelled = true;
       cleanup?.();
+      if (frame) cancelAnimationFrame(frame);
     };
   }, []);
 
@@ -351,9 +371,7 @@ export function MarketingPromotions() {
       .home-promotion-prices s{color:#999;font-size:11px;font-weight:700}
       .home-promotion-prices strong{color:${PROMO_YELLOW};font-size:20px;font-weight:900;letter-spacing:-.02em}
       .home-promotions-empty{grid-column:1/-1;padding:38px 20px;border:1px dashed #ddd;border-radius:14px;background:#fff;text-align:center;color:#777;font-size:13px}
-      @media(max-width:900px){
-        .home-product-tabs{margin-top:13px}
-      }
+      @media(max-width:900px){.home-product-tabs{margin-top:13px}}
       @media(max-width:520px){
         .home-product-tabs{gap:5px}
         .home-product-tab{padding:8px 11px;font-size:8px}
