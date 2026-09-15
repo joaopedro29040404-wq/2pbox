@@ -22,15 +22,15 @@ function renderPrice(container: HTMLElement, original: number, promo: number) {
 
   const price = document.createElement('div');
   price.dataset.marketingPromotionPrice = 'true';
-  price.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:1px;margin-top:8px;line-height:1.05';
+  price.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:1px;margin-top:8px;line-height:1.05;min-width:0;max-width:100%';
 
   const old = document.createElement('s');
   old.textContent = money(original);
-  old.style.cssText = 'color:#999;font:700 12px Inter,Arial,sans-serif';
+  old.style.cssText = 'color:#999;font:700 12px Inter,Arial,sans-serif;white-space:nowrap';
 
   const current = document.createElement('strong');
   current.textContent = money(promo);
-  current.style.cssText = `color:${PROMO_YELLOW};font:900 30px Inter,Arial,sans-serif;letter-spacing:-.02em`;
+  current.style.cssText = `color:${PROMO_YELLOW};font:900 30px Inter,Arial,sans-serif;letter-spacing:-.02em;white-space:nowrap`;
 
   price.append(old, current);
   container.appendChild(price);
@@ -44,11 +44,11 @@ function renderCatalogPrice(container: HTMLElement, original: number, promo: num
 
   const price = document.createElement('div');
   price.dataset.marketingPromotionPrice = 'true';
-  price.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:1px;line-height:1.05;min-width:0';
+  price.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:1px;line-height:1.05;min-width:0;max-width:100%';
 
   const old = document.createElement('s');
   old.textContent = money(original);
-  old.style.cssText = 'color:#999;font:700 11px Inter,Arial,sans-serif';
+  old.style.cssText = 'color:#999;font:700 11px Inter,Arial,sans-serif;white-space:nowrap';
 
   const current = document.createElement('strong');
   current.textContent = money(promo);
@@ -58,6 +58,32 @@ function renderCatalogPrice(container: HTMLElement, original: number, promo: num
   const button = container.querySelector<HTMLElement>('.catalog-add-button');
   if (button) container.insertBefore(price, button);
   else container.appendChild(price);
+}
+
+function constrainPromotionCard(card: HTMLElement) {
+  card.style.minWidth = '0';
+  card.style.maxWidth = '100%';
+  card.style.overflow = 'hidden';
+
+  const info = card.querySelector<HTMLElement>('.product-body, .home-product-info, [class*="product-info"]');
+  if (info) {
+    info.style.minWidth = '0';
+    info.style.maxWidth = '100%';
+    info.style.overflow = 'hidden';
+  }
+
+  const title = card.querySelector<HTMLElement>('.product-info-link h2, .home-product-info h3, [class*="product-info"] h2, [class*="product-info"] h3');
+  if (title) {
+    title.style.minWidth = '0';
+    title.style.maxWidth = '100%';
+    title.style.overflow = 'hidden';
+    title.style.textOverflow = 'ellipsis';
+    title.style.display = '-webkit-box';
+    title.style.webkitBoxOrient = 'vertical';
+    title.style.webkitLineClamp = '2';
+    title.style.overflowWrap = 'anywhere';
+    title.style.wordBreak = 'break-word';
+  }
 }
 
 export function MarketingPromotions() {
@@ -84,6 +110,8 @@ export function MarketingPromotions() {
               null;
           if (!card) continue;
 
+          constrainPromotionCard(card);
+
           if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
 
           if (!card.querySelector('[data-marketing-promotion-badge]')) {
@@ -96,7 +124,11 @@ export function MarketingPromotions() {
 
           if (card.classList.contains('product')) {
             const info = card.querySelector<HTMLElement>('.product-buy');
-            if (info) renderCatalogPrice(info, original, promo);
+            if (info) {
+              info.style.minWidth = '0';
+              info.style.maxWidth = '100%';
+              renderCatalogPrice(info, original, promo);
+            }
             continue;
           }
 
@@ -120,11 +152,11 @@ export function MarketingPromotions() {
 
           const old = document.createElement('s');
           old.textContent = money(Number(product.price));
-          old.style.cssText = 'color:#999;font:700 14px Inter,Arial,sans-serif';
+          old.style.cssText = 'color:#999;font:700 14px Inter,Arial,sans-serif;white-space:nowrap';
 
           const current = document.createElement('strong');
           current.textContent = money(Number(row.promotional_price));
-          current.style.cssText = `color:${PROMO_YELLOW};font:900 36px Inter,Arial,sans-serif;letter-spacing:-.02em`;
+          current.style.cssText = `color:${PROMO_YELLOW};font:900 36px Inter,Arial,sans-serif;letter-spacing:-.02em;white-space:nowrap`;
 
           priceNode.append(old, current);
         }
