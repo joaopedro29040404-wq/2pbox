@@ -5,13 +5,19 @@ import { supabase } from '@/lib/supabase';
 
 const PROMO_YELLOW = '#ffc400';
 
+type PromotionRow = {
+  product_id: string;
+  promotional_price: number;
+  product?: { slug: string; name: string; price: number } | null;
+};
+
 function money(value: number) {
   return `R$ ${Number(value).toFixed(2).replace('.', ',')}`;
 }
 
 function renderPrice(container: HTMLElement, original: number, promo: number) {
-  container.querySelectorAll('[data-marketing-promotion-price]').forEach((node) => node.remove());
-  const nativePrice = container.querySelector<HTMLElement>('[data-product-price]');
+  if (container.querySelector('[data-marketing-promotion-price]')) return;
+  const nativePrice = container.querySelector<HTMLElement>('strong');
   if (nativePrice) nativePrice.remove();
 
   const price = document.createElement('div');
@@ -33,13 +39,13 @@ function renderPrice(container: HTMLElement, original: number, promo: number) {
 export function MarketingPromotions() {
   useEffect(() => {
     let cancelled = false;
-    let rows: any[] = [];
+    let rows: PromotionRow[] = [];
 
     function applyPromotions() {
       if (cancelled || !rows.length) return;
 
       for (const row of rows) {
-        const product = Array.isArray(row.products) ? row.products[0] : row.products;
+        const product = row.product;
         const slug = String(product?.slug || '').trim();
         const original = Number(product?.price);
         const promo = Number(row.promotional_price);
@@ -64,12 +70,6 @@ export function MarketingPromotions() {
 
           const info = card.querySelector<HTMLElement>('.home-product-info') || card.querySelector<HTMLElement>('[class*="product-info"]');
           if (!info) continue;
-
-          info.querySelectorAll('[data-marketing-promotion-price]').forEach((node) => node.remove());
-          const nativeStrong = info.querySelector<HTMLElement>('strong');
-          if (nativeStrong) {
-            nativeStrong.dataset.productPrice = 'true';
-          }
           renderPrice(info, original, promo);
         }
       }
@@ -77,14 +77,11 @@ export function MarketingPromotions() {
       const match = window.location.pathname.match(/^\/produto\/([^/]+)$/);
       if (match) {
         const slug = decodeURIComponent(match[1]);
-        const row = rows.find((item) => {
-          const product = Array.isArray(item.products) ? item.products[0] : item.products;
-          return product?.slug === slug;
-        });
-
+        const row = rows.find((item) => item.product?.slug === slug);
         const priceNode = document.querySelector<HTMLElement>('.product-price');
-        if (row && priceNode) {
-          const product = Array.isArray(row.products) ? row.products[0] : row.products;
+        if (row && priceNode && priceNode.dataset.marketingPromotionApplied !== 'true') {
+          const product = row.product;
+          if (!product) return;
           priceNode.dataset.marketingPromotionApplied = 'true';
           priceNode.innerHTML = '';
           priceNode.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:1px;margin-bottom:18px;line-height:1.05';
@@ -104,14 +101,28 @@ export function MarketingPromotions() {
 
     async function load() {
       if (!supabase) return;
-      const { data } = await supabase
+      const now = new Date().toISOString();
+      const { data: promotions, error } = await supabase
         .from('promotions')
-        .select('product_id,promotional_price,products(slug,name,price)')
+        .select('product_id,promotional_price')
         .eq('active', true)
-        .lte('starts_at', new Date().toISOString())
-        .gte('ends_at', new Date().toISOString());
-      if (cancelled || !Array.isArray(data)) return;
-      rows = data as any[];
+        .lte('starts_at', now)
+        .gte('ends_at', now);
+      if (cancelled || error || !Array.isArray(promotions) || promotions.length === 0) return;
+
+      const ids = promotions.map((row) => String(row.product_id));
+      const { data: products, error: productsError } = await supabase
+        .from('products')
+        .select('id,slug,name,price')
+        .in('id', ids)
+        .eq('active', true);
+      if (cancelled || productsError || !Array.isArray(products)) return;
+
+      const byId = new Map(products.map((product) => [String(product.id), product]));
+      rows = promotions
+        .map((row) => ({ ...row, product: byId.get(String(row.product_id)) || null }))
+        .filter((row) => row.product) as PromotionRow[];
+
       applyPromotions();
       const observer = new MutationObserver(() => applyPromotions());
       observer.observe(document.body, { childList: true, subtree: true });
