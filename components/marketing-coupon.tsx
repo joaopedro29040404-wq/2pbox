@@ -42,14 +42,14 @@ export function MarketingCoupon() {
     if (!normalized) return setMessage('Digite um código de cupom.');
     setLoading(true);
     setMessage('');
-    const result = await applyCoupon(normalized);
+    const valid = await applyCoupon(normalized);
     setLoading(false);
-    if (!result.valid) {
-      setMessage(result.message || 'Cupom inválido.');
+    if (!valid) {
+      setMessage('Cupom inválido, expirado ou não elegível para este carrinho.');
       return;
     }
     setCode('');
-    setMessage(result.message || 'Cupom aplicado com sucesso.');
+    setMessage('Cupom aplicado com sucesso.');
   };
 
   return createPortal(
