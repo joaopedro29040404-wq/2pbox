@@ -6,19 +6,7 @@ import { DELIVERY_PROVIDERS, applySubsidy, quoteOwnDelivery, type DeliveryProvid
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-type Option = {
-  provider: DeliveryProvider;
-  label: string;
-  description: string;
-  fee: number | null;
-  baseFee: number | null;
-  subsidy: number | null;
-  distanceKm: number | null;
-  minutes: number | null;
-  needsAddress: boolean;
-  available: boolean;
-  reason?: string;
-};
+type Option = { provider: DeliveryProvider; label: string; description: string; fee: number | null; baseFee: number | null; subsidy: number | null; distanceKm: number | null; minutes: number | null; needsAddress: boolean; available: boolean; reason?: string };
 
 function enabledProviders(operations: StoreOperations): DeliveryProvider[] {
   const active: DeliveryProvider[] = [];
@@ -29,29 +17,17 @@ function enabledProviders(operations: StoreOperations): DeliveryProvider[] {
   return active;
 }
 
-function describe(provider: DeliveryProvider) {
-  return DELIVERY_PROVIDERS.find((item) => item.value === provider)!;
-}
+function describe(provider: DeliveryProvider) { return DELIVERY_PROVIDERS.find((item) => item.value === provider)!; }
 
 export async function GET() {
   const operations = await readStoreOperations();
   const providers = enabledProviders(operations);
-
   return NextResponse.json({
     sameDay: { enabled: operations.sameDayEnabled, cutoff: operations.sameDayCutoff },
     address: storeAddressLabel(operations),
-    options: providers
-      .filter((provider) => provider !== 'express' || operations.expressFee > 0)
-      .map((provider) => {
+    options: providers.filter((provider) => provider !== 'express' || operations.expressPriceTable.length > 0).map((provider) => {
       const meta = describe(provider);
-      const fee = provider === 'pickup' ? 0 : provider === 'express' ? operations.expressFee : null;
-      return {
-        provider,
-        label: meta.label,
-        description: provider === 'express' && operations.expressFee > 0 ? `${meta.description}` : meta.description,
-        fee,
-        needsAddress: meta.needsAddress,
-      };
+      return { provider, label: meta.label, description: meta.description, fee: provider === 'pickup' ? 0 : null, needsAddress: meta.needsAddress };
     }),
     storeConfigured: Boolean(storeOrigin(operations)),
   });
@@ -62,35 +38,13 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const origin = storeOrigin(operations);
   const providers = enabledProviders(operations);
-
   const destination = await resolveDestination(body);
   const options: Option[] = [];
 
   for (const provider of providers) {
     const meta = describe(provider);
-
     if (provider === 'pickup') {
       options.push({ provider, label: meta.label, description: meta.description, fee: 0, baseFee: 0, subsidy: 0, distanceKm: null, minutes: null, needsAddress: false, available: true });
-      continue;
-    }
-
-    if (provider === 'express') {
-      options.push(
-        operations.expressFee > 0
-          ? {
-              provider,
-              label: meta.label,
-              description: `Frete fixo de ${currency(operations.expressFee)}`,
-              fee: operations.expressFee,
-              baseFee: operations.expressFee,
-              subsidy: 0,
-              distanceKm: null,
-              minutes: null,
-              needsAddress: true,
-              available: true,
-            }
-          : unavailable(provider, meta.label, 'Frete do envio imediato ainda não foi definido pela loja.'),
-      );
       continue;
     }
 
@@ -104,8 +58,10 @@ export async function POST(request: Request) {
     }
 
     const distance = await routeDistance(origin, destination);
+    const maxKm = provider === 'express' ? operations.expressMaxKm : operations.maxKm;
+    const table = provider === 'express' ? operations.expressPriceTable : operations.priceTable;
     const subsidy = provider === 'own' ? operations.subsidyPercent : 0;
-    const quote = distance.km > operations.maxKm ? null : quoteOwnDelivery(distance.km, operations.priceTable, subsidy);
+    const quote = distance.km > maxKm ? null : quoteOwnDelivery(distance.km, table, subsidy);
 
     options.push(
       quote
@@ -121,43 +77,36 @@ export async function POST(request: Request) {
             needsAddress: true,
             available: true,
           }
-        : { ...unavailable(provider, meta.label, `Fora do raio de atendimento (${operations.maxKm} km).`), distanceKm: distance.km },
+        : {
+            ...unavailable(
+              provider,
+              meta.label,
+              table.length === 0
+                ? 'A tabela de preços desta modalidade ainda não foi configurada pela loja.'
+                : `Fora do raio de atendimento (${maxKm} km).`,
+            ),
+            distanceKm: distance.km,
+          },
     );
   }
 
-  return NextResponse.json({
-    options,
-    geoAvailable: isGeoAvailable(),
-    storeConfigured: Boolean(origin),
-    subsidyPercent: operations.subsidyPercent,
-  });
+  return NextResponse.json({ options, geoAvailable: isGeoAvailable(), storeConfigured: Boolean(origin), subsidyPercent: operations.subsidyPercent });
 }
 
 async function resolveDestination(body: any) {
   const lat = Number(body?.lat);
   const lng = Number(body?.lng);
   if (Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0) return { lat, lng };
-
   if (!isGeoAvailable()) return null;
-
   const placeId = String(body?.placeId || '').trim();
   if (placeId) {
     const address = await resolvePlace(placeId).catch(() => null);
     if (address?.lat != null && address?.lng != null) return { lat: address.lat, lng: address.lng };
   }
-
   const typed = body?.address;
   if (typed && typeof typed === 'object') {
-    return geocodeAddress({
-      street: typed.street ?? typed.line,
-      number: typed.number,
-      district: typed.neighborhood ?? typed.district,
-      city: typed.city,
-      state: typed.state,
-      zip: typed.postal_code ?? typed.zip,
-    });
+    return geocodeAddress({ street: typed.street ?? typed.line, number: typed.number, district: typed.neighborhood ?? typed.district, city: typed.city, state: typed.state, zip: typed.postal_code ?? typed.zip });
   }
-
   return null;
 }
 
@@ -168,12 +117,7 @@ function unavailable(provider: DeliveryProvider, label: string, reason: string):
 function storeAddressLabel(operations: StoreOperations) {
   const { line, number, district, city, state, zip } = operations.address;
   if (!line && !city) return '';
-
   const street = [line, number].filter(Boolean).join(', ');
   const region = [district, [city, state].filter(Boolean).join('/')].filter(Boolean).join(', ');
   return [street, region, zip].filter(Boolean).join(' · ');
-}
-
-function currency(value: number) {
-  return `R$ ${Number(value || 0).toFixed(2).replace('.', ',')}`;
 }
