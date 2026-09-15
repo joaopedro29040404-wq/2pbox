@@ -34,10 +34,22 @@ function enabledProviders(operations: StoreOperations): DeliveryProvider[] {
 
 function describe(provider: DeliveryProvider) { return DELIVERY_PROVIDERS.find((item) => item.value === provider)!; }
 
-export async function GET() {
+function freeShippingNotice(value: number | null | undefined) {
+  return Number.isFinite(Number(value)) && Number(value) > 0 ? `Frete grátis em compras a partir de R$ ${Number(value).toFixed(2).replace('.', ',')}.` : '';
+}
+
+function readCartSubtotal(request: Request) {
+  const raw = request.headers.get('cookie')?.match(/(?:^|;\s*)2pbox-cart-subtotal=([^;]+)/)?.[1];
+  const value = raw ? Number(decodeURIComponent(raw)) : NaN;
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+export async function GET(request: Request) {
   const operations = await readStoreOperations();
   const providers = enabledProviders(operations);
   const standardMessage = getStandardDeliveryMessage(operations.sameDayCutoff);
+  const freeNotice = freeShippingNotice(operations.freeShippingFrom);
+  const isProductRequest = request.headers.get('referer')?.includes('/produto/') ?? false;
   return NextResponse.json({
     sameDay: {
       enabled: operations.sameDayEnabled,
@@ -49,7 +61,7 @@ export async function GET() {
     address: storeAddressLabel(operations),
     options: providers.filter((provider) => provider !== 'express' || operations.expressPriceTable.length > 0).map((provider) => {
       const meta = describe(provider);
-      return { provider, label: meta.label, description: provider === 'own' ? standardMessage : meta.description, fee: provider === 'pickup' ? 0 : null, needsAddress: meta.needsAddress };
+      return { provider, label: meta.label, description: provider === 'own' ? [standardMessage, freeNotice].filter(Boolean).join(' ') : meta.description, fee: provider === 'pickup' ? 0 : provider === 'own' && isProductRequest ? 0 : null, needsAddress: meta.needsAddress };
     }),
     storeConfigured: Boolean(storeOrigin(operations)),
   });
@@ -61,6 +73,8 @@ export async function POST(request: Request) {
   const origin = storeOrigin(operations);
   const providers = enabledProviders(operations);
   const destination = await resolveDestination(body);
+  const cartSubtotal = Number.isFinite(Number(body?.subtotal)) ? Number(body.subtotal) : readCartSubtotal(request);
+  const freeStandardDelivery = operations.freeShippingFrom != null && cartSubtotal != null && cartSubtotal >= Number(operations.freeShippingFrom);
   const options: Option[] = [];
 
   for (const provider of providers) {
@@ -81,10 +95,12 @@ export async function POST(request: Request) {
     options.push(quote ? {
       provider,
       label: meta.label,
-      description: provider === 'own' ? getStandardDeliveryMessage(operations.sameDayCutoff) : `${distance.km.toFixed(1)} km`,
-      fee: quote.customerFee,
+      description: provider === 'own'
+        ? [getStandardDeliveryMessage(operations.sameDayCutoff), freeShippingNotice(operations.freeShippingFrom)].filter(Boolean).join(' ')
+        : `${distance.km.toFixed(1)} km`,
+      fee: provider === 'own' && freeStandardDelivery ? 0 : quote.customerFee,
       baseFee: quote.baseFee,
-      subsidy: quote.subsidy,
+      subsidy: provider === 'own' && freeStandardDelivery ? quote.baseFee : quote.subsidy,
       distanceKm: distance.km,
       minutes: distance.minutes,
       needsAddress: true,
