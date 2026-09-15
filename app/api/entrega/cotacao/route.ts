@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { geocodeAddress, isGeoAvailable, resolvePlace, routeDistance } from '@/lib/server/geo';
 import { readStoreOperations, storeOrigin, type StoreOperations } from '@/lib/server/store-settings';
-import { DELIVERY_PROVIDERS, quoteOwnDelivery, type DeliveryProvider } from '@/lib/store-operations';
+import { DELIVERY_PROVIDERS, getStandardDeliveryMessage, quoteOwnDelivery, type DeliveryProvider } from '@/lib/store-operations';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -38,11 +38,11 @@ export async function GET() {
   const operations = await readStoreOperations();
   const providers = enabledProviders(operations);
   return NextResponse.json({
-    sameDay: { enabled: operations.sameDayEnabled, cutoff: operations.sameDayCutoff },
+    sameDay: { enabled: operations.sameDayEnabled, cutoff: operations.sameDayCutoff, message: getStandardDeliveryMessage(operations.sameDayCutoff) },
     address: storeAddressLabel(operations),
     options: providers.filter((provider) => provider !== 'express' || operations.expressPriceTable.length > 0).map((provider) => {
       const meta = describe(provider);
-      return { provider, label: meta.label, description: meta.description, fee: provider === 'pickup' ? 0 : null, needsAddress: meta.needsAddress };
+      return { provider, label: meta.label, description: provider === 'own' ? getStandardDeliveryMessage(operations.sameDayCutoff) : meta.description, fee: provider === 'pickup' ? 0 : null, needsAddress: meta.needsAddress };
     }),
     storeConfigured: Boolean(storeOrigin(operations)),
   });
@@ -72,8 +72,16 @@ export async function POST(request: Request) {
     const quote = distance.km > maxKm ? null : quoteOwnDelivery(distance.km, table, subsidy);
 
     options.push(quote ? {
-      provider, label: meta.label, description: `${distance.km.toFixed(1)} km`, fee: quote.customerFee, baseFee: quote.baseFee,
-      subsidy: quote.subsidy, distanceKm: distance.km, minutes: distance.minutes, needsAddress: true, available: true,
+      provider,
+      label: meta.label,
+      description: provider === 'own' ? getStandardDeliveryMessage(operations.sameDayCutoff) : `${distance.km.toFixed(1)} km`,
+      fee: quote.customerFee,
+      baseFee: quote.baseFee,
+      subsidy: quote.subsidy,
+      distanceKm: distance.km,
+      minutes: distance.minutes,
+      needsAddress: true,
+      available: true,
     } : {
       ...unavailable(provider, meta.label, table.length === 0 ? 'A tabela de preços desta modalidade ainda não foi configurada pela loja.' : `Fora do raio de atendimento (${maxKm} km).`),
       distanceKm: distance.km,
