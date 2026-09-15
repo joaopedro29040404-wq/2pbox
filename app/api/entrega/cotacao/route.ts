@@ -68,7 +68,7 @@ export async function POST(request: Request) {
         ? {
             provider,
             label: meta.label,
-            description: `${distance.km.toFixed(1)} km${distance.minutes ? ` · ~${distance.minutes} min` : ''}`,
+            description: `${distance.km.toFixed(1)} km`,
             fee: quote.customerFee,
             baseFee: quote.baseFee,
             subsidy: quote.subsidy,
