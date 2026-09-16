@@ -1,0 +1,49 @@
+name: Temporary marketing fix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.event.head_commit.message == 'chore: prepare marketing fix'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix marketing page
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('app/admin/marketing/page.tsx')
+          text = path.read_text()
+          marker = "const activePromotions = promotions.filter(p => p.active).length;"
+          if "const activePromotionProductIds = useMemo" not in text:
+              text = text.replace(marker, "const activePromotionProductIds = useMemo(() => new Set(promotions.filter(p => p.active).map(p => p.product_id)), [promotions]);\n  " + marker)
+          old = "const selected = product.id === promotionForm.product_id; return <button type=\"button\" key={product.id} className={`product-option ${selected ? 'selected' : ''}`}"
+          new = "const selected = product.id === promotionForm.product_id; const hasActivePromotion = activePromotionProductIds.has(product.id); return <button type=\"button\" key={product.id} className={`product-option ${selected ? 'selected' : ''}`}"
+          if old in text and "const hasActivePromotion = activePromotionProductIds.has(product.id)" not in text:
+              text = text.replace(old, new, 1)
+          old_name = '<span className="product-option-name">{product.name}</span>'
+          new_name = '<span className="product-option-name">{product.name}{hasActivePromotion && <em className="product-active-promotion">PROMOÇÃO ATIVA</em>}</span>'
+          if old_name in text and 'className="product-active-promotion"' not in text:
+              text = text.replace(old_name, new_name, 1)
+          css_marker = '.product-option-prices{display:grid;'
+          if '.product-active-promotion{' not in text:
+              text = text.replace(css_marker, '.product-active-promotion{display:inline-flex;align-items:center;width:max-content;max-width:100%;margin-top:5px;padding:3px 6px;border-radius:999px;background:#fff0c2;color:#8a6500;font-size:8px;font-style:normal;font-weight:900;letter-spacing:.04em;white-space:nowrap}.product-option-prices{display:grid;', 1)
+          if not text.rstrip().endswith('}'):
+              text = text.rstrip() + '\n}\n'
+          path.write_text(text)
+          PY
+      - name: Commit and remove temporary workflow
+        shell: bash
+        run: |
+          rm -f .github/workflows/fix-marketing-build.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/admin/marketing/page.tsx .github/workflows/fix-marketing-build.yml
+          git commit -m 'fix(marketing): signal active promotions in product search'
+          git push origin HEAD:main
