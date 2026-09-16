@@ -16,6 +16,7 @@ export type ModalProps = {
 
 export function Modal({ open, onClose, title, eyebrow, description, size = 'lg', footer, children }: ModalProps) {
   const panel = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
 
   useEffect(() => {
@@ -40,6 +41,37 @@ export function Modal({ open, onClose, title, eyebrow, description, size = 'lg',
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+
+    const updateViewportHeight = () => {
+      document.documentElement.style.setProperty('--ui-modal-vh', `${viewport.height}px`);
+    };
+
+    const keepFocusedFieldVisible = () => {
+      const active = document.activeElement;
+      if (!active || !body.current?.contains(active)) return;
+      if (!(active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement)) return;
+
+      window.setTimeout(() => {
+        active.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+      }, 80);
+    };
+
+    updateViewportHeight();
+    viewport.addEventListener('resize', updateViewportHeight);
+    body.current?.addEventListener('focusin', keepFocusedFieldVisible);
+
+    return () => {
+      viewport.removeEventListener('resize', updateViewportHeight);
+      body.current?.removeEventListener('focusin', keepFocusedFieldVisible);
+      document.documentElement.style.removeProperty('--ui-modal-vh');
+    };
+  }, [open]);
+
   if (!open) return null;
 
   return (
@@ -47,15 +79,15 @@ export function Modal({ open, onClose, title, eyebrow, description, size = 'lg',
       <style>{`
         @media (max-width: 640px) {
           .ui-modal-overlay {
-            height: 100dvh;
-            min-height: 100dvh;
+            height: var(--ui-modal-vh, 100dvh);
+            min-height: var(--ui-modal-vh, 100dvh);
             padding: 0;
             align-items: flex-end;
           }
 
           .ui-modal {
-            height: 100dvh;
-            max-height: 100dvh;
+            height: var(--ui-modal-vh, 100dvh);
+            max-height: var(--ui-modal-vh, 100dvh);
             min-height: 0;
             border-radius: 18px 18px 0 0;
           }
@@ -83,14 +115,14 @@ export function Modal({ open, onClose, title, eyebrow, description, size = 'lg',
             overscroll-behavior: contain;
             -webkit-overflow-scrolling: touch;
             scroll-padding-top: 20px;
-            scroll-padding-bottom: 150px;
+            scroll-padding-bottom: 180px;
           }
 
           .ui-modal-body input,
           .ui-modal-body textarea,
           .ui-modal-body select {
             scroll-margin-top: 20px;
-            scroll-margin-bottom: 150px;
+            scroll-margin-bottom: 180px;
           }
 
           .ui-modal-foot {
@@ -119,7 +151,7 @@ export function Modal({ open, onClose, title, eyebrow, description, size = 'lg',
             </button>
           </header>
 
-          <div className="ui-modal-body">{children}</div>
+          <div className="ui-modal-body" ref={body}>{children}</div>
 
           {footer && <footer className="ui-modal-foot">{footer}</footer>}
         </div>
