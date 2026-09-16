@@ -117,7 +117,8 @@ export function PromotionCardVisuals() {
       .promotion-card .promotion-card-discount{position:absolute!important;left:10px!important;bottom:10px!important;z-index:7!important;width:64px!important;height:64px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;box-sizing:border-box!important;padding:4px!important;background:#ef2834!important;color:#fff!important;clip-path:polygon(50% 0%,61% 7%,75% 5%,83% 16%,95% 22%,93% 36%,100% 50%,93% 63%,95% 78%,83% 84%,75% 95%,61% 93%,50% 100%,39% 93%,25% 95%,17% 84%,5% 78%,7% 63%,0% 50%,7% 36%,5% 22%,17% 16%,25% 5%,39% 7%)!important;filter:drop-shadow(0 3px 7px rgba(0,0,0,.16));text-align:center!important}
       .promotion-card .promotion-card-discount strong{font:900 20px/1 Inter,Arial,sans-serif!important}
       .promotion-card .promotion-card-discount span{font:900 12px/1 Inter,Arial,sans-serif!important;margin-top:3px!important}
-      .promotion-card.home-promotion-product-card .home-promotion-prices{padding-right:90px!important}
+      .promotion-card.home-promotion-product-card .home-product-info{box-sizing:border-box!important;display:flex!important;flex-direction:column!important;align-items:stretch!important;padding-bottom:70px!important}
+      .promotion-card.home-promotion-product-card .home-promotion-prices{margin-top:15px!important;padding-right:0!important;flex:0 0 auto!important}
       .promotion-card.home-promotion-product-card::after{content:'Adicionar';position:absolute;right:16px;bottom:16px;min-width:76px;height:40px;padding:0 12px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#ffc400;color:#111;font:900 11px Inter,Arial,sans-serif;pointer-events:none}
       @media (max-width:700px){
         .promotion-card .product-body,.promotion-card .home-product-info{padding:12px!important}
@@ -129,7 +130,8 @@ export function PromotionCardVisuals() {
         .promotion-card .promotion-card-discount strong{font-size:17px!important}
         .promotion-card .promotion-card-discount span{font-size:10px!important}
         .promotion-card.home-promotion-product-card::after{right:12px;bottom:12px;height:38px;min-width:68px;font-size:10px}
-        .promotion-card.home-promotion-product-card .home-promotion-prices{padding-right:80px!important}
+        .promotion-card.home-promotion-product-card .home-product-info{padding-bottom:62px!important}
+        .promotion-card.home-promotion-product-card .home-promotion-prices{padding-right:0!important;margin-top:13px!important}
       }
     `}</style>
   );
