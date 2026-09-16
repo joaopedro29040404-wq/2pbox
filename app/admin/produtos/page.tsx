@@ -36,19 +36,21 @@ type Product = {
   stock: number;
   active: boolean;
   category_id: string | null;
+  product_categories?: { category_id: string }[] | null;
   image_url?: string | null;
   images?: string[];
   slug?: string;
   updated_at?: string | null;
   created_at?: string | null;
 };
-type Category = { id: string; name: string };
+type Category = { id: string; name: string; parent_id: string | null };
 type AiCopy = { title: string; description: string; features: string[] };
-type FormState = { name: string; description: string; price: string; cost: string; barcode: string; stock: string; category_id: string; image_url: string; images: string[] };
+type FormState = { name: string; description: string; price: string; cost: string; barcode: string; stock: string; category_ids: string[]; image_url: string; images: string[] };
 
-const empty: FormState = { name: '', description: '', price: '', cost: '', barcode: '', stock: '0', category_id: '', image_url: '', images: [] };
+const empty: FormState = { name: '', description: '', price: '', cost: '', barcode: '', stock: '0', category_ids: [], image_url: '', images: [] };
 const FETCH_SIZE = 1000;
 const PAGE_SIZE = 20;
+const ROOT_ORDER = ['Papelaria', 'Eletrônicos', 'Acessórios para celular', 'Variedades'];
 
 const STATUS_OPTIONS = [
   { value: 'all', label: 'Todos os status' },
@@ -95,7 +97,7 @@ export default function ProductsAdminPage() {
       for (;;) {
         const { data, error } = await supabase
           .from('products')
-          .select('id,name,description,price,cost,barcode,stock,active,category_id,image_url,images,slug,updated_at,created_at')
+          .select('id,name,description,price,cost,barcode,stock,active,category_id,image_url,images,slug,updated_at,created_at,product_categories(category_id)')
           .order('updated_at', { ascending: false, nullsFirst: false })
           .range(from, from + FETCH_SIZE - 1);
         if (error) throw error;
@@ -104,7 +106,7 @@ export default function ProductsAdminPage() {
         if (batch.length < FETCH_SIZE) break;
         from += FETCH_SIZE;
       }
-      const { data: categoryRows, error: categoryError } = await supabase.from('categories').select('id,name').eq('active', true).order('name');
+      const { data: categoryRows, error: categoryError } = await supabase.from('categories').select('id,name,parent_id').eq('active', true).order('name');
       if (categoryError) throw categoryError;
       setProducts(all);
       setCategories((categoryRows ?? []) as Category[]);
@@ -135,6 +137,8 @@ export default function ProductsAdminPage() {
 
   function startEdit(product: Product) {
     const images = Array.isArray(product.images) ? product.images : [];
+    const relationIds = (product.product_categories ?? []).map((relation) => relation.category_id).filter(Boolean);
+    const categoryIds = relationIds.length ? Array.from(new Set(relationIds)) : product.category_id ? [product.category_id] : [];
     setEditing(product.id);
     setForm({
       name: product.name,
@@ -143,13 +147,38 @@ export default function ProductsAdminPage() {
       cost: String(product.cost ?? 0),
       barcode: product.barcode || '',
       stock: String(product.stock),
-      category_id: product.category_id || '',
+      category_ids: categoryIds,
       image_url: product.image_url || images[0] || '',
       images: images.length ? images : product.image_url ? [product.image_url] : [],
     });
     resetAi();
     setFormError('');
     setShowForm(true);
+  }
+
+  function toggleCategory(categoryId: string) {
+    setForm((current) => {
+      const category = categories.find((item) => item.id === categoryId);
+      const selected = new Set(current.category_ids);
+      if (selected.has(categoryId)) {
+        selected.delete(categoryId);
+        if (!category?.parent_id) {
+          categories.filter((item) => item.parent_id === categoryId).forEach((child) => selected.delete(child.id));
+        }
+      } else {
+        selected.add(categoryId);
+        if (category?.parent_id) selected.add(category.parent_id);
+      }
+      return { ...current, category_ids: Array.from(selected) };
+    });
+  }
+
+  function categoryNameList() {
+    return form.category_ids
+      .map((id) => categories.find((category) => category.id === id)?.name)
+      .filter(Boolean)
+      .slice(0, 4)
+      .join(', ');
   }
 
   function handleAiFile(file: File | null) {
@@ -169,7 +198,7 @@ export default function ProductsAdminPage() {
       const body = new FormData();
       body.append('image', aiSource);
       body.append('productName', form.name);
-      body.append('category', categories.find((c) => c.id === form.category_id)?.name || '');
+      body.append('category', categoryNameList());
       const response = await fetch('/api/admin/ai-copy', { method: 'POST', body });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Não foi possível analisar a imagem.');
@@ -225,6 +254,7 @@ export default function ProductsAdminPage() {
     setFormError('');
     setSaving(true);
     const images = form.images;
+    const primaryCategoryId = form.category_ids[0] || null;
     const payload = {
       name: form.name.trim(),
       description: form.description.trim() || null,
@@ -232,15 +262,22 @@ export default function ProductsAdminPage() {
       cost: Number(form.cost || 0),
       barcode: form.barcode.trim() || null,
       stock: Number(form.stock || 0),
-      category_id: form.category_id || null,
+      category_id: primaryCategoryId,
       image_url: images[0] || form.image_url || null,
       images,
       updated_at: new Date().toISOString(),
     };
 
-    const { error } = editing
-      ? await supabase.from('products').update(payload).eq('id', editing)
-      : await supabase.from('products').insert({
+    let productId = editing;
+    let error: Error | null = null;
+
+    if (editing) {
+      const result = await supabase.from('products').update(payload).eq('id', editing);
+      error = result.error;
+    } else {
+      const result = await supabase
+        .from('products')
+        .insert({
           ...payload,
           slug:
             form.name
@@ -249,12 +286,37 @@ export default function ProductsAdminPage() {
               .replace(/[̀-ͯ]/g, '')
               .replace(/[^a-z0-9]+/g, '-')
               .replace(/(^-|-$)/g, '') + `-${Date.now()}`,
-        });
+        })
+        .select('id')
+        .single();
+      error = result.error;
+      productId = result.data?.id ?? null;
+    }
 
-    setSaving(false);
     if (error) {
+      setSaving(false);
       setFormError(error.message);
       toast.error('Não foi possível salvar', error.message);
+      return;
+    }
+
+    if (!productId) {
+      setSaving(false);
+      const message = 'O produto foi salvo, mas não foi possível identificar o ID para salvar as categorias.';
+      setFormError(message);
+      toast.error('Categorias não salvas', message);
+      return;
+    }
+
+    const { error: categoryError } = await supabase.rpc('set_product_categories', {
+      p_product_id: productId,
+      p_category_ids: form.category_ids,
+    });
+
+    setSaving(false);
+    if (categoryError) {
+      setFormError(`Produto salvo, mas não foi possível salvar as categorias: ${categoryError.message}`);
+      toast.error('Categorias não salvas', categoryError.message);
       return;
     }
 
@@ -310,7 +372,8 @@ export default function ProductsAdminPage() {
     return products.filter((product) => {
       const matchesQuery = !query || product.name.toLowerCase().includes(query) || (product.description || '').toLowerCase().includes(query) || (product.barcode || '').toLowerCase().includes(query);
       const matchesStatus = statusFilter === 'all' || (statusFilter === 'active' ? product.active : !product.active);
-      const matchesCategory = categoryFilter === 'all' || product.category_id === categoryFilter;
+      const relationIds = (product.product_categories ?? []).map((relation) => relation.category_id);
+      const matchesCategory = categoryFilter === 'all' || product.category_id === categoryFilter || relationIds.includes(categoryFilter);
       return matchesQuery && matchesStatus && matchesCategory;
     });
   }, [products, search, statusFilter, categoryFilter]);
@@ -322,6 +385,19 @@ export default function ProductsAdminPage() {
   );
   const activeCount = products.filter((product) => product.active).length;
   const stockCount = products.reduce((sum, product) => sum + Number(product.stock || 0), 0);
+
+  const roots = useMemo(() => {
+    return categories
+      .filter((category) => !category.parent_id)
+      .sort((a, b) => {
+        const ai = ROOT_ORDER.indexOf(a.name);
+        const bi = ROOT_ORDER.indexOf(b.name);
+        if (ai >= 0 && bi >= 0) return ai - bi;
+        if (ai >= 0) return -1;
+        if (bi >= 0) return 1;
+        return a.name.localeCompare(b.name, 'pt-BR');
+      });
+  }, [categories]);
 
   return (
     <main className="admin-products-page">
@@ -385,7 +461,6 @@ export default function ProductsAdminPage() {
           }
         >
           <form id="product-form" onSubmit={saveProduct} className="product-editor">
-
             <section className="ai-copy-box">
               <div className="ai-copy-heading">
                 <div className="ai-icon">
@@ -509,14 +584,58 @@ export default function ProductsAdminPage() {
                     onValueChange={(value) => setForm({ ...form, barcode: value })}
                   />
                 </div>
-                <SelectField
-                  label="Categoria"
-                  value={form.category_id}
-                  placeholder="Sem categoria"
-                  options={categories.map((category) => ({ value: category.id, label: category.name }))}
-                  onValueChange={(value) => setForm({ ...form, category_id: value })}
-                  fullWidth
-                />
+
+                <section className="category-picker" aria-labelledby="product-categories-label">
+                  <div className="category-picker-head">
+                    <div>
+                      <span id="product-categories-label" className="field-label">Categorias do produto</span>
+                      <p>Selecione uma ou várias categorias. Subcategorias também vinculam o departamento correspondente.</p>
+                    </div>
+                    <strong>{form.category_ids.length} selecionada{form.category_ids.length === 1 ? '' : 's'}</strong>
+                  </div>
+                  <div className="category-tree">
+                    {roots.map((root) => {
+                      const children = categories.filter((category) => category.parent_id === root.id).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+                      const rootSelected = form.category_ids.includes(root.id);
+                      return (
+                        <div className="category-group" key={root.id}>
+                          <label className={`category-option category-root ${rootSelected ? 'selected' : ''}`}>
+                            <input type="checkbox" checked={rootSelected} onChange={() => toggleCategory(root.id)} />
+                            <span className="category-check"><Check size={13} /></span>
+                            <strong>{root.name}</strong>
+                          </label>
+                          {children.length > 0 && (
+                            <div className="category-children">
+                              {children.map((child) => {
+                                const selected = form.category_ids.includes(child.id);
+                                return (
+                                  <label className={`category-option category-child ${selected ? 'selected' : ''}`} key={child.id}>
+                                    <input type="checkbox" checked={selected} onChange={() => toggleCategory(child.id)} />
+                                    <span className="category-check"><Check size={12} /></span>
+                                    <span>{child.name}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {form.category_ids.length > 0 && (
+                    <div className="selected-category-list">
+                      {form.category_ids.map((id) => {
+                        const category = categories.find((item) => item.id === id);
+                        if (!category) return null;
+                        return (
+                          <button type="button" key={id} className="selected-category-chip" onClick={() => toggleCategory(id)}>
+                            {category.name} <X size={12} />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
               </div>
 
               <div className="editor-media">
@@ -622,37 +741,47 @@ export default function ProductsAdminPage() {
         ) : (
           <>
             <div className="admin-product-grid">
-              {pageItems.map((product) => (
-                <article className="admin-product-card" key={product.id}>
-                  <div className="card-image">
-                    <span className={`status-pill ${product.active ? 'active' : 'inactive'}`}>{product.active ? 'Ativo' : 'Inativo'}</span>
-                    <ProductImage src={productCover(product)} alt={product.name} sizes="(max-width:950px) 50vw, 320px" />
-                  </div>
-                  <div className="card-content">
-                    <div className="card-category">{categories.find((category) => category.id === product.category_id)?.name || 'Sem categoria'}</div>
-                    <h3>{product.name}</h3>
-                    <p className="card-description">{product.description || 'Sem descrição cadastrada.'}</p>
-                    <div className="card-meta">
-                      <strong>R$ {Number(product.price).toFixed(2).replace('.', ',')}</strong>
-                      <span>{Number(product.stock) <= 0 ? 'Sem estoque' : `${product.stock} ${product.stock === 1 ? 'unidade' : 'unidades'}`}</span>
+              {pageItems.map((product) => {
+                const productCategoryNames = (product.product_categories ?? [])
+                  .map((relation) => categories.find((category) => category.id === relation.category_id)?.name)
+                  .filter(Boolean) as string[];
+                const displayCategoryNames = Array.from(new Set(productCategoryNames));
+                if (!displayCategoryNames.length && product.category_id) {
+                  const legacy = categories.find((category) => category.id === product.category_id)?.name;
+                  if (legacy) displayCategoryNames.push(legacy);
+                }
+                return (
+                  <article className="admin-product-card" key={product.id}>
+                    <div className="card-image">
+                      <span className={`status-pill ${product.active ? 'active' : 'inactive'}`}>{product.active ? 'Ativo' : 'Inativo'}</span>
+                      <ProductImage src={productCover(product)} alt={product.name} sizes="(max-width:950px) 50vw, 320px" />
                     </div>
-                    <div className="card-actions">
-                      <Link className="view-btn" href={`/produto/${product.slug || product.id}`} target="_blank">
-                        <Eye size={15} /> Ver loja
-                      </Link>
-                      <button type="button" className="edit-btn" onClick={() => startEdit(product)}>
-                        <Edit3 size={15} /> Editar
-                      </button>
-                      <button type="button" className="more-btn" onClick={() => toggle(product)} title={product.active ? 'Desativar produto' : 'Ativar produto'}>
-                        <Power size={15} />
-                      </button>
-                      <button type="button" className="more-btn danger" onClick={() => remove(product)} title="Excluir produto">
-                        <Trash2 size={15} />
-                      </button>
+                    <div className="card-content">
+                      <div className="card-category" title={displayCategoryNames.join(' · ')}>{displayCategoryNames.length ? displayCategoryNames.join(' · ') : 'Sem categoria'}</div>
+                      <h3>{product.name}</h3>
+                      <p className="card-description">{product.description || 'Sem descrição cadastrada.'}</p>
+                      <div className="card-meta">
+                        <strong>R$ {Number(product.price).toFixed(2).replace('.', ',')}</strong>
+                        <span>{Number(product.stock) <= 0 ? 'Sem estoque' : `${product.stock} ${product.stock === 1 ? 'unidade' : 'unidades'}`}</span>
+                      </div>
+                      <div className="card-actions">
+                        <Link className="view-btn" href={`/produto/${product.slug || product.id}`} target="_blank">
+                          <Eye size={15} /> Ver loja
+                        </Link>
+                        <button type="button" className="edit-btn" onClick={() => startEdit(product)}>
+                          <Edit3 size={15} /> Editar
+                        </button>
+                        <button type="button" className="more-btn" onClick={() => toggle(product)} title={product.active ? 'Desativar produto' : 'Ativar produto'}>
+                          <Power size={15} />
+                        </button>
+                        <button type="button" className="more-btn danger" onClick={() => remove(product)} title="Excluir produto">
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
             <Pagination page={page} totalPages={totalPages} onPageChange={setPage} from={from} to={to} total={total} label="produtos" scrollTargetId="lista-produtos" />
           </>
@@ -705,6 +834,24 @@ export default function ProductsAdminPage() {
         .editor-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:25px}
         .editor-main{display:grid;gap:16px;align-content:start}
         .editor-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+        .category-picker{border:1px solid #e1e1dc;background:#fff;border-radius:14px;padding:14px}
+        .category-picker-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}
+        .category-picker-head p{margin:4px 0 0;color:#777;font-size:11px;line-height:1.4}
+        .category-picker-head>strong{font-size:10px;white-space:nowrap;background:#f0f0ed;border-radius:20px;padding:6px 9px}
+        .field-label{display:block;font-size:12px;font-weight:800;color:#222}
+        .category-tree{display:grid;gap:8px;max-height:310px;overflow:auto;padding-right:2px}
+        .category-group{border:1px solid #ecece8;border-radius:11px;overflow:hidden}
+        .category-option{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+        .category-option input{position:absolute;opacity:0;pointer-events:none}
+        .category-root{padding:10px 11px;background:#f7f7f4;font-size:12px}
+        .category-root.selected{background:#fff8d9}
+        .category-children{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #ecece8}
+        .category-child{padding:8px 10px 8px 28px;font-size:11px;color:#555;border-right:1px solid #f0f0ed;border-bottom:1px solid #f0f0ed}
+        .category-child.selected{background:#fffdf1;color:#111;font-weight:700}
+        .category-check{width:18px;height:18px;border:1px solid #cfcfca;border-radius:5px;background:#fff;display:grid;place-items:center;flex:none;color:transparent}
+        .category-option.selected .category-check{background:#ffc400;border-color:#ffc400;color:#111}
+        .selected-category-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid #eee}
+        .selected-category-chip{display:inline-flex;align-items:center;gap:5px;border:1px solid #e2d58d;background:#fff9d9;color:#333;border-radius:20px;padding:6px 9px;font-size:10px;font-weight:700;cursor:pointer}
         .media-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
         .media-head strong,.media-head span{display:block}
         .media-head span{font-size:10px;color:#888;margin-top:3px}
@@ -732,7 +879,7 @@ export default function ProductsAdminPage() {
         .status-pill{position:absolute;z-index:3;left:10px;top:10px;padding:5px 8px;border-radius:20px;background:#fff;font-size:10px;font-weight:800;box-shadow:0 2px 7px rgba(0,0,0,.06)}
         .status-pill.inactive{color:#a22}
         .card-content{padding:15px}
-        .card-category{font-size:9px;text-transform:uppercase;color:#a07800;font-weight:800}
+        .card-category{font-size:9px;text-transform:uppercase;color:#a07800;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .card-content h3{margin:5px 0;font-size:17px;line-height:1.25}
         .card-description{font-size:11px;color:#777;min-height:32px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
         .card-meta{display:flex;justify-content:space-between;align-items:center;margin:12px 0;gap:8px}
@@ -775,6 +922,9 @@ export default function ProductsAdminPage() {
           .editor-footer>*{width:100%}
           .media-head{align-items:flex-start;flex-direction:column}
           .upload-btn{width:100%}
+          .category-children{grid-template-columns:1fr}
+          .category-picker-head{flex-direction:column}
+          .category-picker-head>strong{align-self:flex-start}
         }
       `}</style>
     </main>
