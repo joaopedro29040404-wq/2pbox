@@ -56,7 +56,7 @@ export function ProductImage({ src, alt, sizes = '(max-width:700px) 50vw, 300px'
   }
 
   const resolvedFit = catalogFit ? 'cover' : fit;
-  const resolvedPadding = catalogFit ? false : padded;
+  const resolvedPadding = catalogFit ? true : padded;
 
   return (
     <>
@@ -66,6 +66,8 @@ export function ProductImage({ src, alt, sizes = '(max-width:700px) 50vw, 300px'
           height: 100% !important;
           object-fit: cover !important;
           object-position: center center !important;
+          padding: 8px !important;
+          box-sizing: border-box !important;
         }
       `}</style>
       <span className={`ui-product-image ${state === 'loading' ? 'is-loading' : ''} ${className}`}>
@@ -77,7 +79,7 @@ export function ProductImage({ src, alt, sizes = '(max-width:700px) 50vw, 300px'
           loading={priority ? 'eager' : 'lazy'}
           decoding="async"
           fetchPriority={priority ? 'high' : 'auto'}
-          style={{ objectFit: resolvedFit, padding: resolvedPadding ? undefined : 0 }}
+          style={{ objectFit: resolvedFit, padding: resolvedPadding ? 8 : 0, boxSizing: 'border-box' }}
           onLoad={() => setState('ready')}
           onError={() => setState('failed')}
         />
