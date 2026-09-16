@@ -114,7 +114,7 @@ function renderCatalogPromotionSeal(card: HTMLElement, discount: number) {
   const seal = document.createElement('span');
   seal.dataset.promotionDiscountSeal = 'true';
   seal.className = 'promotion-discount-seal';
-  seal.textContent = `${discount}% OFF`;
+  seal.innerHTML = `<span class="promotion-discount-value">${discount}%</span><span class="promotion-discount-label">OFF</span>`;
   image.appendChild(seal);
 }
 
@@ -139,7 +139,7 @@ function renderHomePromotionCards(products: Array<PromotionRow & { product: Prom
         <div class="home-product-image home-promotion-product-image">
           ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(product.name)}" loading="eager" />` : '<div class="home-promotion-placeholder">2P BOX</div>'}
           <span class="home-promotion-badge">OFERTA</span>
-          <span class="home-promotion-discount">${discount}% OFF</span>
+          <span class="home-promotion-discount"><span class="promotion-discount-value">${discount}%</span><span class="promotion-discount-label">OFF</span></span>
         </div>
         <div class="home-product-info">
           <small>2P BOX</small>
@@ -384,7 +384,9 @@ export function MarketingPromotions() {
       .home-promotion-product-image img{display:block;width:100%;height:100%;object-fit:contain}
       .home-promotion-badge,.home-promotion-discount{position:absolute;z-index:2;font-weight:900;letter-spacing:.04em}
       .home-promotion-badge{left:13px;top:13px;padding:10px 15px;background:${PROMO_YELLOW};color:#111;border-radius:999px;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,.12)}
-      .home-promotion-discount{left:13px;bottom:13px;width:82px;height:82px;display:flex;align-items:center;justify-content:center;text-align:center;background:#ef1f2f;color:#fff;border-radius:50%;font-size:14px;line-height:1.05;box-shadow:0 4px 12px rgba(0,0,0,.16);clip-path:polygon(50% 0%,58% 7%,68% 3%,74% 13%,85% 12%,87% 23%,97% 28%,93% 39%,100% 50%,93% 61%,97% 72%,87% 77%,85% 88%,74% 87%,68% 97%,58% 93%,50% 100%,42% 93%,32% 97%,26% 87%,15% 88%,13% 77%,3% 72%,7% 61%,0% 50%,7% 39%,3% 28%,13% 23%,15% 12%,26% 13%,32% 3%,42% 7%)}
+      .home-promotion-discount{left:13px;bottom:13px;width:82px;height:82px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:#ef1f2f;color:#fff;border-radius:50%;box-shadow:0 4px 12px rgba(0,0,0,.16);clip-path:polygon(50% 0%,58% 7%,68% 3%,74% 13%,85% 12%,87% 23%,97% 28%,93% 39%,100% 50%,93% 61%,97% 72%,87% 77%,85% 88%,74% 87%,68% 97%,58% 93%,50% 100%,42% 93%,32% 97%,26% 87%,15% 88%,13% 77%,3% 72%,7% 61%,0% 50%,7% 39%,3% 28%,13% 23%,15% 12%,26% 13%,32% 3%,42% 7%)}
+      .promotion-discount-value{display:block;font:900 23px/1 Inter,Arial,sans-serif;letter-spacing:-.03em}
+      .promotion-discount-label{display:block;margin-top:3px;font:900 13px/1 Inter,Arial,sans-serif;letter-spacing:.02em}
       .home-promotion-prices{display:flex;flex-direction:column;gap:3px;margin-top:auto;line-height:1}
       .home-promotion-prices s{color:#888;font-size:13px;font-weight:700}
       .home-promotion-prices strong{color:${PROMO_YELLOW};font-size:26px;font-weight:900;letter-spacing:-.02em}
@@ -400,7 +402,9 @@ export function MarketingPromotions() {
       .promotion-offer-card.product [data-marketing-promotion-price] strong{color:${PROMO_YELLOW}!important;font-size:26px!important;font-weight:900!important}
       .promotion-offer-card.product .catalog-add-button{min-height:52px;padding:0 22px;border-radius:10px;background:${PROMO_YELLOW};color:#111;font-size:13px;font-weight:900;box-shadow:0 4px 10px rgba(0,0,0,.08)}
 
-      .promotion-discount-seal{position:absolute;left:12px;bottom:12px;z-index:4;width:82px;height:82px;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;box-sizing:border-box;background:#ef1f2f;color:#fff;border-radius:50%;font:900 14px/1.05 Inter,Arial,sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.16);clip-path:polygon(50% 0%,58% 7%,68% 3%,74% 13%,85% 12%,87% 23%,97% 28%,93% 39%,100% 50%,93% 61%,97% 72%,87% 77%,85% 88%,74% 87%,68% 97%,58% 93%,50% 100%,42% 93%,32% 97%,26% 87%,15% 88%,13% 77%,3% 72%,7% 61%,0% 50%,7% 39%,3% 28%,13% 23%,15% 12%,26% 13%,32% 3%,42% 7%)}
+      .promotion-discount-seal{position:absolute;left:12px;bottom:12px;z-index:4;width:82px;height:82px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:10px;box-sizing:border-box;background:#ef1f2f;color:#fff;border-radius:50%;box-shadow:0 4px 12px rgba(0,0,0,.16);clip-path:polygon(50% 0%,58% 7%,68% 3%,74% 13%,85% 12%,87% 23%,97% 28%,93% 39%,100% 50%,93% 61%,97% 72%,87% 77%,85% 88%,74% 87%,68% 97%,58% 93%,50% 100%,42% 93%,32% 97%,26% 87%,15% 88%,13% 77%,3% 72%,7% 61%,0% 50%,7% 39%,3% 28%,13% 23%,15% 12%,26% 13%,32% 3%,42% 7%)}
+      .promotion-discount-seal .promotion-discount-value{font-size:23px}
+      .promotion-discount-seal .promotion-discount-label{font-size:13px}
 
       .home-promotions-empty{grid-column:1/-1;padding:38px 20px;border:1px dashed #ddd;border-radius:14px;background:#fff;text-align:center;color:#777;font-size:13px}
       @media(max-width:900px){
@@ -411,9 +415,13 @@ export function MarketingPromotions() {
         .home-product-tabs{gap:5px}
         .home-product-tab{padding:8px 11px;font-size:8px}
         .home-promotion-badge{left:8px;top:8px;padding:7px 10px;font-size:9px}
-        .home-promotion-discount{left:8px;bottom:8px;width:64px;height:64px;font-size:11px}
+        .home-promotion-discount{left:8px;bottom:8px;width:64px;height:64px}
+        .home-promotion-discount .promotion-discount-value{font-size:17px}
+        .home-promotion-discount .promotion-discount-label{font-size:10px;margin-top:2px}
         .home-promotion-prices strong{font-size:20px}
-        .promotion-discount-seal{left:8px;bottom:8px;width:64px;height:64px;font-size:11px}
+        .promotion-discount-seal{left:8px;bottom:8px;width:64px;height:64px;padding:7px}
+        .promotion-discount-seal .promotion-discount-value{font-size:17px}
+        .promotion-discount-seal .promotion-discount-label{font-size:10px;margin-top:2px}
         .promotion-offer-card.product .product-body{padding:11px}
         .promotion-offer-card.product .product-buy{display:block;padding-top:12px}
         .promotion-offer-card.product [data-marketing-promotion-price] strong{font-size:21px!important}
