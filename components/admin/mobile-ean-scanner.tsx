@@ -63,20 +63,11 @@ function putBarcodeInSearch(barcode: string) {
 }
 
 export function MobileEanScanner() {
-  const [isMobile, setIsMobile] = useState(false);
   const [open, setOpen] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState('');
   const scannerRef = useRef<InstanceType<NonNullable<typeof window.Html5Qrcode>> | null>(null);
   const handledRef = useRef(false);
-
-  useEffect(() => {
-    const media = window.matchMedia('(max-width: 640px)');
-    const update = () => setIsMobile(media.matches);
-    update();
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, []);
 
   async function stopScanner() {
     const scanner = scannerRef.current;
@@ -98,10 +89,11 @@ export function MobileEanScanner() {
     await stopScanner();
     setOpen(false);
     setStarting(false);
+    setError('');
   }
 
   async function start() {
-    if (!isMobile || open || starting) return;
+    if (open || starting) return;
     setOpen(true);
     setStarting(true);
     setError('');
@@ -131,8 +123,7 @@ export function MobileEanScanner() {
           await stopScanner();
           setOpen(false);
           setStarting(false);
-          const found = putBarcodeInSearch(barcode);
-          if (!found) setError('Não encontrei o campo de busca. Recarregue a página e tente novamente.');
+          putBarcodeInSearch(barcode);
         },
         () => {
           // Falhas de leitura são esperadas enquanto a câmera procura o código.
@@ -149,8 +140,6 @@ export function MobileEanScanner() {
   useEffect(() => () => {
     void stopScanner();
   }, []);
-
-  if (!isMobile) return null;
 
   return (
     <>
@@ -204,8 +193,8 @@ export function MobileEanScanner() {
         .mobile-ean-status{position:absolute;left:12px;right:12px;bottom:12px;background:rgba(0,0,0,.72);color:#fff;padding:9px 12px;border-radius:9px;text-align:center;font-size:12px}
         .mobile-ean-error{margin-top:10px;padding:10px 12px;border-radius:9px;background:#fff0f0;color:#a22;font-size:12px}
         .mobile-ean-cancel{width:100%;margin-top:10px;height:44px;border:1px solid #ddd;border-radius:10px;background:#fff;font-weight:800;cursor:pointer}
-        @media(max-width:640px){
-          .mobile-ean-trigger{display:inline-flex;align-items:center;justify-content:center;gap:7px;width:100%;min-height:46px;margin-top:8px;border:1px solid #ddd;border-radius:10px;background:#111;color:#fff;font-weight:800;font-size:12px;cursor:pointer}
+        @media(max-width:768px){
+          .mobile-ean-trigger{position:fixed;left:12px;right:12px;bottom:max(12px,env(safe-area-inset-bottom));z-index:9998;display:flex;align-items:center;justify-content:center;gap:7px;width:auto;min-height:48px;border:1px solid #222;border-radius:12px;background:#111;color:#fff;font-weight:800;font-size:13px;cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.22)}
         }
       `}</style>
     </>
