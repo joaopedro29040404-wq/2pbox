@@ -17,7 +17,7 @@ type ProductCategory = { id: string; name: string; parent_id: string | null };
 type Product = {
   id: string; name: string; slug: string; description: string | null; price: number; stock: number;
   image_url: string | null; images?: string[] | null; category_id: string | null;
-  categories?: ProductCategory | null; product_categories?: { category_id: string; categories?: ProductCategory | null }[] | null;
+  product_categories?: { category_id: string; categories?: ProductCategory | null }[] | null;
 };
 type AuthUser = { id: string; user_metadata?: { full_name?: string } };
 
@@ -51,7 +51,7 @@ export default function LojaPage() {
     }
     async function load() {
       const [{ data, error }, { data: categoryRows }, { data: auth }] = await Promise.all([
-        client.from('products').select('id,name,slug,description,price,stock,image_url,images,category_id,categories(id,name,parent_id),product_categories(category_id,categories(id,name,parent_id))').eq('active', true).order('created_at', { ascending: false }),
+        client.from('products').select('id,name,slug,description,price,stock,image_url,images,category_id,product_categories(category_id,categories(id,name,parent_id))').eq('active', true).order('created_at', { ascending: false }),
         client.from('categories').select('id,name,parent_id').eq('active', true).order('name'),
         client.auth.getUser(),
       ]);
@@ -159,7 +159,7 @@ export default function LojaPage() {
         ) : (
           <><div className="product-grid">{pageItems.map((product) => {
             const names = (product.product_categories ?? []).map((row) => row.categories?.name).filter(Boolean) as string[];
-            return <article className="product" key={product.id}><div className="product-image-wrap"><Link href={`/produto/${product.slug}`} className="product-image-link"><div className="product-image"><ProductImage src={productCover(product)} alt={product.name} sizes="(max-width:700px) 50vw, 280px" />{product.stock > 0 && product.stock <= 5 && <span className="low-stock">Últimas unidades</span>}</div></Link><button type="button" aria-label={favorites.includes(product.id) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'} className={`product-favorite ${favorites.includes(product.id) ? 'is-favorite' : ''}`} onClick={() => toggleFavorite(product.id)}><Heart size={15} strokeWidth={1.8} fill={favorites.includes(product.id) ? 'currentColor' : 'none'} /></button></div><div className="product-body"><Link href={`/produto/${product.slug}`} className="product-info-link"><small>{names.slice(0, 2).join(' • ') || product.categories?.name || '2P Box'}</small><h2>{product.name}</h2>{product.description && <p>{product.description}</p>}</Link><div className="product-buy"><strong>R$ {Number(product.price).toFixed(2).replace('.', ',')}</strong><button type="button" className={`catalog-add-button ${added === product.id ? 'added' : ''}`} disabled={product.stock <= 0} onClick={() => addProduct(product)}>{added === product.id ? <><Check size={16} /> Adicionado</> : product.stock > 0 ? 'Adicionar' : 'Indisponível'}</button></div></div></article>;
+            return <article className="product" key={product.id}><div className="product-image-wrap"><Link href={`/produto/${product.slug}`} className="product-image-link"><div className="product-image"><ProductImage src={productCover(product)} alt={product.name} sizes="(max-width:700px) 50vw, 280px" />{product.stock > 0 && product.stock <= 5 && <span className="low-stock">Últimas unidades</span>}</div></Link><button type="button" aria-label={favorites.includes(product.id) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'} className={`product-favorite ${favorites.includes(product.id) ? 'is-favorite' : ''}`} onClick={() => toggleFavorite(product.id)}><Heart size={15} strokeWidth={1.8} fill={favorites.includes(product.id) ? 'currentColor' : 'none'} /></button></div><div className="product-body"><Link href={`/produto/${product.slug}`} className="product-info-link"><small>{names.slice(0, 2).join(' • ') || '2P Box'}</small><h2>{product.name}</h2>{product.description && <p>{product.description}</p>}</Link><div className="product-buy"><strong>R$ {Number(product.price).toFixed(2).replace('.', ',')}</strong><button type="button" className={`catalog-add-button ${added === product.id ? 'added' : ''}`} disabled={product.stock <= 0} onClick={() => addProduct(product)}>{added === product.id ? <><Check size={16} /> Adicionado</> : product.stock > 0 ? 'Adicionar' : 'Indisponível'}</button></div></div></article>;
           })}</div><Pagination page={page} totalPages={totalPages} onPageChange={setPage} from={from} to={to} total={total} label="produtos" scrollTargetId="catalogo" /></>
         )}
       </section>
