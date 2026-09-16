@@ -16,6 +16,7 @@ export type ModalProps = {
 
 export function Modal({ open, onClose, title, eyebrow, description, size = 'lg', footer, children }: ModalProps) {
   const panel = useRef<HTMLDivElement>(null);
+  const overlay = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
 
@@ -33,44 +34,54 @@ export function Modal({ open, onClose, title, eyebrow, description, size = 'lg',
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    panel.current?.focus();
+
+    const viewport = window.visualViewport;
+    const syncViewport = () => {
+      const height = viewport?.height ?? window.innerHeight;
+      const top = viewport?.offsetTop ?? 0;
+      const isKeyboardOpen = height < window.innerHeight - 80;
+
+      overlay.current?.style.setProperty('--modal-viewport-height', `${height}px`);
+      overlay.current?.style.setProperty('--modal-viewport-top', `${top}px`);
+      panel.current?.classList.toggle('is-keyboard-open', isKeyboardOpen);
+    };
+
+    syncViewport();
+    viewport?.addEventListener('resize', syncViewport);
+    viewport?.addEventListener('scroll', syncViewport);
+    window.addEventListener('resize', syncViewport);
 
     return () => {
       document.removeEventListener('keydown', onKeyDown);
+      viewport?.removeEventListener('resize', syncViewport);
+      viewport?.removeEventListener('scroll', syncViewport);
+      window.removeEventListener('resize', syncViewport);
       document.body.style.overflow = previousOverflow;
     };
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
+  function keepFocusedFieldVisible(target: EventTarget | null) {
+    const field = target instanceof HTMLElement ? target.closest('input, textarea, select') as HTMLElement | null : null;
+    const scrollArea = body.current;
+    if (!field || !scrollArea) return;
 
-    const viewport = window.visualViewport;
-    if (!viewport) return;
+    const alignField = () => {
+      const areaRect = scrollArea.getBoundingClientRect();
+      const fieldRect = field.getBoundingClientRect();
+      const topPadding = 16;
+      const bottomPadding = 24;
 
-    const updateViewportHeight = () => {
-      document.documentElement.style.setProperty('--ui-modal-vh', `${viewport.height}px`);
+      if (fieldRect.bottom > areaRect.bottom - bottomPadding) {
+        scrollArea.scrollTop += fieldRect.bottom - (areaRect.bottom - bottomPadding);
+      } else if (fieldRect.top < areaRect.top + topPadding) {
+        scrollArea.scrollTop -= areaRect.top + topPadding - fieldRect.top;
+      }
     };
 
-    const keepFocusedFieldVisible = () => {
-      const active = document.activeElement;
-      if (!active || !body.current?.contains(active)) return;
-      if (!(active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement)) return;
-
-      window.setTimeout(() => {
-        active.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
-      }, 80);
-    };
-
-    updateViewportHeight();
-    viewport.addEventListener('resize', updateViewportHeight);
-    body.current?.addEventListener('focusin', keepFocusedFieldVisible);
-
-    return () => {
-      viewport.removeEventListener('resize', updateViewportHeight);
-      body.current?.removeEventListener('focusin', keepFocusedFieldVisible);
-      document.documentElement.style.removeProperty('--ui-modal-vh');
-    };
-  }, [open]);
+    requestAnimationFrame(alignField);
+    window.setTimeout(alignField, 80);
+    window.setTimeout(alignField, 220);
+  }
 
   if (!open) return null;
 
@@ -79,15 +90,18 @@ export function Modal({ open, onClose, title, eyebrow, description, size = 'lg',
       <style>{`
         @media (max-width: 640px) {
           .ui-modal-overlay {
-            height: var(--ui-modal-vh, 100dvh);
-            min-height: var(--ui-modal-vh, 100dvh);
+            height: var(--modal-viewport-height, 100dvh);
+            min-height: var(--modal-viewport-height, 100dvh);
+            top: var(--modal-viewport-top, 0px);
+            bottom: auto;
             padding: 0;
             align-items: flex-end;
+            overflow: hidden;
           }
 
           .ui-modal {
-            height: var(--ui-modal-vh, 100dvh);
-            max-height: var(--ui-modal-vh, 100dvh);
+            height: var(--modal-viewport-height, 100dvh);
+            max-height: var(--modal-viewport-height, 100dvh);
             min-height: 0;
             border-radius: 18px 18px 0 0;
           }
@@ -114,24 +128,26 @@ export function Modal({ open, onClose, title, eyebrow, description, size = 'lg',
             overflow-y: auto;
             overscroll-behavior: contain;
             -webkit-overflow-scrolling: touch;
-            scroll-padding-top: 20px;
-            scroll-padding-bottom: 180px;
+            scroll-padding: 20px;
           }
 
           .ui-modal-body input,
           .ui-modal-body textarea,
           .ui-modal-body select {
-            scroll-margin-top: 20px;
-            scroll-margin-bottom: 180px;
+            scroll-margin: 20px;
           }
 
           .ui-modal-foot {
             flex: none;
             padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
           }
+
+          .ui-modal.is-keyboard-open .ui-modal-foot {
+            padding-bottom: 8px;
+          }
         }
       `}</style>
-      <div className="ui-modal-overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <div ref={overlay} className="ui-modal-overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
         <div
           className={`ui-modal ui-modal-${size}`}
           role="dialog"
@@ -151,7 +167,9 @@ export function Modal({ open, onClose, title, eyebrow, description, size = 'lg',
             </button>
           </header>
 
-          <div className="ui-modal-body" ref={body}>{children}</div>
+          <div ref={body} className="ui-modal-body" onFocusCapture={(event) => keepFocusedFieldVisible(event.target)}>
+            {children}
+          </div>
 
           {footer && <footer className="ui-modal-foot">{footer}</footer>}
         </div>
