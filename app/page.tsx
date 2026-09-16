@@ -99,7 +99,7 @@ export default function Home() {
           </div>
           <div className="home-category-grid">
             {visibleCategories.map((category, index) => (
-              <Link key={category.id || category.name} href={category.id.startsWith('papelaria') || category.id.startsWith('eletronicos') || category.id.startsWith('acessorios') || category.id.startsWith('variedades') ? `/loja?categoria=${encodeURIComponent(category.id)}` : '/loja'} className="home-category-card">
+              <Link key={category.id || category.name} href={`/loja?categoria=${encodeURIComponent(category.id)}`} className="home-category-card">
                 <div className="home-category-icon"><CategoryIcon index={index} /></div>
                 <div className="home-category-copy"><p>{String(index + 1).padStart(2, '0')}</p><h3>{category.name}</h3><span>{category.description || 'Confira as subcategorias e produtos deste departamento.'}</span></div>
                 <ArrowRight className="home-category-arrow" size={18} />
