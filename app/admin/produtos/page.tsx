@@ -31,6 +31,8 @@ type Product = {
   name: string;
   description: string | null;
   price: number;
+  cost: number;
+  barcode: string | null;
   stock: number;
   active: boolean;
   category_id: string | null;
@@ -42,9 +44,9 @@ type Product = {
 };
 type Category = { id: string; name: string };
 type AiCopy = { title: string; description: string; features: string[] };
-type FormState = { name: string; description: string; price: string; stock: string; category_id: string; image_url: string; images: string[] };
+type FormState = { name: string; description: string; price: string; cost: string; barcode: string; stock: string; category_id: string; image_url: string; images: string[] };
 
-const empty: FormState = { name: '', description: '', price: '', stock: '0', category_id: '', image_url: '', images: [] };
+const empty: FormState = { name: '', description: '', price: '', cost: '', barcode: '', stock: '0', category_id: '', image_url: '', images: [] };
 const FETCH_SIZE = 1000;
 const PAGE_SIZE = 20;
 
@@ -93,7 +95,7 @@ export default function ProductsAdminPage() {
       for (;;) {
         const { data, error } = await supabase
           .from('products')
-          .select('id,name,description,price,stock,active,category_id,image_url,images,slug,updated_at,created_at')
+          .select('id,name,description,price,cost,barcode,stock,active,category_id,image_url,images,slug,updated_at,created_at')
           .order('updated_at', { ascending: false, nullsFirst: false })
           .range(from, from + FETCH_SIZE - 1);
         if (error) throw error;
@@ -138,6 +140,8 @@ export default function ProductsAdminPage() {
       name: product.name,
       description: product.description || '',
       price: String(product.price),
+      cost: String(product.cost ?? 0),
+      barcode: product.barcode || '',
       stock: String(product.stock),
       category_id: product.category_id || '',
       image_url: product.image_url || images[0] || '',
@@ -225,6 +229,8 @@ export default function ProductsAdminPage() {
       name: form.name.trim(),
       description: form.description.trim() || null,
       price: Number(form.price),
+      cost: Number(form.cost || 0),
+      barcode: form.barcode.trim() || null,
       stock: Number(form.stock || 0),
       category_id: form.category_id || null,
       image_url: images[0] || form.image_url || null,
@@ -302,7 +308,7 @@ export default function ProductsAdminPage() {
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return products.filter((product) => {
-      const matchesQuery = !query || product.name.toLowerCase().includes(query) || (product.description || '').toLowerCase().includes(query);
+      const matchesQuery = !query || product.name.toLowerCase().includes(query) || (product.description || '').toLowerCase().includes(query) || (product.barcode || '').toLowerCase().includes(query);
       const matchesStatus = statusFilter === 'all' || (statusFilter === 'active' ? product.active : !product.active);
       const matchesCategory = categoryFilter === 'all' || product.category_id === categoryFilter;
       return matchesQuery && matchesStatus && matchesCategory;
@@ -466,7 +472,7 @@ export default function ProductsAdminPage() {
                 />
                 <div className="editor-cols">
                   <TextField
-                    label="Preço"
+                    label="Preço de venda"
                     required
                     type="number"
                     min="0"
@@ -476,6 +482,17 @@ export default function ProductsAdminPage() {
                     onValueChange={(value) => setForm({ ...form, price: value })}
                   />
                   <TextField
+                    label="Preço de custo"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0,00"
+                    value={form.cost}
+                    onValueChange={(value) => setForm({ ...form, cost: value })}
+                  />
+                </div>
+                <div className="editor-cols">
+                  <TextField
                     label="Estoque"
                     required
                     type="number"
@@ -483,6 +500,13 @@ export default function ProductsAdminPage() {
                     placeholder="0"
                     value={form.stock}
                     onValueChange={(value) => setForm({ ...form, stock: value })}
+                  />
+                  <TextField
+                    label="EAN / Código de barras"
+                    inputMode="numeric"
+                    placeholder="Escaneie ou digite o EAN"
+                    value={form.barcode}
+                    onValueChange={(value) => setForm({ ...form, barcode: value })}
                   />
                 </div>
                 <SelectField
@@ -541,7 +565,7 @@ export default function ProductsAdminPage() {
           <div className="span-6">
             <TextField
               aria-label="Buscar produto"
-              placeholder="Buscar por nome ou descrição..."
+              placeholder="Buscar por nome, descrição ou EAN..."
               value={search}
               icon={<Search size={17} />}
               onValueChange={setSearch}
