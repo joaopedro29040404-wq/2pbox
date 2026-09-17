@@ -11,13 +11,34 @@ export default function AnalyticsLayout({ children }: { children: ReactNode }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
-    const target = document.querySelector('.analytics-cards, .dashboard-cards');
-    if (!target?.parentElement) return;
-    const node = document.createElement('div');
-    node.className = 'analytics-switcher-slot';
-    target.parentElement.insertBefore(node, target);
-    setSlot(node);
-    return () => node.remove();
+    let active = true;
+    let observer: MutationObserver | null = null;
+
+    const mount = () => {
+      if (!active || slot) return;
+      const target = document.querySelector('.analytics-cards, .dashboard-cards');
+      if (!target?.parentElement) return;
+      const node = document.createElement('div');
+      node.className = 'analytics-switcher-slot';
+      target.parentElement.insertBefore(node, target);
+      setSlot(node);
+      observer?.disconnect();
+    };
+
+    mount();
+    if (!slot) {
+      observer = new MutationObserver(mount);
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    return () => {
+      active = false;
+      observer?.disconnect();
+      setSlot((current) => {
+        current?.remove();
+        return null;
+      });
+    };
   }, [pathname]);
 
   const tabs = (
