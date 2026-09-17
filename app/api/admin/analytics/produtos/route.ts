@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || start >= end) return NextResponse.json({ error: 'Período inválido.' }, { status: 400 });
 
   const [{ data: products, error: productsError }, { data: events, error: eventsError }, { data: orders, error: ordersError }, { data: promotions, error: promotionsError }] = await Promise.all([
-    client.from('products').select('id,name,slug,price,cost,stock,active,image_url,images,category_id,product_categories(category_id,categories(id,name,parent_id))').order('name', { ascending: true }).range(0, 19999),
+    client.from('products').select('id,name,slug,price,cost,stock,active,image_url,images,category_id,product_categories(category_id,categories(id,name,parent_id))').eq('active', true).order('name', { ascending: true }).range(0, 19999),
     client.from('analytics_events').select('event_name,session_id,product_id,order_id,value,created_at').gte('created_at', start.toISOString()).lt('created_at', end.toISOString()).not('product_id', 'is', null).range(0, 49999),
     client.from('orders').select('id,total,payment_status,is_test,analytics_excluded,analytics_session_id').gte('created_at', start.toISOString()).lt('created_at', end.toISOString()).range(0, 9999),
     client.from('promotions').select('id,product_id,promotional_price,starts_at,ends_at,active').eq('active', true),
@@ -66,7 +66,7 @@ export async function GET(request: Request) {
   for (const product of (products || []) as any[]) {
     const promotion = activePromotions.get(product.id);
     map.set(product.id, {
-      id: product.id, name: product.name, slug: product.slug, price: Number(product.price || 0), cost: Number(product.cost || 0), stock: Number(product.stock || 0), active: Boolean(product.active), image: imageFrom(product), categories: categoryNames(product), promotion: promotion ? { id: promotion.id, price: Number(promotion.promotional_price || 0), startsAt: promotion.starts_at, endsAt: promotion.ends_at } : null,
+      id: product.id, name: product.name, slug: product.slug, price: Number(product.price || 0), cost: Number(product.cost || 0), stock: Number(product.stock || 0), active: true, image: imageFrom(product), categories: categoryNames(product), promotion: promotion ? { id: promotion.id, price: Number(promotion.promotional_price || 0), startsAt: promotion.starts_at, endsAt: promotion.ends_at } : null,
       visitors: new Set<string>(), views: 0, carts: 0, cartRemoves: 0, checkouts: 0, paymentStarts: 0, orders: new Set<string>(), units: 0, revenue: 0,
     });
   }
@@ -99,7 +99,7 @@ export async function GET(request: Request) {
     if (row.stock <= 5) indicators.push('Estoque baixo');
     if (interestLowConversion) indicators.push('Alto interesse');
     if (row.revenue > 0 && marginRate < 20) indicators.push('Margem apertada');
-    return { id: row.id, name: row.name, slug: row.slug, image: row.image, categories: row.categories, price: row.price, cost: row.cost, stock: row.stock, active: row.active, promotion: row.promotion, visitors: row.visitors.size, views: row.views, carts: row.carts, cartRemoves: row.cartRemoves, checkouts: row.checkouts, paymentStarts: row.paymentStarts, orders: ordersCount, units: row.units, revenue: round(row.revenue), ticket: round(ticket), conversion: round(conversion), cartRate: round(cartRate), estimatedMargin: round(estimatedMargin), marginRate: round(marginRate), interestLowConversion, indicators };
+    return { id: row.id, name: row.name, slug: row.slug, image: row.image, categories: row.categories, price: row.price, cost: row.cost, stock: row.stock, active: true, promotion: row.promotion, visitors: row.visitors.size, views: row.views, carts: row.carts, cartRemoves: row.cartRemoves, checkouts: row.checkouts, paymentStarts: row.paymentStarts, orders: ordersCount, units: row.units, revenue: round(row.revenue), ticket: round(ticket), conversion: round(conversion), cartRate: round(cartRate), estimatedMargin: round(estimatedMargin), marginRate: round(marginRate), interestLowConversion, indicators };
   });
   const sorters: Record<string, (a: any, b: any) => number> = {
     views: (a,b) => b.views-a.views || b.visitors-a.visitors,
