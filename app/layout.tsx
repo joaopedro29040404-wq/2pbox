@@ -9,6 +9,7 @@ import { ToastProvider } from '@/components/ui/toast';
 import { WhatsAppFloat } from '@/components/whatsapp-float';
 import { MarketingCoupon } from '@/components/marketing-coupon';
 import { MarketingPromotions } from '@/components/marketing-promotions';
+import AnalyticsTracker from '@/components/analytics-tracker';
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://2pbox.com.br'),
@@ -36,6 +37,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <ToastProvider>
           <CartProvider>
+            <AnalyticsTracker />
             {children}
             <MarketingCoupon />
             <MarketingPromotions />

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BarChart3, Box, ChevronRight, LayoutDashboard, Package, Settings, ShoppingCart, Tags, TrendingUp, Megaphone } from 'lucide-react';
+import { BarChart3, Box, ChevronRight, LayoutDashboard, Package, Settings, ShoppingCart, Tags, TrendingUp, Megaphone, Share2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { SiteHeader } from '@/components/site-header';
 import { money } from '@/lib/order-format';
@@ -11,10 +11,12 @@ type OrderRow = { created_at: string; status: string; payment_status?: string | 
 type Stat = { label: string; value: string; hint: string; icon: typeof Package };
 
 const MENU = [
+  { href: '/admin/analytics', title: 'Analytics', text: 'Funil, tráfego, produtos, vendas e conversão.', icon: BarChart3, tone: 'yellow' },
   { href: '/admin/produtos', title: 'Produtos', text: 'Catálogo, estoque, preços, fotos e conteúdo.', icon: Package, tone: 'yellow' },
   { href: '/admin/categorias', title: 'Categorias', text: 'Organize e mantenha seu catálogo limpo.', icon: Tags, tone: 'soft' },
   { href: '/admin/pedidos', title: 'Pedidos', text: 'Acompanhe vendas, pagamentos e status.', icon: ShoppingCart, tone: 'soft' },
   { href: '/admin/marketing', title: 'Marketing', text: 'Promoções, cupons e campanhas de venda.', icon: Megaphone, tone: 'yellow' },
+  { href: '/admin/marketing/divulgar', title: 'Divulgação', text: 'Gere links rastreáveis para divulgar produtos.', icon: Share2, tone: 'soft' },
   { href: '/admin/configuracoes', title: 'Configurações', text: 'Dados da loja, retirada, contato e atendimento.', icon: Settings, tone: 'soft' },
 ];
 
@@ -72,18 +74,13 @@ export default function AdminPage() {
             <h1>Dashboard</h1>
             <p>Acompanhe a operação da 2P Box em um só lugar.</p>
           </div>
-          <div className="admin-live">
-            <i /> Dados em tempo real
-          </div>
+          <div className="admin-live"><i /> Dados em tempo real</div>
         </div>
 
         <div className="admin-stat-grid">
           {stats.map(({ label, value, hint, icon: Icon }) => (
             <article className="admin-stat" key={label}>
-              <div className="admin-stat-top">
-                <span>{label}</span>
-                <b><Icon size={17} /></b>
-              </div>
+              <div className="admin-stat-top"><span>{label}</span><b><Icon size={17} /></b></div>
               <strong>{value}</strong>
               <small>{hint}</small>
             </article>
@@ -91,10 +88,7 @@ export default function AdminPage() {
         </div>
 
         <div className="admin-section-title">
-          <div>
-            <p className="admin-eyebrow">OPERAÇÃO</p>
-            <h2>Acesso rápido</h2>
-          </div>
+          <div><p className="admin-eyebrow">OPERAÇÃO</p><h2>Acesso rápido</h2></div>
           <span>{MENU.length} áreas</span>
         </div>
 
