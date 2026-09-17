@@ -27,16 +27,12 @@ export async function GET(request: Request) {
   if (blockedIpsError) return NextResponse.json({ error: blockedIpsError.message }, { status: 500 });
   if (eventsError) return NextResponse.json({ error: eventsError.message }, { status: 500 });
   const excluded = new Set((exclusions || []).map((row) => row.session_id));
-  const blocked = new Set((blockedIps || []).map((row) => row.ip_address));
   const detected = new Map<string, { session_id: string; device_type: string; last_seen: string; source: string | null; ip_address: string | null }>();
   for (const event of events || []) {
     if (!event.session_id) continue;
     const existing = detected.get(event.session_id);
-    if (!existing) {
-      detected.set(event.session_id, { session_id: event.session_id, device_type: event.device_type || 'unknown', last_seen: event.created_at, source: event.utm_source || event.referrer || null, ip_address: event.ip_address || null });
-    } else if (!existing.ip_address && event.ip_address) {
-      existing.ip_address = event.ip_address;
-    }
+    if (!existing) detected.set(event.session_id, { session_id: event.session_id, device_type: event.device_type || 'unknown', last_seen: event.created_at, source: event.utm_source || event.referrer || null, ip_address: event.ip_address || null });
+    else if (!existing.ip_address && event.ip_address) existing.ip_address = event.ip_address;
   }
   const current = detected.get(sessionId);
   return NextResponse.json({ current_session_id: sessionId || null, current_ip: clientIp(request) || current?.ip_address || null, excluded: sessionId ? excluded.has(sessionId) : false, excluded_devices: exclusions || [], blocked_ips: blockedIps || [], detected_devices: Array.from(detected.values()).slice(0, 50) }, { headers: { 'Cache-Control': 'no-store' } });
@@ -61,6 +57,13 @@ export async function POST(request: Request) {
     if (ids.length) await client.from('orders').update({ analytics_excluded: true }).in('analytics_session_id', ids);
     return NextResponse.json({ ok: true });
   }
+  if (action === 'unblock_ip') {
+    const ip = String(body?.ip_address || '').trim().slice(0, 120);
+    if (!ip) return NextResponse.json({ error: 'IP inválido.' }, { status: 400 });
+    const { error } = await client.from('analytics_excluded_ips').delete().eq('ip_address', ip);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
   if (!sessionId) return NextResponse.json({ error: 'Dispositivo inválido.' }, { status: 400 });
   if (action === 'exclude') {
     const { error } = await client.from('analytics_excluded_devices').upsert({ session_id: sessionId, label, excluded_by: admin.id, excluded_at: new Date().toISOString() }, { onConflict: 'session_id' });
@@ -70,11 +73,6 @@ export async function POST(request: Request) {
     const { error } = await client.from('analytics_excluded_devices').delete().eq('session_id', sessionId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     await client.from('orders').update({ analytics_excluded: false }).eq('analytics_session_id', sessionId);
-  } else if (action === 'unblock_ip') {
-    const ip = String(body?.ip_address || '').trim().slice(0, 120);
-    if (!ip) return NextResponse.json({ error: 'IP inválido.' }, { status: 400 });
-    const { error } = await client.from('analytics_excluded_ips').delete().eq('ip_address', ip);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   } else return NextResponse.json({ error: 'Ação inválida.' }, { status: 400 });
   return NextResponse.json({ ok: true });
 }
