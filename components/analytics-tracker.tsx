@@ -42,9 +42,20 @@ export default function AnalyticsTracker() {
     let lastCart = readCart();
     let cartInitialized = false;
     let stopped = false;
+    let excludedPromise: Promise<boolean> | null = null;
+
+    async function isExcluded() {
+      if (!excludedPromise) {
+        excludedPromise = originalFetch(`/api/admin/analytics/devices?session_id=${encodeURIComponent(getSessionId())}`, { cache: 'no-store' })
+          .then((response) => response.ok ? response.json() : { excluded: false })
+          .then((result) => Boolean(result?.excluded))
+          .catch(() => false);
+      }
+      return excludedPromise;
+    }
 
     async function send(payload: EventPayload) {
-      if (stopped) return;
+      if (stopped || await isExcluded()) return;
       const attribution = getAttribution();
       try {
         await originalFetch('/api/analytics/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, session_id: getSessionId(), utm_source: attribution.source, utm_medium: attribution.medium, utm_campaign: attribution.campaign, referrer: attribution.referrer, device_type: deviceType() }), keepalive: true });

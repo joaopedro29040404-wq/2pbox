@@ -27,15 +27,18 @@ export async function GET(request: Request) {
   const start = new Date(url.searchParams.get('start') || new Date(Date.now() - 6 * 86400000).toISOString());
   if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || start >= end) return NextResponse.json({ error: 'Período inválido.' }, { status: 400 });
 
-  const [{ data: events, error: eventsError }, { data: orders, error: ordersError }] = await Promise.all([
+  const [{ data: events, error: eventsError }, { data: orders, error: ordersError }, { data: excludedDevices, error: excludedError }] = await Promise.all([
     client.from('analytics_events').select('event_name,session_id,user_id,product_id,order_id,page_path,utm_source,utm_medium,utm_campaign,referrer,device_type,value,metadata,created_at').gte('created_at', start.toISOString()).lt('created_at', end.toISOString()).order('created_at', { ascending: true }).range(0, 49999),
-    client.from('orders').select('id,total,status,payment_status,created_at,paid_at,is_test,analytics_session_id,analytics_utm_source,analytics_utm_medium,analytics_utm_campaign').gte('created_at', start.toISOString()).lt('created_at', end.toISOString()).order('created_at', { ascending: false }).range(0, 9999),
+    client.from('orders').select('id,total,status,payment_status,created_at,paid_at,is_test,analytics_excluded,analytics_session_id,analytics_utm_source,analytics_utm_medium,analytics_utm_campaign').gte('created_at', start.toISOString()).lt('created_at', end.toISOString()).order('created_at', { ascending: false }).range(0, 9999),
+    client.from('analytics_excluded_devices').select('session_id'),
   ]);
   if (eventsError) return NextResponse.json({ error: eventsError.message }, { status: 500 });
   if (ordersError) return NextResponse.json({ error: ordersError.message }, { status: 500 });
+  if (excludedError) return NextResponse.json({ error: excludedError.message }, { status: 500 });
 
-  const allEvents = (events || []) as any[];
-  const allOrders = (orders || []) as any[];
+  const excludedSessions = new Set((excludedDevices || []).map((row) => row.session_id));
+  const allEvents = ((events || []) as any[]).filter((event) => !excludedSessions.has(event.session_id));
+  const allOrders = ((orders || []) as any[]).filter((order) => !order.analytics_excluded && !excludedSessions.has(order.analytics_session_id));
   const realOrders = allOrders.filter((order) => !order.is_test);
   const paidOrders = realOrders.filter((order) => String(order.payment_status || '').toLowerCase() === 'paid');
   const canceledOrders = realOrders.filter((order) => ['cancelled', 'canceled'].includes(String(order.status || '').toLowerCase()) || ['failed', 'refunded'].includes(String(order.payment_status || '').toLowerCase()));

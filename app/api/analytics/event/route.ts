@@ -18,6 +18,13 @@ export async function POST(request: Request) {
     const client = getAdminSupabase();
     if (!client) return NextResponse.json({ ok: false }, { status: 503 });
 
+    const { data: excludedDevice } = await client
+      .from('analytics_excluded_devices')
+      .select('session_id')
+      .eq('session_id', sessionId)
+      .maybeSingle();
+    if (excludedDevice) return NextResponse.json({ ok: true, ignored: true });
+
     const user = await getSessionUser();
     let productId = String(body?.product_id || '').trim() || null;
     const metadata = body?.metadata && typeof body.metadata === 'object' ? body.metadata : {};
