@@ -1,72 +1,41 @@
 import { NextResponse } from 'next/server';
 import { requireAdminUser } from '@/lib/server/auth';
 import { getAdminSupabase } from '@/lib/server/supabase-admin';
-
-const round = (value: number) => Math.round(value * 100) / 100;
-const dayStart = (value: Date) => { const d = new Date(value); d.setHours(0, 0, 0, 0); return d; };
-
-export async function GET(request: Request) {
-  const admin = await requireAdminUser();
-  if (!admin) return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
-  const client = getAdminSupabase();
-  if (!client) return NextResponse.json({ error: 'Supabase backend não configurado.' }, { status: 503 });
-  const url = new URL(request.url), now = new Date();
-  const end = new Date(url.searchParams.get('end') || now.toISOString());
-  const start = new Date(url.searchParams.get('start') || dayStart(new Date(now.getTime() - 6 * 86400000)).toISOString());
-  const page = Math.max(1, Number(url.searchParams.get('page') || 1)), pageSize = 20, sort = url.searchParams.get('sort') || 'views';
-  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || start >= end) return NextResponse.json({ error: 'Período inválido.' }, { status: 400 });
-
-  const [{ data: products, error: productsError }, { data: events, error: eventsError }, { data: orders, error: ordersError }, { data: promotions, error: promotionsError }] = await Promise.all([
-    client.from('products').select('id,name,slug,price,cost,stock,active,image_url,images,category_id,product_categories(category_id,categories(id,name,parent_id))').eq('active', true).order('name', { ascending: true }).range(0, 19999),
-    client.from('analytics_events').select('event_name,session_id,product_id,order_id,value,created_at').gte('created_at', start.toISOString()).lt('created_at', end.toISOString()).not('product_id', 'is', null).range(0, 49999),
-    client.from('orders').select('id,total,payment_status,is_test,analytics_excluded,analytics_session_id').gte('created_at', start.toISOString()).lt('created_at', end.toISOString()).range(0, 9999),
-    client.from('promotions').select('id,product_id,promotional_price,starts_at,ends_at,active').eq('active', true),
+const round=(value:number)=>Math.round(value*100)/100;
+const dayStart=(value:Date)=>{const d=new Date(value);d.setHours(0,0,0,0);return d;};
+export async function GET(request:Request){
+  const admin=await requireAdminUser(); if(!admin)return NextResponse.json({error:'Não autorizado.'},{status:401});
+  const client=getAdminSupabase(); if(!client)return NextResponse.json({error:'Supabase backend não configurado.'},{status:503});
+  const url=new URL(request.url),now=new Date(); const end=new Date(url.searchParams.get('end')||now.toISOString()); const start=new Date(url.searchParams.get('start')||dayStart(new Date(now.getTime()-6*86400000)).toISOString());
+  const page=Math.max(1,Number(url.searchParams.get('page')||1)),pageSize=20,sort=url.searchParams.get('sort')||'views';
+  if(!Number.isFinite(start.getTime())||!Number.isFinite(end.getTime())||start>=end)return NextResponse.json({error:'Período inválido.'},{status:400});
+  const [{data:products,error:productsError},{data:events,error:eventsError},{data:orders,error:ordersError},{data:promotions,error:promotionsError},{data:blockedIps,error:blockedError}]=await Promise.all([
+    client.from('products').select('id,name,slug,price,cost,stock,active,image_url,images,category_id,product_categories(category_id,categories(id,name,parent_id))').eq('active',true).order('name',{ascending:true}).range(0,19999),
+    client.from('analytics_events').select('event_name,session_id,product_id,order_id,value,created_at,ip_address').gte('created_at',start.toISOString()).lt('created_at',end.toISOString()).not('product_id','is',null).range(0,49999),
+    client.from('orders').select('id,total,payment_status,is_test,analytics_excluded,analytics_session_id').gte('created_at',start.toISOString()).lt('created_at',end.toISOString()).range(0,9999),
+    client.from('promotions').select('id,product_id,promotional_price,starts_at,ends_at,active').eq('active',true),
+    client.from('analytics_excluded_ips').select('ip_address'),
   ]);
-  if (productsError) return NextResponse.json({ error: productsError.message }, { status: 500 });
-  if (eventsError) return NextResponse.json({ error: eventsError.message }, { status: 500 });
-  if (ordersError) return NextResponse.json({ error: ordersError.message }, { status: 500 });
-  if (promotionsError) return NextResponse.json({ error: promotionsError.message }, { status: 500 });
-  const { data: excludedDevices, error: excludedError } = await client.from('analytics_excluded_devices').select('session_id');
-  if (excludedError) return NextResponse.json({ error: excludedError.message }, { status: 500 });
-  const excludedSessions = new Set((excludedDevices || []).map((row: any) => row.session_id));
-  const validEvents = ((events || []) as any[]).filter(event => !excludedSessions.has(event.session_id));
-  const validOrders = ((orders || []) as any[]).filter(order => !order.analytics_excluded && !order.is_test && !excludedSessions.has(order.analytics_session_id));
-  const paidOrders = validOrders.filter(order => String(order.payment_status || '').toLowerCase() === 'paid');
-  const { data: items, error: itemsError } = paidOrders.length ? await client.from('order_items').select('order_id,product_id,quantity,total').in('order_id', paidOrders.map(order => order.id)).range(0, 19999) : { data: [] as any[], error: null };
-  if (itemsError) return NextResponse.json({ error: itemsError.message }, { status: 500 });
-
-  const map = new Map<string, any>(), activePromotions = new Map<string, any>();
-  for (const promotion of (promotions || []) as any[]) if (new Date(promotion.starts_at) <= now && new Date(promotion.ends_at) >= now) activePromotions.set(promotion.product_id, promotion);
-  const imageFrom = (product: any) => product.image_url || (Array.isArray(product.images) && product.images.length ? (typeof product.images[0] === 'string' ? product.images[0] : product.images[0]?.url || null) : null);
-  const categoryNames = (product: any) => {
-    const names = new Set<string>();
-    for (const relation of Array.isArray(product.product_categories) ? product.product_categories : []) {
-      const category = Array.isArray(relation.categories) ? relation.categories[0] : relation.categories;
-      if (category?.name) names.add(category.name);
-    }
-    return Array.from(names);
-  };
-  for (const product of (products || []) as any[]) map.set(product.id, { id: product.id, name: product.name, slug: product.slug, price: Number(product.price || 0), cost: Number(product.cost || 0), stock: Number(product.stock || 0), active: true, image: imageFrom(product), categories: categoryNames(product), promotion: activePromotions.has(product.id) ? { id: activePromotions.get(product.id).id, price: Number(activePromotions.get(product.id).promotional_price || 0), startsAt: activePromotions.get(product.id).starts_at, endsAt: activePromotions.get(product.id).ends_at } : null, visitors: new Set<string>(), views: 0, carts: 0, cartRemoves: 0, checkouts: 0, paymentStarts: 0, orders: new Set<string>(), units: 0, revenue: 0 });
-  for (const event of validEvents) {
-    if (!event.product_id || !map.has(event.product_id)) continue;
-    const row = map.get(event.product_id);
-    if (event.event_name === 'product_view') { row.views++; if (event.session_id) row.visitors.add(event.session_id); }
-    if (event.event_name === 'add_to_cart') row.carts++;
-    if (event.event_name === 'remove_from_cart') row.cartRemoves++;
-    if (event.event_name === 'begin_checkout') row.checkouts++;
-    if (event.event_name === 'payment_started') row.paymentStarts++;
-  }
-  const paidOrderIds = new Set(paidOrders.map(order => order.id));
-  for (const item of (items || []) as any[]) if (item.product_id && map.has(item.product_id) && paidOrderIds.has(item.order_id)) { const row = map.get(item.product_id); row.orders.add(item.order_id); row.units += Number(item.quantity || 0); row.revenue += Number(item.total || 0); }
-  const rows = Array.from(map.values()).map(row => {
-    const ordersCount = row.orders.size, conversion = row.views ? ordersCount / row.views * 100 : 0, cartRate = row.views ? row.carts / row.views * 100 : 0, ticket = ordersCount ? row.revenue / ordersCount : 0, netProfit = row.revenue - row.cost * row.units, marginRate = row.revenue ? netProfit / row.revenue * 100 : 0;
-    const interestLowConversion = row.views >= 5 && row.carts >= 2 && ordersCount === 0, indicators: string[] = [];
-    if (row.promotion) indicators.push('Promoção ativa'); if (row.stock <= 5) indicators.push('Estoque baixo'); if (interestLowConversion) indicators.push('Alto interesse'); if (row.revenue > 0 && marginRate < 20) indicators.push('Margem apertada');
-    return { id: row.id, name: row.name, slug: row.slug, image: row.image, categories: row.categories, price: row.price, cost: row.cost, stock: row.stock, active: true, promotion: row.promotion, visitors: row.visitors.size, views: row.views, carts: row.carts, cartRemoves: row.cartRemoves, checkouts: row.checkouts, paymentStarts: row.paymentStarts, orders: ordersCount, units: row.units, revenue: round(row.revenue), ticket: round(ticket), conversion: round(conversion), cartRate: round(cartRate), estimatedMargin: round(netProfit), netProfit: round(netProfit), marginRate: round(marginRate), interestLowConversion, indicators };
-  });
-  const sorters: Record<string,(a:any,b:any)=>number> = { views:(a,b)=>b.views-a.views||b.visitors-a.visitors, visitors:(a,b)=>b.visitors-a.visitors||b.views-a.views, carts:(a,b)=>b.carts-a.carts||b.views-a.views, orders:(a,b)=>b.orders-a.orders||b.units-a.units, revenue:(a,b)=>b.revenue-a.revenue||b.orders-a.orders, conversion:(a,b)=>b.conversion-a.conversion||b.views-a.views, margin:(a,b)=>b.netProfit-a.netProfit };
-  rows.sort(sorters[sort] || sorters.views);
-  const total = rows.length, totalPages = Math.max(1, Math.ceil(total / pageSize)), currentPage = Math.min(page, totalPages), paginated = rows.slice((currentPage-1)*pageSize,currentPage*pageSize);
-  const summary = rows.reduce((acc,row)=>({ visitors:acc.visitors+row.visitors, views:acc.views+row.views, carts:acc.carts+row.carts, checkouts:acc.checkouts+row.checkouts, orders:acc.orders+row.orders, units:acc.units+row.units, revenue:acc.revenue+row.revenue }),{visitors:0,views:0,carts:0,checkouts:0,orders:0,units:0,revenue:0});
-  return NextResponse.json({ period:{start:start.toISOString(),end:end.toISOString()}, page:currentPage, pageSize, total, totalPages, sort, summary:{...summary,revenue:round(summary.revenue)}, products:paginated });
+  if(productsError)return NextResponse.json({error:productsError.message},{status:500}); if(eventsError)return NextResponse.json({error:eventsError.message},{status:500}); if(ordersError)return NextResponse.json({error:ordersError.message},{status:500}); if(promotionsError)return NextResponse.json({error:promotionsError.message},{status:500}); if(blockedError)return NextResponse.json({error:blockedError.message},{status:500});
+  const blocked=new Set((blockedIps||[]).map((row:any)=>row.ip_address));
+  const excludedSessions=new Set<string>();
+  const validEvents=((events||[]) as any[]).filter(event=>{if(event.ip_address&&blocked.has(event.ip_address))return false;return true;});
+  for(const event of ((events||[]) as any[]))if(event.ip_address&&blocked.has(event.ip_address)&&event.session_id)excludedSessions.add(event.session_id);
+  const {data:excludedDevices,error:excludedError}=await client.from('analytics_excluded_devices').select('session_id'); if(excludedError)return NextResponse.json({error:excludedError.message},{status:500});
+  for(const row of excludedDevices||[])excludedSessions.add(row.session_id);
+  const validEvents2=validEvents.filter(event=>!excludedSessions.has(event.session_id));
+  const validOrders=((orders||[]) as any[]).filter(order=>!order.analytics_excluded&&!order.is_test&&!excludedSessions.has(order.analytics_session_id));
+  const paidOrders=validOrders.filter(order=>String(order.payment_status||'').toLowerCase()==='paid');
+  const {data:items,error:itemsError}=paidOrders.length?await client.from('order_items').select('order_id,product_id,quantity,total').in('order_id',paidOrders.map(order=>order.id)).range(0,19999):{data:[] as any[],error:null}; if(itemsError)return NextResponse.json({error:itemsError.message},{status:500});
+  const map=new Map<string,any>(),activePromotions=new Map<string,any>();
+  for(const promotion of (promotions||[]) as any[])if(new Date(promotion.starts_at)<=now&&new Date(promotion.ends_at)>=now)activePromotions.set(promotion.product_id,promotion);
+  const imageFrom=(product:any)=>product.image_url||(Array.isArray(product.images)&&product.images.length?(typeof product.images[0]==='string'?product.images[0]:product.images[0]?.url||null):null);
+  const categoryNames=(product:any)=>{const names=new Set<string>();for(const relation of Array.isArray(product.product_categories)?product.product_categories:[]){const category=Array.isArray(relation.categories)?relation.categories[0]:relation.categories;if(category?.name)names.add(category.name);}return Array.from(names);};
+  for(const product of (products||[]) as any[])map.set(product.id,{id:product.id,name:product.name,slug:product.slug,price:Number(product.price||0),cost:Number(product.cost||0),stock:Number(product.stock||0),active:true,image:imageFrom(product),categories:categoryNames(product),promotion:activePromotions.has(product.id)?{id:activePromotions.get(product.id).id,price:Number(activePromotions.get(product.id).promotional_price||0),startsAt:activePromotions.get(product.id).starts_at,endsAt:activePromotions.get(product.id).ends_at}:null,visitors:new Set<string>(),views:0,carts:0,cartRemoves:0,checkouts:0,paymentStarts:0,orders:new Set<string>(),units:0,revenue:0});
+  for(const event of validEvents2){if(!event.product_id||!map.has(event.product_id))continue;const row=map.get(event.product_id);if(event.event_name==='product_view'){row.views++;if(event.session_id)row.visitors.add(event.session_id);}if(event.event_name==='add_to_cart')row.carts++;if(event.event_name==='remove_from_cart')row.cartRemoves++;if(event.event_name==='begin_checkout')row.checkouts++;if(event.event_name==='payment_started')row.paymentStarts++;}
+  const paidOrderIds=new Set(paidOrders.map(order=>order.id)); for(const item of (items||[]) as any[])if(item.product_id&&map.has(item.product_id)&&paidOrderIds.has(item.order_id)){const row=map.get(item.product_id);row.orders.add(item.order_id);row.units+=Number(item.quantity||0);row.revenue+=Number(item.total||0);}
+  const rows=Array.from(map.values()).map(row=>{const ordersCount=row.orders.size,conversion=row.views?ordersCount/row.views*100:0,cartRate=row.views?row.carts/row.views*100:0,ticket=ordersCount?row.revenue/ordersCount:0,netProfit=row.revenue-row.cost*row.units,marginRate=row.revenue?netProfit/row.revenue*100:0;const interestLowConversion=row.views>=5&&row.carts>=2&&ordersCount===0,indicators:string[]=[];if(row.promotion)indicators.push('Promoção ativa');if(row.stock<=5)indicators.push('Estoque baixo');if(interestLowConversion)indicators.push('Alto interesse');if(row.revenue>0&&marginRate<20)indicators.push('Margem apertada');return{id:row.id,name:row.name,slug:row.slug,image:row.image,categories:row.categories,price:row.price,cost:row.cost,stock:row.stock,active:true,promotion:row.promotion,visitors:row.visitors.size,views:row.views,carts:row.carts,cartRemoves:row.cartRemoves,checkouts:row.checkouts,paymentStarts:row.paymentStarts,orders:ordersCount,units:row.units,revenue:round(row.revenue),ticket:round(ticket),conversion:round(conversion),cartRate:round(cartRate),estimatedMargin:round(netProfit),netProfit:round(netProfit),marginRate:round(marginRate),interestLowConversion,indicators};});
+  const sorters:Record<string,(a:any,b:any)=>number>={views:(a,b)=>b.views-a.views||b.visitors-a.visitors,visitors:(a,b)=>b.visitors-a.visitors||b.views-a.views,carts:(a,b)=>b.carts-a.carts||b.views-a.views,orders:(a,b)=>b.orders-a.orders||b.units-a.units,revenue:(a,b)=>b.revenue-a.revenue||b.orders-a.orders,conversion:(a,b)=>b.conversion-a.conversion||b.views-a.views,margin:(a,b)=>b.netProfit-a.netProfit};rows.sort(sorters[sort]||sorters.views);
+  const total=rows.length,totalPages=Math.max(1,Math.ceil(total/pageSize)),currentPage=Math.min(page,totalPages),paginated=rows.slice((currentPage-1)*pageSize,currentPage*pageSize);const summary=rows.reduce((acc,row)=>({visitors:acc.visitors+row.visitors,views:acc.views+row.views,carts:acc.carts+row.carts,checkouts:acc.checkouts+row.checkouts,orders:acc.orders+row.orders,units:acc.units+row.units,revenue:acc.revenue+row.revenue}),{visitors:0,views:0,carts:0,checkouts:0,orders:0,units:0,revenue:0});
+  return NextResponse.json({period:{start:start.toISOString(),end:end.toISOString()},page:currentPage,pageSize,total,totalPages,sort,summary:{...summary,revenue:round(summary.revenue)},products:paginated});
 }
