@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/server/supabase-admin';
 import { requireAdminUser } from '@/lib/server/auth';
 
+function clientIp(request: Request) {
+  const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  return (forwarded || request.headers.get('x-real-ip') || request.headers.get('cf-connecting-ip') || '').trim().slice(0, 120) || null;
+}
+
 export async function GET(request: Request) {
   const client = getAdminSupabase();
   if (!client) return NextResponse.json({ error: 'Supabase backend não configurado.' }, { status: 503 });
@@ -25,11 +30,16 @@ export async function GET(request: Request) {
   const blocked = new Set((blockedIps || []).map((row) => row.ip_address));
   const detected = new Map<string, { session_id: string; device_type: string; last_seen: string; source: string | null; ip_address: string | null }>();
   for (const event of events || []) {
-    if (!event.session_id || detected.has(event.session_id)) continue;
-    detected.set(event.session_id, { session_id: event.session_id, device_type: event.device_type || 'unknown', last_seen: event.created_at, source: event.utm_source || event.referrer || null, ip_address: event.ip_address || null });
+    if (!event.session_id) continue;
+    const existing = detected.get(event.session_id);
+    if (!existing) {
+      detected.set(event.session_id, { session_id: event.session_id, device_type: event.device_type || 'unknown', last_seen: event.created_at, source: event.utm_source || event.referrer || null, ip_address: event.ip_address || null });
+    } else if (!existing.ip_address && event.ip_address) {
+      existing.ip_address = event.ip_address;
+    }
   }
   const current = detected.get(sessionId);
-  return NextResponse.json({ current_session_id: sessionId || null, current_ip: current?.ip_address || null, excluded: sessionId ? excluded.has(sessionId) : false, excluded_devices: exclusions || [], blocked_ips: blockedIps || [], detected_devices: Array.from(detected.values()).slice(0, 50) }, { headers: { 'Cache-Control': 'no-store' } });
+  return NextResponse.json({ current_session_id: sessionId || null, current_ip: clientIp(request) || current?.ip_address || null, excluded: sessionId ? excluded.has(sessionId) : false, excluded_devices: exclusions || [], blocked_ips: blockedIps || [], detected_devices: Array.from(detected.values()).slice(0, 50) }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function POST(request: Request) {
