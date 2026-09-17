@@ -10,14 +10,10 @@ export async function GET(request: Request) {
   if (!admin) return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
   const client = getAdminSupabase();
   if (!client) return NextResponse.json({ error: 'Supabase backend não configurado.' }, { status: 503 });
-
-  const url = new URL(request.url);
-  const now = new Date();
+  const url = new URL(request.url), now = new Date();
   const end = new Date(url.searchParams.get('end') || now.toISOString());
   const start = new Date(url.searchParams.get('start') || dayStart(new Date(now.getTime() - 6 * 86400000)).toISOString());
-  const page = Math.max(1, Number(url.searchParams.get('page') || 1));
-  const pageSize = 20;
-  const sort = url.searchParams.get('sort') || 'views';
+  const page = Math.max(1, Number(url.searchParams.get('page') || 1)), pageSize = 20, sort = url.searchParams.get('sort') || 'views';
   if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || start >= end) return NextResponse.json({ error: 'Período inválido.' }, { status: 400 });
 
   const [{ data: products, error: productsError }, { data: events, error: eventsError }, { data: orders, error: ordersError }, { data: promotions, error: promotionsError }] = await Promise.all([
@@ -30,89 +26,47 @@ export async function GET(request: Request) {
   if (eventsError) return NextResponse.json({ error: eventsError.message }, { status: 500 });
   if (ordersError) return NextResponse.json({ error: ordersError.message }, { status: 500 });
   if (promotionsError) return NextResponse.json({ error: promotionsError.message }, { status: 500 });
-
   const { data: excludedDevices, error: excludedError } = await client.from('analytics_excluded_devices').select('session_id');
   if (excludedError) return NextResponse.json({ error: excludedError.message }, { status: 500 });
   const excludedSessions = new Set((excludedDevices || []).map((row: any) => row.session_id));
-  const validEvents = ((events || []) as any[]).filter((event) => !excludedSessions.has(event.session_id));
-  const validOrders = ((orders || []) as any[]).filter((order) => !order.analytics_excluded && !order.is_test && !excludedSessions.has(order.analytics_session_id));
-  const paidOrders = validOrders.filter((order) => String(order.payment_status || '').toLowerCase() === 'paid');
-
-  const { data: items, error: itemsError } = paidOrders.length
-    ? await client.from('order_items').select('order_id,product_id,quantity,total').in('order_id', paidOrders.map((order) => order.id)).range(0, 19999)
-    : { data: [] as any[], error: null };
+  const validEvents = ((events || []) as any[]).filter(event => !excludedSessions.has(event.session_id));
+  const validOrders = ((orders || []) as any[]).filter(order => !order.analytics_excluded && !order.is_test && !excludedSessions.has(order.analytics_session_id));
+  const paidOrders = validOrders.filter(order => String(order.payment_status || '').toLowerCase() === 'paid');
+  const { data: items, error: itemsError } = paidOrders.length ? await client.from('order_items').select('order_id,product_id,quantity,total').in('order_id', paidOrders.map(order => order.id)).range(0, 19999) : { data: [] as any[], error: null };
   if (itemsError) return NextResponse.json({ error: itemsError.message }, { status: 500 });
 
-  const map = new Map<string, any>();
-  const activePromotions = new Map<string, any>();
-  for (const promotion of (promotions || []) as any[]) {
-    if (new Date(promotion.starts_at) <= now && new Date(promotion.ends_at) >= now) activePromotions.set(promotion.product_id, promotion);
-  }
-  const imageFrom = (product: any) => {
-    if (product.image_url) return product.image_url;
-    if (Array.isArray(product.images) && product.images.length) return typeof product.images[0] === 'string' ? product.images[0] : product.images[0]?.url || null;
-    return null;
-  };
+  const map = new Map<string, any>(), activePromotions = new Map<string, any>();
+  for (const promotion of (promotions || []) as any[]) if (new Date(promotion.starts_at) <= now && new Date(promotion.ends_at) >= now) activePromotions.set(promotion.product_id, promotion);
+  const imageFrom = (product: any) => product.image_url || (Array.isArray(product.images) && product.images.length ? (typeof product.images[0] === 'string' ? product.images[0] : product.images[0]?.url || null) : null);
   const categoryNames = (product: any) => {
     const names = new Set<string>();
-    if (product.category_id && Array.isArray(product.product_categories)) {
-      for (const relation of product.product_categories) {
-        const category = Array.isArray(relation.categories) ? relation.categories[0] : relation.categories;
-        if (category?.name) names.add(category.name);
-      }
+    for (const relation of Array.isArray(product.product_categories) ? product.product_categories : []) {
+      const category = Array.isArray(relation.categories) ? relation.categories[0] : relation.categories;
+      if (category?.name) names.add(category.name);
     }
     return Array.from(names);
   };
-  for (const product of (products || []) as any[]) {
-    const promotion = activePromotions.get(product.id);
-    map.set(product.id, {
-      id: product.id, name: product.name, slug: product.slug, price: Number(product.price || 0), cost: Number(product.cost || 0), stock: Number(product.stock || 0), active: true, image: imageFrom(product), categories: categoryNames(product), promotion: promotion ? { id: promotion.id, price: Number(promotion.promotional_price || 0), startsAt: promotion.starts_at, endsAt: promotion.ends_at } : null,
-      visitors: new Set<string>(), views: 0, carts: 0, cartRemoves: 0, checkouts: 0, paymentStarts: 0, orders: new Set<string>(), units: 0, revenue: 0,
-    });
-  }
+  for (const product of (products || []) as any[]) map.set(product.id, { id: product.id, name: product.name, slug: product.slug, price: Number(product.price || 0), cost: Number(product.cost || 0), stock: Number(product.stock || 0), active: true, image: imageFrom(product), categories: categoryNames(product), promotion: activePromotions.has(product.id) ? { id: activePromotions.get(product.id).id, price: Number(activePromotions.get(product.id).promotional_price || 0), startsAt: activePromotions.get(product.id).starts_at, endsAt: activePromotions.get(product.id).ends_at } : null, visitors: new Set<string>(), views: 0, carts: 0, cartRemoves: 0, checkouts: 0, paymentStarts: 0, orders: new Set<string>(), units: 0, revenue: 0 });
   for (const event of validEvents) {
     if (!event.product_id || !map.has(event.product_id)) continue;
     const row = map.get(event.product_id);
-    if (event.event_name === 'product_view') { row.views += 1; if (event.session_id) row.visitors.add(event.session_id); }
-    if (event.event_name === 'add_to_cart') row.carts += 1;
-    if (event.event_name === 'remove_from_cart') row.cartRemoves += 1;
-    if (event.event_name === 'begin_checkout') row.checkouts += 1;
-    if (event.event_name === 'payment_started') row.paymentStarts += 1;
+    if (event.event_name === 'product_view') { row.views++; if (event.session_id) row.visitors.add(event.session_id); }
+    if (event.event_name === 'add_to_cart') row.carts++;
+    if (event.event_name === 'remove_from_cart') row.cartRemoves++;
+    if (event.event_name === 'begin_checkout') row.checkouts++;
+    if (event.event_name === 'payment_started') row.paymentStarts++;
   }
-  const paidOrderIds = new Set(paidOrders.map((order) => order.id));
-  for (const item of (items || []) as any[]) {
-    if (!item.product_id || !map.has(item.product_id) || !paidOrderIds.has(item.order_id)) continue;
-    const row = map.get(item.product_id);
-    row.orders.add(item.order_id); row.units += Number(item.quantity || 0); row.revenue += Number(item.total || 0);
-  }
-
-  const rows = Array.from(map.values()).map((row) => {
-    const ordersCount = row.orders.size;
-    const conversion = row.views ? (ordersCount / row.views) * 100 : 0;
-    const cartRate = row.views ? (row.carts / row.views) * 100 : 0;
-    const ticket = ordersCount ? row.revenue / ordersCount : 0;
-    const estimatedMargin = row.revenue - row.cost * row.units;
-    const marginRate = row.revenue ? (estimatedMargin / row.revenue) * 100 : 0;
-    const interestLowConversion = row.views >= 5 && row.carts >= 2 && ordersCount === 0;
-    const indicators: string[] = [];
-    if (row.promotion) indicators.push('Promoção ativa');
-    if (row.stock <= 5) indicators.push('Estoque baixo');
-    if (interestLowConversion) indicators.push('Alto interesse');
-    if (row.revenue > 0 && marginRate < 20) indicators.push('Margem apertada');
-    return { id: row.id, name: row.name, slug: row.slug, image: row.image, categories: row.categories, price: row.price, cost: row.cost, stock: row.stock, active: true, promotion: row.promotion, visitors: row.visitors.size, views: row.views, carts: row.carts, cartRemoves: row.cartRemoves, checkouts: row.checkouts, paymentStarts: row.paymentStarts, orders: ordersCount, units: row.units, revenue: round(row.revenue), ticket: round(ticket), conversion: round(conversion), cartRate: round(cartRate), estimatedMargin: round(estimatedMargin), marginRate: round(marginRate), interestLowConversion, indicators };
+  const paidOrderIds = new Set(paidOrders.map(order => order.id));
+  for (const item of (items || []) as any[]) if (item.product_id && map.has(item.product_id) && paidOrderIds.has(item.order_id)) { const row = map.get(item.product_id); row.orders.add(item.order_id); row.units += Number(item.quantity || 0); row.revenue += Number(item.total || 0); }
+  const rows = Array.from(map.values()).map(row => {
+    const ordersCount = row.orders.size, conversion = row.views ? ordersCount / row.views * 100 : 0, cartRate = row.views ? row.carts / row.views * 100 : 0, ticket = ordersCount ? row.revenue / ordersCount : 0, netProfit = row.revenue - row.cost * row.units, marginRate = row.revenue ? netProfit / row.revenue * 100 : 0;
+    const interestLowConversion = row.views >= 5 && row.carts >= 2 && ordersCount === 0, indicators: string[] = [];
+    if (row.promotion) indicators.push('Promoção ativa'); if (row.stock <= 5) indicators.push('Estoque baixo'); if (interestLowConversion) indicators.push('Alto interesse'); if (row.revenue > 0 && marginRate < 20) indicators.push('Margem apertada');
+    return { id: row.id, name: row.name, slug: row.slug, image: row.image, categories: row.categories, price: row.price, cost: row.cost, stock: row.stock, active: true, promotion: row.promotion, visitors: row.visitors.size, views: row.views, carts: row.carts, cartRemoves: row.cartRemoves, checkouts: row.checkouts, paymentStarts: row.paymentStarts, orders: ordersCount, units: row.units, revenue: round(row.revenue), ticket: round(ticket), conversion: round(conversion), cartRate: round(cartRate), estimatedMargin: round(netProfit), netProfit: round(netProfit), marginRate: round(marginRate), interestLowConversion, indicators };
   });
-  const sorters: Record<string, (a: any, b: any) => number> = {
-    views: (a,b) => b.views-a.views || b.visitors-a.visitors,
-    visitors: (a,b) => b.visitors-a.visitors || b.views-a.views,
-    carts: (a,b) => b.carts-a.carts || b.views-a.views,
-    orders: (a,b) => b.orders-a.orders || b.units-a.units,
-    revenue: (a,b) => b.revenue-a.revenue || b.orders-a.orders,
-    conversion: (a,b) => b.conversion-a.conversion || b.views-a.views,
-    margin: (a,b) => b.estimatedMargin-a.estimatedMargin,
-  };
+  const sorters: Record<string,(a:any,b:any)=>number> = { views:(a,b)=>b.views-a.views||b.visitors-a.visitors, visitors:(a,b)=>b.visitors-a.visitors||b.views-a.views, carts:(a,b)=>b.carts-a.carts||b.views-a.views, orders:(a,b)=>b.orders-a.orders||b.units-a.units, revenue:(a,b)=>b.revenue-a.revenue||b.orders-a.orders, conversion:(a,b)=>b.conversion-a.conversion||b.views-a.views, margin:(a,b)=>b.netProfit-a.netProfit };
   rows.sort(sorters[sort] || sorters.views);
-  const total = rows.length; const totalPages = Math.max(1, Math.ceil(total / pageSize)); const currentPage = Math.min(page, totalPages);
-  const paginated = rows.slice((currentPage-1)*pageSize, currentPage*pageSize);
-  const summary = rows.reduce((acc,row) => ({ visitors: acc.visitors + row.visitors, views: acc.views + row.views, carts: acc.carts + row.carts, checkouts: acc.checkouts + row.checkouts, orders: acc.orders + row.orders, units: acc.units + row.units, revenue: acc.revenue + row.revenue }), { visitors: 0, views: 0, carts: 0, checkouts: 0, orders: 0, units: 0, revenue: 0 });
-  return NextResponse.json({ period: { start: start.toISOString(), end: end.toISOString() }, page: currentPage, pageSize, total, totalPages, sort, summary: { ...summary, revenue: round(summary.revenue) }, products: paginated });
+  const total = rows.length, totalPages = Math.max(1, Math.ceil(total / pageSize)), currentPage = Math.min(page, totalPages), paginated = rows.slice((currentPage-1)*pageSize,currentPage*pageSize);
+  const summary = rows.reduce((acc,row)=>({ visitors:acc.visitors+row.visitors, views:acc.views+row.views, carts:acc.carts+row.carts, checkouts:acc.checkouts+row.checkouts, orders:acc.orders+row.orders, units:acc.units+row.units, revenue:acc.revenue+row.revenue }),{visitors:0,views:0,carts:0,checkouts:0,orders:0,units:0,revenue:0});
+  return NextResponse.json({ period:{start:start.toISOString(),end:end.toISOString()}, page:currentPage, pageSize, total, totalPages, sort, summary:{...summary,revenue:round(summary.revenue)}, products:paginated });
 }

@@ -8,38 +8,29 @@ import { usePathname } from 'next/navigation';
 export default function AnalyticsLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   return <>
-    <nav className="analytics-nav">
-      <Link className={`analytics-tab ${pathname === '/admin/analytics' ? 'active' : ''}`} href="/admin/analytics"><BarChart3 size={17}/><span><b>Visão geral</b><small>Indicadores do e-commerce</small></span></Link>
-      <Link className={`analytics-tab ${pathname === '/admin/analytics/produtos' ? 'active' : ''}`} href="/admin/analytics/produtos"><Package size={17}/><span><b>Produtos</b><small>Desempenho por produto</small></span></Link>
-      <Link className="analytics-panel-link" href="/admin"><ArrowLeft size={15}/><span>Painel</span></Link>
-    </nav>
+    <section className="analytics-switcher">
+      <Link className={`analytics-switch-card ${pathname === '/admin/analytics' ? 'active' : ''}`} href="/admin/analytics">
+        <span className="switch-icon"><BarChart3 size={19}/></span>
+        <span className="switch-copy"><small>VISÃO GERAL</small><b>Visão do e-commerce</b><em>Indicadores gerais da sua loja</em></span>
+      </Link>
+      <Link className={`analytics-switch-card ${pathname === '/admin/analytics/produtos' ? 'active' : ''}`} href="/admin/analytics/produtos">
+        <span className="switch-icon"><Package size={19}/></span>
+        <span className="switch-copy"><small>PRODUTOS</small><b>Desempenho por produto</b><em>Interesse, vendas e lucro</em></span>
+      </Link>
+      <Link className="analytics-switch-back" href="/admin"><ArrowLeft size={15}/> Painel</Link>
+    </section>
     {children}
     <style jsx global>{`
-      .analytics-nav{width:min(1180px,calc(100% - 32px));margin:0 auto;padding:16px 0 0;display:grid;grid-template-columns:1fr 1fr auto;gap:9px;align-items:stretch}
-      .analytics-tab{display:flex;align-items:center;gap:10px;min-height:58px;padding:10px 14px;border:1px solid #dddcd7;background:#fff;border-radius:14px;text-decoration:none;color:#555;box-shadow:0 2px 8px rgba(0,0,0,.025);transition:.15s ease}
-      .analytics-tab svg{flex:0 0 auto;color:#9b7600}
-      .analytics-tab span{display:grid;gap:3px;min-width:0}
-      .analytics-tab b{font:900 12px Inter,Arial,sans-serif;color:#222}
-      .analytics-tab small{font:700 9px Inter,Arial,sans-serif;color:#999}
-      .analytics-tab:hover{border-color:#cfcfc9;transform:translateY(-1px)}
-      .analytics-tab.active{background:#111;border-color:#111;box-shadow:0 5px 14px rgba(0,0,0,.12)}
-      .analytics-tab.active svg{color:#ffc400}
-      .analytics-tab.active b{color:#fff}
-      .analytics-tab.active small{color:#bdbdbd}
-      .analytics-panel-link{display:flex;align-items:center;justify-content:center;gap:6px;min-width:76px;padding:0 12px;border:1px solid transparent;border-radius:12px;color:#777;text-decoration:none;font:800 10px Inter,Arial,sans-serif}
-      .analytics-panel-link:hover{background:#fff;border-color:#dddcd7;color:#111}
-      @media(max-width:700px){
-        .analytics-nav{width:calc(100% - 20px);padding-top:10px;grid-template-columns:1fr 1fr;gap:7px}
-        .analytics-tab{min-height:54px;padding:9px 11px;border-radius:12px}
-        .analytics-tab b{font-size:11px}.analytics-tab small{font-size:8px}
-        .analytics-panel-link{grid-column:1/-1;justify-self:start;min-height:30px;padding:3px 8px;font-size:9px}
-      }
-      @media(max-width:420px){
-        .analytics-nav{width:calc(100% - 16px);gap:6px}
-        .analytics-tab{min-height:50px;padding:8px 9px;gap:8px}
-        .analytics-tab svg{width:15px;height:15px}.analytics-tab b{font-size:10px}.analytics-tab small{font-size:7px}
-        .analytics-panel-link{min-height:28px}
-      }
+      .analytics-switcher{width:min(1180px,calc(100% - 32px));margin:0 auto;padding:18px 0 0;display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:stretch}
+      .analytics-switch-card{display:flex;align-items:center;gap:11px;min-height:72px;padding:12px 15px;background:#fff;border:1px solid #dddcd7;border-radius:15px;text-decoration:none;color:#111;box-shadow:0 2px 8px rgba(0,0,0,.025);transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease}
+      .analytics-switch-card:hover{transform:translateY(-1px);border-color:#cfcfc9;box-shadow:0 5px 14px rgba(0,0,0,.06)}
+      .analytics-switch-card.active{background:#111;border-color:#111;box-shadow:0 6px 18px rgba(0,0,0,.12)}
+      .switch-icon{width:38px;height:38px;flex:0 0 38px;display:grid;place-items:center;border-radius:11px;background:#f5f5f0;color:#9b7600}
+      .active .switch-icon{background:#222;color:#ffc400}
+      .switch-copy{display:grid;gap:2px;min-width:0}.switch-copy small{font:900 8px Inter,Arial,sans-serif;letter-spacing:.16em;color:#9b7600}.switch-copy b{font:900 13px Inter,Arial,sans-serif;color:#222}.switch-copy em{font:700 9px Inter,Arial,sans-serif;color:#999;font-style:normal}.active .switch-copy b{color:#fff}.active .switch-copy em{color:#aaa}
+      .analytics-switch-back{display:flex;align-items:center;justify-content:center;gap:6px;min-width:76px;padding:0 11px;border:1px solid transparent;border-radius:12px;color:#777;text-decoration:none;font:800 10px Inter,Arial,sans-serif}.analytics-switch-back:hover{background:#fff;border-color:#dddcd7;color:#111}
+      @media(max-width:700px){.analytics-switcher{width:calc(100% - 24px);padding:12px 0 0;grid-template-columns:1fr 1fr;gap:7px}.analytics-switch-card{min-height:64px;padding:10px;border-radius:13px;gap:8px}.switch-icon{width:32px;height:32px;flex-basis:32px;border-radius:9px}.switch-icon svg{width:16px;height:16px}.switch-copy small{font-size:7px}.switch-copy b{font-size:10px;line-height:1.2}.switch-copy em{font-size:7px}.analytics-switch-back{grid-column:1/-1;justify-self:start;min-height:28px;padding:2px 7px;font-size:9px}}
+      @media(max-width:390px){.analytics-switcher{width:calc(100% - 18px);gap:6px}.analytics-switch-card{min-height:60px;padding:8px}.switch-icon{width:28px;height:28px;flex-basis:28px}.switch-copy b{font-size:9px}.switch-copy em{display:none}}
     `}</style>
   </>;
 }
