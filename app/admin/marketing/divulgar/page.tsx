@@ -156,7 +156,7 @@ export default function MarketingSharePage() {
 
               <div className="share-result">
                 <div><strong>3. Link rastreável</strong><span>Quem acessar por este link terá a origem registrada no Analytics.</span></div>
-                <div className="share-url">{link || 'Selecione o produto e o canal.'}</div>
+                <div className="share-url">{link ? new URL(link).origin + new URL(link).pathname : 'Selecione o produto e o canal.'}</div>
                 <button type="button" className="share-copy" disabled={!link} onClick={() => void copyLink()}>{copied ? <Check size={17} /> : <Copy size={17} />}{copied ? 'Copiado' : 'Copiar link'}</button>
               </div>
             </section>
