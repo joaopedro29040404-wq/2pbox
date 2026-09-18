@@ -16,6 +16,25 @@ const hourKey = (value: string) => new Date(value).getHours();
 const uniqueSessions = (rows: any[]) => new Set(rows.map((row) => row.session_id).filter(Boolean));
 const round = (value: number) => Math.round(value * 100) / 100;
 
+const privateIp = (ip: string) => /^(10\\.|127\\.|169\\\.254\\.|192\\\.168\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.)/.test(ip);
+
+async function geolocateIps(ips: string[]) {
+  const unique = Array.from(new Set(ips.filter((ip) => ip && !privateIp(ip))));
+  const results = new Map<string, { city: string; region: string; country: string }>();
+  await Promise.all(unique.slice(0, 80).map(async (ip) => {
+    try {
+      const response = await fetch(`https://ipapi.co/${encodeURIComponent(ip)}/json/`, { cache: 'no-store', signal: AbortSignal.timeout(2500) });
+      if (!response.ok) return;
+      const data = await response.json();
+      const city = String(data?.city || '').trim();
+      const region = String(data?.region_code || data?.region || '').trim();
+      const country = String(data?.country_code || '').trim().toUpperCase();
+      if (city || region || country) results.set(ip, { city: city || 'Localização desconhecida', region, country });
+    } catch {}
+  }));
+  return results;
+}
+
 export async function GET(request: Request) {
   const admin = await requireAdminUser();
   if (!admin) return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
@@ -40,6 +59,18 @@ export async function GET(request: Request) {
   const excludedSessions = new Set((excludedDevices || []).map((row) => row.session_id));
   const blocked = new Set((blockedIps || []).map((row) => row.ip_address));
   const allEvents = ((events || []) as any[]).filter((event) => !excludedSessions.has(event.session_id) && !blocked.has(event.ip_address));
+  const locationByIp = await geolocateIps(allEvents.map((event) => String(event.ip_address || '')));
+  const locationMap = new Map<string, { location: string; visits: Set<string>; events: number }>();
+  for (const event of allEvents) {
+    const geo = locationByIp.get(String(event.ip_address || ''));
+    if (!geo) continue;
+    const location = geo.city && geo.region ? `${geo.city} — ${geo.region}` : geo.city || geo.region || 'Localização desconhecida';
+    if (!locationMap.has(location)) locationMap.set(location, { location, visits: new Set(), events: 0 });
+    const row = locationMap.get(location)!;
+    if (event.session_id) row.visits.add(event.session_id);
+    row.events += 1;
+  }
+  const locations = Array.from(locationMap.values()).map((row) => ({ location: row.location, visitors: row.visits.size, events: row.events })).sort((a, b) => b.visitors - a.visitors || b.events - a.events).slice(0, 20);
   const allOrders = ((orders || []) as any[]).filter((order) => !order.analytics_excluded && !excludedSessions.has(order.analytics_session_id));
   const realOrders = allOrders.filter((order) => !order.is_test);
   const paidOrders = realOrders.filter((order) => String(order.payment_status || '').toLowerCase() === 'paid');
@@ -112,5 +143,5 @@ export async function GET(request: Request) {
   const abandonedRate = cartCreatedSessions ? round((abandonedSessions.length / cartCreatedSessions) * 100) : 0;
   const conversionRate = visitors.size ? round((paidOrders.length / visitors.size) * 100) : 0;
   const testOrders = allOrders.filter((order) => order.is_test).slice(0, 50).map((order) => ({ id: order.id, total: Number(order.total || 0), status: order.status, payment_status: order.payment_status, created_at: order.created_at, is_test: true }));
-  return NextResponse.json({ period: { start: start.toISOString(), end: end.toISOString() }, cards: { visitors: visitors.size, productViews: productViews.length, cartAdds: cartAdds.length, checkouts: checkoutSessions.size, payments: paymentSessions.size, approvedOrders: paidOrders.length, orders: realOrders.length, canceledOrders: canceledOrders.length, revenue: round(revenue), averageTicket: paidOrders.length ? round(revenue / paidOrders.length) : 0, conversionRate, productsSold: items.reduce((sum, item) => sum + Number(item.quantity || 0), 0) }, evolution, funnel: funnelStages, traffic, products, abandoned: { carts: cartCreatedSessions, abandoned: abandonedSessions.length, rate: abandonedRate, value: round(abandonedValue) }, devices, hours, sales: { orders: realOrders.length, approved: paidOrders.length, canceled: canceledOrders.length, revenue: round(revenue), averageTicket: paidOrders.length ? round(revenue / paidOrders.length) : 0, productsSold: items.reduce((sum, item) => sum + Number(item.quantity || 0), 0) }, testOrders });
+  return NextResponse.json({ period: { start: start.toISOString(), end: end.toISOString() }, locations, cards: { visitors: visitors.size, productViews: productViews.length, cartAdds: cartAdds.length, checkouts: checkoutSessions.size, payments: paymentSessions.size, approvedOrders: paidOrders.length, orders: realOrders.length, canceledOrders: canceledOrders.length, revenue: round(revenue), averageTicket: paidOrders.length ? round(revenue / paidOrders.length) : 0, conversionRate, productsSold: items.reduce((sum, item) => sum + Number(item.quantity || 0), 0) }, evolution, funnel: funnelStages, traffic, products, abandoned: { carts: cartCreatedSessions, abandoned: abandonedSessions.length, rate: abandonedRate, value: round(abandonedValue) }, devices, hours, sales: { orders: realOrders.length, approved: paidOrders.length, canceled: canceledOrders.length, revenue: round(revenue), averageTicket: paidOrders.length ? round(revenue / paidOrders.length) : 0, productsSold: items.reduce((sum, item) => sum + Number(item.quantity || 0), 0) }, testOrders });
 }
