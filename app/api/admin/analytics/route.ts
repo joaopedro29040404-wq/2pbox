@@ -16,22 +16,34 @@ const hourKey = (value: string) => new Date(value).getHours();
 const uniqueSessions = (rows: any[]) => new Set(rows.map((row) => row.session_id).filter(Boolean));
 const round = (value: number) => Math.round(value * 100) / 100;
 
-const privateIp = (ip: string) => /^(10\\.|127\\.|169\\\.254\\.|192\\\.168\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.)/.test(ip);
+const privateIp = (ip: string) => /^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(ip);
 
 async function geolocateIps(ips: string[]) {
-  const unique = Array.from(new Set(ips.filter((ip) => ip && !privateIp(ip))));
+  const unique = Array.from(new Set(ips.map((ip) => ip.trim()).filter((ip) => ip && !privateIp(ip))));
   const results = new Map<string, { city: string; region: string; country: string }>();
+
+  const request = async (url: string) => {
+    const response = await fetch(url, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(2500),
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) return null;
+    return response.json();
+  };
+
   await Promise.all(unique.slice(0, 80).map(async (ip) => {
     try {
-      const response = await fetch(`https://ipapi.co/${encodeURIComponent(ip)}/json/`, { cache: 'no-store', signal: AbortSignal.timeout(2500) });
-      if (!response.ok) return;
-      const data = await response.json();
+      let data = await request(`https://ipwho.is/${encodeURIComponent(ip)}`);
+      if (!data?.success) data = await request(`https://ipapi.co/${encodeURIComponent(ip)}/json/`);
+      if (!data) return;
       const city = String(data?.city || '').trim();
       const region = String(data?.region_code || data?.region || '').trim();
       const country = String(data?.country_code || '').trim().toUpperCase();
       if (city || region || country) results.set(ip, { city: city || 'Localização desconhecida', region, country });
     } catch {}
   }));
+
   return results;
 }
 
