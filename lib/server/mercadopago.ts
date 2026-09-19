@@ -1,5 +1,4 @@
 import { getMercadoPagoAccessToken } from './env';
-import { getSellerAccessToken } from './mercadopago-oauth';
 import { fetchJson } from './http';
 import { cacheGet, cacheSet } from './redis';
 import { supabaseRest, supabaseRpc } from './supabase-admin';
@@ -79,8 +78,8 @@ export function normalizePaymentStatus(payment: any) {
   return 'pending';
 }
 
-async function authHeaders() {
-  const accessToken = (await getSellerAccessToken().catch(() => null)) || getMercadoPagoAccessToken();
+function authHeaders() {
+  const accessToken = getMercadoPagoAccessToken();
   if (!accessToken) throw new Error('Mercado Pago não configurado.');
   return { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' };
 }
@@ -141,14 +140,13 @@ export async function readSupportedMethods(accessToken: string): Promise<MethodS
   return value;
 }
 
-export async function isMercadoPagoConfigured() {
-  if (getMercadoPagoAccessToken()) return true;
-  return Boolean(await getSellerAccessToken().catch(() => null));
+export function isMercadoPagoConfigured() {
+  return Boolean(getMercadoPagoAccessToken());
 }
 
 export async function fetchMercadoPagoResource(type: 'payment' | 'order', resourceId: string) {
   const endpoint = type === 'order' ? `/v1/orders/${encodeURIComponent(resourceId)}` : `/v1/payments/${encodeURIComponent(resourceId)}`;
-  const { ok, status, data } = await fetchJson(`${API}${endpoint}`, { headers: await authHeaders() });
+  const { ok, status, data } = await fetchJson(`${API}${endpoint}`, { headers: authHeaders() });
   return { ok, status, resource: data };
 }
 
@@ -182,36 +180,20 @@ export async function searchMercadoPagoOrder(externalReference: string) {
     sort_by: 'created_date',
     sort_order: 'desc',
   });
-  const { ok, data } = await fetchJson(`${API}/v1/orders?${params.toString()}`, { headers: await authHeaders() });
+  const { ok, data } = await fetchJson(`${API}/v1/orders?${params.toString()}`, { headers: authHeaders() });
   if (!ok) return null;
   const orders = Array.isArray(data?.data) ? data.data : [];
   return sortByRelevance(orders.filter((item: any) => String(item?.external_reference || '').trim() === externalReference))[0] || null;
 }
 
 export async function searchMercadoPagoPayment(externalReference: string) {
-  const now = new Date();
-  const begin = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-  const params = new URLSearchParams({
-    external_reference: externalReference,
-    sort: 'date_created',
-    criteria: 'desc',
-    range: 'date_created',
-    begin_date: begin.toISOString(),
-    end_date: now.toISOString(),
-    limit: '50',
-  });
-
   const { ok, data } = await fetchJson(
-    `${API}/v1/payments/search?${params.toString()}`,
-    { headers: await authHeaders() },
+    `${API}/v1/payments/search?external_reference=${encodeURIComponent(externalReference)}&sort=date_created&criteria=desc&limit=20`,
+    { headers: authHeaders() },
   );
   if (!ok) return null;
-
   const payments = Array.isArray(data?.results) ? data.results : [];
-  const matching = payments.filter(
-    (item: any) => String(item?.external_reference || '').trim() === String(externalReference).trim(),
-  );
-  return sortByRelevance(matching)[0] || null;
+  return sortByRelevance(payments)[0] || null;
 }
 
 function sortByRelevance(list: any[]) {
@@ -225,17 +207,8 @@ function sortByRelevance(list: any[]) {
   });
 }
 
-export async function findOrderIdByPaymentId(paymentId: string) {
-  const id = String(paymentId || '').trim();
-  if (!id) return null;
-
-  const query = new URLSearchParams({ select: 'id', payment_id: `eq.${id}`, limit: '1' });
-  const rows = await supabaseRest(`orders?${query.toString()}`).catch(() => null);
-  return Array.isArray(rows) && rows[0]?.id ? String(rows[0].id) : null;
-}
-
 export async function resolveMercadoPagoPayment(orderId: string, hints: { paymentId?: string; mpOrderId?: string } = {}) {
-  if (!(await isMercadoPagoConfigured())) return null;
+  if (!isMercadoPagoConfigured()) return null;
 
   if (hints.mpOrderId) {
     const result = await fetchMercadoPagoResource('order', hints.mpOrderId);
@@ -247,18 +220,7 @@ export async function resolveMercadoPagoPayment(orderId: string, hints: { paymen
 
   if (hints.paymentId) {
     const result = await fetchMercadoPagoResource('payment', hints.paymentId);
-    if (result.ok) {
-      const payment = result.resource as any;
-      const externalReference = String(payment?.external_reference || '').trim();
-
-      // Quando o Mercado Pago não devolve external_reference no GET /v1/payments/:id,
-      // o próprio payment_id já é a chave vinculada ao pedido local. Nesse caminho,
-      // o caller chegou aqui usando o payment_id persistido para este orderId.
-      if (externalReference === orderId) return payment;
-      if (!externalReference && String(payment?.id || '').trim() === String(hints.paymentId).trim()) {
-        return { ...payment, external_reference: orderId };
-      }
-    }
+    if (result.ok && String((result.resource as any)?.external_reference || '').trim() === orderId) return result.resource;
   }
 
   const mpOrder = await searchMercadoPagoOrder(orderId).catch(() => null);
@@ -303,7 +265,7 @@ const BILLING_CACHE_SECONDS = 60 * 30;
 
 export async function fetchPaymentBilling(paymentId: string): Promise<PaymentBilling | null> {
   const id = String(paymentId || '').trim();
-  if (!id || !(await isMercadoPagoConfigured())) return null;
+  if (!id || !isMercadoPagoConfigured()) return null;
 
   const memo = billingMemo.get(id);
   if (memo && memo.expiresAt > Date.now()) return memo.value;

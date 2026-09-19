@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 import { getMercadoPagoWebhookSecret } from '@/lib/server/env';
 import {
   fetchMercadoPagoResource,
-  findOrderIdByPaymentId,
   isMercadoPagoConfigured,
   normalizeOrderResource,
   syncOrderPayment,
@@ -67,7 +66,7 @@ async function recordEvent(job: PaymentWebhookJob, payload: unknown, status: str
 }
 
 async function processInline(job: PaymentWebhookJob) {
-  if (!(await isMercadoPagoConfigured())) throw new Error('Mercado Pago não configurado.');
+  if (!isMercadoPagoConfigured()) throw new Error('Mercado Pago não configurado.');
 
   const result = await fetchMercadoPagoResource(job.resourceType, job.resourceId);
   if (result.status === 404) return { handled: false, reason: 'not_found' };
@@ -75,9 +74,8 @@ async function processInline(job: PaymentWebhookJob) {
 
   const resource = result.resource;
   const isOrder = job.resourceType === 'order' || resource?.type === 'online';
-  let orderId = String(resource?.external_reference || '').trim();
-  if (!orderId && job.resourceType === 'payment') orderId = (await findOrderIdByPaymentId(job.resourceId)) || '';
-  if (!orderId) return { handled: false, reason: 'no_order_reference' };
+  const orderId = String(resource?.external_reference || '').trim();
+  if (!orderId) return { handled: false, reason: 'no_external_reference' };
 
   const payment = isOrder ? normalizeOrderResource(resource, orderId) : resource;
   if (!payment) return { handled: false, reason: 'no_payment' };

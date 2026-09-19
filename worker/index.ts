@@ -4,7 +4,6 @@ import { deliverEmailJob } from '../lib/server/email/deliver';
 import { isEmailEnabled } from '../lib/server/env';
 import {
   fetchMercadoPagoResource,
-  findOrderIdByPaymentId,
   isMercadoPagoConfigured,
   normalizeOrderResource,
   resolveMercadoPagoPayment,
@@ -50,7 +49,7 @@ async function markWebhookEvent(resourceId: string, status: string, detail: stri
 }
 
 async function handlePaymentWebhook(job: PaymentWebhookJob) {
-  if (!(await isMercadoPagoConfigured())) throw new Error('Mercado Pago não configurado.');
+  if (!isMercadoPagoConfigured()) throw new Error('Mercado Pago não configurado.');
 
   const result = await fetchMercadoPagoResource(job.resourceType, job.resourceId);
   if (result.status === 404) {
@@ -61,10 +60,10 @@ async function handlePaymentWebhook(job: PaymentWebhookJob) {
 
   const resource = result.resource as any;
   const isOrder = job.resourceType === 'order' || resource?.type === 'online';
-  let orderId = String(resource?.external_reference || '').trim();
-  if (!orderId && job.resourceType === 'payment') orderId = (await findOrderIdByPaymentId(job.resourceId)) || '';
+  const orderId = String(resource?.external_reference || '').trim();
+
   if (!orderId) {
-    await markWebhookEvent(job.resourceId, 'ignored', 'Recurso sem referência do pedido.', null);
+    await markWebhookEvent(job.resourceId, 'ignored', 'Recurso sem external_reference.', null);
     return;
   }
 
@@ -90,7 +89,7 @@ async function handlePaymentWebhook(job: PaymentWebhookJob) {
 }
 
 async function handlePaymentReconcile(job: PaymentReconcileJob) {
-  if (!(await isMercadoPagoConfigured())) throw new Error('Mercado Pago não configurado.');
+  if (!isMercadoPagoConfigured()) throw new Error('Mercado Pago não configurado.');
 
   const lockKey = `order:${job.orderId}`;
   if (!(await acquireLock(lockKey, 30))) return;
@@ -174,7 +173,7 @@ function consume(channel: Channel, queue: string) {
 }
 
 async function reconcilePendingOrders() {
-  if (shuttingDown || !(await isMercadoPagoConfigured())) return;
+  if (shuttingDown || !isMercadoPagoConfigured()) return;
   try {
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const notifyAfter = Date.now() - NOTIFY_MAX_AGE_MS;

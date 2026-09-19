@@ -31,7 +31,7 @@ export async function GET(request: Request) {
     const orderStatus = String(order.status || '').toLowerCase();
     const settled = paymentStatus === 'paid' || orderStatus === 'cancelled';
 
-    if (!settled && await isMercadoPagoConfigured()) {
+    if (!settled && isMercadoPagoConfigured()) {
       try {
         const payment = await resolveMercadoPagoPayment(orderId, { paymentId: String(order.payment_id || '') || undefined });
         if (payment) {

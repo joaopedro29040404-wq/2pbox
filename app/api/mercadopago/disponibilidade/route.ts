@@ -33,14 +33,7 @@ export async function GET() {
     Boolean(publicKey) && isTest(publicKey) === chargeIsTest;
 
   const chargeToken = connected ? await getSellerAccessToken().catch(() => null) : platformToken;
-  const methods = hasToken && environmentMatches && chargeToken
-    ? await readSupportedMethods(chargeToken).then((supported) => ({
-        ...supported,
-        // Com uma public key válida, o Brick oficial continua visível mesmo
-        // quando /v1/payment_methods omite algum meio em contas OAuth.
-        card: supported.card || Boolean(publicKey),
-      }))
-    : { card: false, debit: false, pix: false };
+  const methods = hasToken && environmentMatches && chargeToken ? await readSupportedMethods(chargeToken) : { card: false, debit: false, pix: false };
 
   let reason: string | null = null;
   if (!hasToken) reason = "mercadopago-desconectado";
