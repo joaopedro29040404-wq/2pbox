@@ -62,11 +62,16 @@ export default function AnalyticsTracker() {
       } catch {}
     }
 
+    function sendNavigationEvent(payload: EventPayload) {
+      if (stopped) return;
+      void send(payload);
+    }
+
     const currentPath = pathname || window.location.pathname;
-    void send({ event_name: 'page_view', page_path: currentPath });
+    sendNavigationEvent({ event_name: 'page_view', page_path: currentPath });
     if (currentPath.startsWith('/produto/')) {
       const slug = decodeURIComponent(currentPath.split('/').filter(Boolean)[1] || '');
-      if (slug) void send({ event_name: 'product_view', page_path: currentPath, metadata: { slug } });
+      if (slug) sendNavigationEvent({ event_name: 'product_view', page_path: currentPath, metadata: { slug } });
     }
     if (currentPath === '/checkout') {
       const items = readCart();
