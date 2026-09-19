@@ -43,6 +43,9 @@ export async function POST(request: Request) {
 
   const items = await readOrderItems(orderId);
   const subtotal = round(Number(order.items_subtotal) > 0 ? Number(order.items_subtotal) : items.reduce((sum, item) => sum + Number(item.unit_price || 0) * Number(item.quantity || 0), 0) || Number(order.total || 0));
+  const couponRows = await supabaseRest(`orders?select=coupon_discount&id=eq.${encodeURIComponent(orderId)}&limit=1`).catch(() => []);
+  const couponDiscount = round(Math.min(Math.max(Number(Array.isArray(couponRows) ? couponRows[0]?.coupon_discount || 0 : 0), 0), subtotal));
+  const discountedSubtotal = round(Math.max(0, subtotal - couponDiscount));
   let distanceKm: number | null = null;
   let fee = 0;
   let baseFee = 0;
@@ -67,7 +70,7 @@ export async function POST(request: Request) {
   const freeShipping = provider === 'own' && freeFrom != null && freeFrom > 0 && subtotal >= freeFrom;
   if (freeShipping && fee > 0) { subsidy = round(subsidy + fee); fee = 0; }
   const serviceFee = round(subtotal * (operations.serviceFeePercent / 100) + operations.serviceFeeFixed);
-  const total = round(subtotal + fee + serviceFee);
+  const total = round(discountedSubtotal + fee + serviceFee);
   const payload: Record<string, unknown> = {
     delivery_type: DELIVERY_TYPE_BY_PROVIDER[provider as DeliveryProvider], delivery_provider: provider,
     delivery_distance_km: distanceKm, delivery_fee: fee, delivery_fee_base: baseFee, delivery_fee_subsidy: subsidy,
