@@ -7,7 +7,7 @@ import { SiteHeader } from '@/components/site-header';
 import { useToast } from '@/components/ui/toast';
 
 const money=(value:number)=>Number(value||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-const STATUS=[{value:'received',label:'Recebido'},{value:'printing',label:'Em produção'},{value:'ready',label:'Pronto'},{value:'completed',label:'Entregue'},{value:'cancelled',label:'Cancelado'}];
+const STATUS=[{value:'pending',label:'Pendente'},{value:'confirmed',label:'Confirmado'},{value:'preparing',label:'Preparando'},{value:'ready',label:'Pronto'},{value:'out_for_delivery',label:'Saiu para entrega'},{value:'delivered',label:'Entregue'},{value:'completed',label:'Concluído'},{value:'cancelled',label:'Cancelado'}];
 const statusLabel=(value:string)=>STATUS.find(x=>x.value===value)?.label||value;
 
 export default function AdminPrintOrders(){
@@ -15,12 +15,17 @@ export default function AdminPrintOrders(){
   const [jobs,setJobs]=useState<any[]>([]); const [loading,setLoading]=useState(true); const [query,setQuery]=useState(''); const [filter,setFilter]=useState('all'); const [updating,setUpdating]=useState<string|null>(null);
   async function load(){setLoading(true);try{const response=await fetch('/api/admin/impressao/pedidos',{cache:'no-store'});const data=await response.json();if(!response.ok)throw new Error(data?.error||'Não foi possível carregar os pedidos.');setJobs(data.jobs||[]);}catch(error){toast.error('Pedidos de impressão indisponíveis',error instanceof Error?error.message:undefined);}finally{setLoading(false);}}
   useEffect(()=>{void load();},[]);
-  async function updateStatus(id:string,status:string){setUpdating(id);try{const response=await fetch('/api/admin/impressao/pedidos',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,status})});const data=await response.json();if(!response.ok)throw new Error(data?.error||'Não foi possível atualizar o status.');setJobs(rows=>rows.map(row=>row.id===id?{...row,status}:row));toast.success('Status atualizado');}catch(error){toast.error('Não foi possível atualizar',error instanceof Error?error.message:undefined);}finally{setUpdating(null);}}
+  async function updateStatus(id:string,status:string){setUpdating(id);try{const response=await fetch('/api/admin/impressao/pedidos',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,status})});const data=await response.json();if(!response.ok)throw new Error(data?.error||'Não foi possível atualizar o status.');setJobs(rows=>rows.map(row=>row.id===id?{...row,status}:row));toast.success('Status atualizado','O pedido principal também foi atualizado e o cliente será notificado por e-mail.');}catch(error){toast.error('Não foi possível atualizar',error instanceof Error?error.message:undefined);}finally{setUpdating(null);}}
   const counts=useMemo(()=>({
     all:jobs.length,
-    received:jobs.filter(job=>job.status==='received').length,
-    printing:jobs.filter(job=>job.status==='printing').length,
+    pending:jobs.filter(job=>job.status==='pending').length,
+    confirmed:jobs.filter(job=>job.status==='confirmed').length,
+    preparing:jobs.filter(job=>job.status==='preparing').length,
     ready:jobs.filter(job=>job.status==='ready').length,
+    out_for_delivery:jobs.filter(job=>job.status==='out_for_delivery').length,
+    delivered:jobs.filter(job=>job.status==='delivered').length,
+    completed:jobs.filter(job=>job.status==='completed').length,
+    cancelled:jobs.filter(job=>job.status==='cancelled').length,
   }),[jobs]);
   const visible=useMemo(()=>{const term=query.trim().toLowerCase();return jobs.filter(job=>{if(filter!=='all'&&job.status!==filter)return false;if(!term)return true;const order=Array.isArray(job.orders)?job.orders[0]:job.orders;const files=(job.print_files||[]).map((f:any)=>f.original_name).join(' ');return [job.id,job.order_id,order?.customer_name,order?.customer_email,files].some(value=>String(value||'').toLowerCase().includes(term));});},[jobs,query,filter]);
 
@@ -28,19 +33,19 @@ export default function AdminPrintOrders(){
     <Link href="/admin" className="back"><ArrowLeft size={15}/> Painel</Link>
     <header className="head"><div><p>CENTRAL DE IMPRESSÃO</p><h1>Pedidos para produzir</h1><span>Aqui você recebe o arquivo, confere as configurações escolhidas pelo cliente, baixa e imprime.</span></div><button className="refresh" onClick={()=>void load()} disabled={loading}><RefreshCw size={15} className={loading?'spin':''}/> Atualizar</button></header>
     <nav className="print-tabs" aria-label="Central de impressão">
-      <Link href="/admin/impressao" className="tab active"><PackageCheck size={15}/> Pedidos <b>{counts.received}</b></Link>
+      <Link href="/admin/impressao" className="tab active"><PackageCheck size={15}/> Pedidos <b>{counts.all}</b></Link>
       <Link href="/admin/impressao/configuracoes" className="tab"><Settings2 size={15}/> Configurações</Link>
     </nav>
     <div className="summary">
-      <button className="summary-card received" onClick={()=>setFilter('received')}><span><Clock3 size={17}/></span><div><small>Novos</small><strong>{counts.received}</strong></div></button>
-      <button className="summary-card printing" onClick={()=>setFilter('printing')}><span><Printer size={17}/></span><div><small>Em produção</small><strong>{counts.printing}</strong></div></button>
+      <button className="summary-card received" onClick={()=>setFilter('pending')}><span><Clock3 size={17}/></span><div><small>Pendentes</small><strong>{counts.pending}</strong></div></button>
+      <button className="summary-card printing" onClick={()=>setFilter('preparing')}><span><Printer size={17}/></span><div><small>Preparando</small><strong>{counts.preparing}</strong></div></button>
       <button className="summary-card ready" onClick={()=>setFilter('ready')}><span><CheckCircle2 size={17}/></span><div><small>Prontos</small><strong>{counts.ready}</strong></div></button>
       <button className="summary-card all" onClick={()=>setFilter('all')}><span><PackageCheck size={17}/></span><div><small>Total</small><strong>{counts.all}</strong></div></button>
     </div>
     <div className="filters"><label><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar cliente, pedido ou arquivo..."/></label><div className="status-filters">
       <button className={filter==='all'?'active':''} onClick={()=>setFilter('all')}>Todos <b>{counts.all}</b></button>
-      <button className={filter==='received'?'active':''} onClick={()=>setFilter('received')}>Novos <b>{counts.received}</b></button>
-      <button className={filter==='printing'?'active':''} onClick={()=>setFilter('printing')}>Produção <b>{counts.printing}</b></button>
+      <button className={filter==='pending'?'active':''} onClick={()=>setFilter('pending')}>Pendentes <b>{counts.pending}</b></button>
+      <button className={filter==='preparing'?'active':''} onClick={()=>setFilter('preparing')}>Preparando <b>{counts.preparing}</b></button>
       <button className={filter==='ready'?'active':''} onClick={()=>setFilter('ready')}>Prontos <b>{counts.ready}</b></button>
     </div></div>
     {loading?<div className="empty">Carregando pedidos...</div>:visible.length===0?<div className="empty"><Printer size={25}/><b>Nenhum pedido de impressão encontrado.</b><span>Quando um cliente finalizar uma impressão, ela aparecerá aqui.</span></div>:<div className="jobs">{visible.map(job=>{const order=Array.isArray(job.orders)?job.orders[0]:job.orders;return <article className="job" key={job.id}>

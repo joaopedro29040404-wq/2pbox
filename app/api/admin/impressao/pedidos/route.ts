@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAdminUser } from '@/lib/server/auth';
 import { getAdminSupabase } from '@/lib/server/supabase-admin';
 
-const STATUSES = new Set(['received','printing','ready','completed','cancelled']);
+const STATUSES = new Set(['pending','confirmed','preparing','ready','out_for_delivery','delivered','completed','cancelled']);
 
 export async function GET() {
   const admin = await requireAdminUser();
@@ -62,14 +62,20 @@ export async function GET() {
     serviceRowsByFile.set(row.print_file_id, list);
   }
 
-  const normalizedJobs = rows.map((job: any) => ({
-    ...job,
-    print_files: (Array.isArray(job.print_files) ? job.print_files : []).map((file: any) => ({
+  const normalizedJobs = rows.map((job: any) => {
+    const order = Array.isArray(job.orders) ? job.orders[0] : job.orders;
+    return {
+      ...job,
+      // O status exibido na Central é sempre o status real do pedido principal.
+      // O valor legado de print_jobs (ex.: "received") não deve aparecer para o administrador.
+      status: order?.status || job.status,
+      print_files: (Array.isArray(job.print_files) ? job.print_files : []).map((file: any) => ({
       ...file,
       print_paper_types: paperById.get(file.paper_type_id) || null,
       print_file_services: serviceRowsByFile.get(file.id) || [],
-    })),
-  }));
+      })),
+    };
+  });
 
   return NextResponse.json({ jobs: normalizedJobs });
 }
@@ -85,8 +91,21 @@ export async function PATCH(request: Request) {
   const status = String(body?.status || '').trim();
   if (!id || !STATUSES.has(status)) return NextResponse.json({ error: 'Pedido ou status inválido.' }, { status: 400 });
 
-  const { data, error } = await client.from('print_jobs').update({ status }).eq('id', id).select('id,status').maybeSingle();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!data) return NextResponse.json({ error: 'Pedido de impressão não encontrado.' }, { status: 404 });
-  return NextResponse.json({ ok: true, job: data });
+  const { data: job, error: jobError } = await client.from('print_jobs').select('id,order_id').eq('id', id).maybeSingle();
+  if (jobError) return NextResponse.json({ error: jobError.message }, { status: 500 });
+  if (!job) return NextResponse.json({ error: 'Pedido de impressão não encontrado.' }, { status: 404 });
+  if (!job.order_id) return NextResponse.json({ error: 'Pedido de impressão sem pedido principal vinculado.' }, { status: 409 });
+
+  // Usa exatamente o fluxo de atualização do pedido normal: grava o status,
+  // registra o histórico e dispara a notificação de e-mail ao cliente.
+  const origin = request.headers.get('origin') || new URL(request.url).origin;
+  const response = await fetch(`${origin}/api/admin/pedidos/status`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', cookie: request.headers.get('cookie') || '' },
+    body: JSON.stringify({ orderId: job.order_id, status }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) return NextResponse.json({ error: payload?.error || 'Não foi possível atualizar o pedido.' }, { status: response.status });
+
+  return NextResponse.json({ ok: true, job: { id: job.id, order_id: job.order_id, status } });
 }

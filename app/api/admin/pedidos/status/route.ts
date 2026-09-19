@@ -68,6 +68,15 @@ export async function POST(request: Request) {
       }
     }
 
+    // A Central de Impressão usa o mesmo status do pedido principal.
+    // Mantemos os dois registros sincronizados para que qualquer alteração
+    // feita em Pedidos ou na Central gere o mesmo histórico e e-mail.
+    await supabaseRest(`print_jobs?order_id=eq.${orderId}`, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ status }),
+    }).catch((error) => console.warn('[admin/pedidos/status] não foi possível sincronizar impressão:', error));
+
     if (note) {
       await supabaseRest('order_status_history', {
         method: 'POST',
