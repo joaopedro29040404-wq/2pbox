@@ -87,6 +87,7 @@ export default function Home() {
     return () => window.clearInterval(timer);
   }, [banners.length]);
 
+
   const visibleCategories = useMemo(
     () => (categories.length === 4 ? categories : FALLBACK_MAIN_CATEGORIES),
     [categories],
