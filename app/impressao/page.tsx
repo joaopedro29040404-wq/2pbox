@@ -147,6 +147,7 @@ export default function ImpressaoPage(){
     .file-total{display:flex;align-items:flex-end;gap:18px;border-top:1px solid #eee;margin-top:16px;padding-top:13px}.file-total>div{display:grid;gap:3px}.file-total span{font-size:9px;color:#888}.file-total b{font-size:12px}.main-total{margin-left:auto;text-align:right}.main-total strong{font-size:21px}.summary{position:sticky;bottom:8px;margin-top:14px;background:#111;color:#fff;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:18px;box-shadow:0 7px 25px rgba(0,0,0,.16)}.summary>div{display:grid;gap:3px;flex:1}.summary span{font-size:8px;color:#aaa;letter-spacing:.08em}.summary b{font-size:12px}.summary>strong{font-size:21px}.summary button{border:0;background:#ffc400;color:#111;border-radius:9px;padding:12px 17px;font:900 11px Inter;cursor:pointer}.summary button:disabled{opacity:.5}
     @media(min-width:701px){
       .print-shell{width:min(1180px,calc(100% - 56px));padding:18px 0 64px}
+      .hero{min-height:0}
       .back{margin-bottom:14px}
       .hero{margin-bottom:16px}
       .hero h1{font-size:52px}
