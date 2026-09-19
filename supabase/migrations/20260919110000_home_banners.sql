@@ -16,3 +16,7 @@ with check (bucket_id = 'home-banners' and public.is_admin());
 drop policy if exists "Admins can delete home banners" on storage.objects;
 create policy "Admins can delete home banners" on storage.objects for delete to authenticated
 using (bucket_id = 'home-banners' and public.is_admin());
+
+-- 2P Box | persistência das artes configuráveis da Home
+alter table public.store_settings
+add column if not exists home_banners jsonb not null default '[]'::jsonb;
