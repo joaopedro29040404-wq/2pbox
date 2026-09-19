@@ -182,7 +182,7 @@ export async function searchMercadoPagoOrder(externalReference: string) {
     sort_by: 'created_date',
     sort_order: 'desc',
   });
-  const { ok, data } = await fetchJson(`${API}/v1/orders?${params.toString()}`, { headers: authHeaders() });
+  const { ok, data } = await fetchJson(`${API}/v1/orders?${params.toString()}`, { headers: await authHeaders() });
   if (!ok) return null;
   const orders = Array.isArray(data?.data) ? data.data : [];
   return sortByRelevance(orders.filter((item: any) => String(item?.external_reference || '').trim() === externalReference))[0] || null;
@@ -191,7 +191,7 @@ export async function searchMercadoPagoOrder(externalReference: string) {
 export async function searchMercadoPagoPayment(externalReference: string) {
   const { ok, data } = await fetchJson(
     `${API}/v1/payments/search?external_reference=${encodeURIComponent(externalReference)}&sort=date_created&criteria=desc&limit=20`,
-    { headers: authHeaders() },
+    { headers: await authHeaders() },
   );
   if (!ok) return null;
   const payments = Array.isArray(data?.results) ? data.results : [];
@@ -210,7 +210,7 @@ function sortByRelevance(list: any[]) {
 }
 
 export async function resolveMercadoPagoPayment(orderId: string, hints: { paymentId?: string; mpOrderId?: string } = {}) {
-  if (!isMercadoPagoConfigured()) return null;
+  if (!(await isMercadoPagoConfigured())) return null;
 
   if (hints.mpOrderId) {
     const result = await fetchMercadoPagoResource('order', hints.mpOrderId);
