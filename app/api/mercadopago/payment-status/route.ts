@@ -54,7 +54,7 @@ export async function GET(request: Request) {
       });
     }
 
-    if (!isMercadoPagoConfigured()) {
+    if (!(await isMercadoPagoConfigured())) {
       return respond({
         paymentStatus: localPaymentStatus || 'pending',
         orderStatus: localOrderStatus || 'pending',

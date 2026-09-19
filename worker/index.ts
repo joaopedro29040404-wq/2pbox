@@ -49,7 +49,7 @@ async function markWebhookEvent(resourceId: string, status: string, detail: stri
 }
 
 async function handlePaymentWebhook(job: PaymentWebhookJob) {
-  if (!isMercadoPagoConfigured()) throw new Error('Mercado Pago não configurado.');
+  if (!(await isMercadoPagoConfigured())) throw new Error('Mercado Pago não configurado.');
 
   const result = await fetchMercadoPagoResource(job.resourceType, job.resourceId);
   if (result.status === 404) {
@@ -89,7 +89,7 @@ async function handlePaymentWebhook(job: PaymentWebhookJob) {
 }
 
 async function handlePaymentReconcile(job: PaymentReconcileJob) {
-  if (!isMercadoPagoConfigured()) throw new Error('Mercado Pago não configurado.');
+  if (!(await isMercadoPagoConfigured())) throw new Error('Mercado Pago não configurado.');
 
   const lockKey = `order:${job.orderId}`;
   if (!(await acquireLock(lockKey, 30))) return;
@@ -173,7 +173,7 @@ function consume(channel: Channel, queue: string) {
 }
 
 async function reconcilePendingOrders() {
-  if (shuttingDown || !isMercadoPagoConfigured()) return;
+  if (shuttingDown || !(await isMercadoPagoConfigured())) return;
   try {
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const notifyAfter = Date.now() - NOTIFY_MAX_AGE_MS;

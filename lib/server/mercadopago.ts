@@ -1,4 +1,5 @@
 import { getMercadoPagoAccessToken } from './env';
+import { getSellerAccessToken } from './mercadopago-oauth';
 import { fetchJson } from './http';
 import { cacheGet, cacheSet } from './redis';
 import { supabaseRest, supabaseRpc } from './supabase-admin';
@@ -78,8 +79,8 @@ export function normalizePaymentStatus(payment: any) {
   return 'pending';
 }
 
-function authHeaders() {
-  const accessToken = getMercadoPagoAccessToken();
+async function authHeaders() {
+  const accessToken = (await getSellerAccessToken().catch(() => null)) || getMercadoPagoAccessToken();
   if (!accessToken) throw new Error('Mercado Pago não configurado.');
   return { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' };
 }
@@ -140,13 +141,14 @@ export async function readSupportedMethods(accessToken: string): Promise<MethodS
   return value;
 }
 
-export function isMercadoPagoConfigured() {
-  return Boolean(getMercadoPagoAccessToken());
+export async function isMercadoPagoConfigured() {
+  if (getMercadoPagoAccessToken()) return true;
+  return Boolean(await getSellerAccessToken().catch(() => null));
 }
 
 export async function fetchMercadoPagoResource(type: 'payment' | 'order', resourceId: string) {
   const endpoint = type === 'order' ? `/v1/orders/${encodeURIComponent(resourceId)}` : `/v1/payments/${encodeURIComponent(resourceId)}`;
-  const { ok, status, data } = await fetchJson(`${API}${endpoint}`, { headers: authHeaders() });
+  const { ok, status, data } = await fetchJson(`${API}${endpoint}`, { headers: await authHeaders() });
   return { ok, status, resource: data };
 }
 

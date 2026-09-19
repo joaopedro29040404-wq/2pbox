@@ -66,7 +66,7 @@ async function recordEvent(job: PaymentWebhookJob, payload: unknown, status: str
 }
 
 async function processInline(job: PaymentWebhookJob) {
-  if (!isMercadoPagoConfigured()) throw new Error('Mercado Pago não configurado.');
+  if (!(await isMercadoPagoConfigured())) throw new Error('Mercado Pago não configurado.');
 
   const result = await fetchMercadoPagoResource(job.resourceType, job.resourceId);
   if (result.status === 404) return { handled: false, reason: 'not_found' };
