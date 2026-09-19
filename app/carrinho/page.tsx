@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Bike, Gift, LoaderCircle, MessageCircle, Minus, Plus, ShoppingBag, Store, Trash2, Zap } from 'lucide-react';
+import { ArrowRight, Bike, FileText, Gift, LoaderCircle, MessageCircle, Minus, Plus, ShoppingBag, Store, Trash2, Zap } from 'lucide-react';
 import { useCart } from '@/components/cart-provider';
 import { SiteHeader } from '@/components/site-header';
 import { RadioGroup } from '@/components/ui/field';
@@ -138,33 +138,18 @@ export default function CarrinhoPage() {
                 </div>
               </div>
 
-              {items.map((item) => (
+              {items.map((item) => item.kind === 'print' ? (
                 <article className="cart-item" key={item.id}>
-                  <div className="cart-product-image">
-                    <ProductImage src={item.image_url} alt={item.name} sizes="120px" />
-                  </div>
-                  <div className="cart-product-info">
-                    <p className="cart-product-label">PRODUTO</p>
-                    <h2>{item.name}</h2>
-                    <p className="cart-unit-price">
-                      {money(item.price)} <span>cada</span>
-                    </p>
-                    <p className="cart-stock">Disponível: {item.stock} unidade(s)</p>
-                  </div>
-                  <div className="cart-item-actions">
-                    <div className="quantity-control">
-                      <button type="button" className="quantity-btn" onClick={() => setQty(item.id, item.quantity - 1)} aria-label="Diminuir" disabled={item.quantity <= 1}>
-                        <Minus size={15} />
-                      </button>
-                      <strong>{item.quantity}</strong>
-                      <button type="button" className="quantity-btn" onClick={() => setQty(item.id, item.quantity + 1)} aria-label="Aumentar" disabled={item.quantity >= item.stock}>
-                        <Plus size={15} />
-                      </button>
-                    </div>
-                    <button type="button" className="remove-btn" onClick={() => remove(item.id)}>
-                      <Trash2 size={15} /> Remover
-                    </button>
-                  </div>
+                  <div className="cart-product-image"><div className="cart-print-icon"><FileText size={28} /></div></div>
+                  <div className="cart-product-info"><p className="cart-product-label">IMPRESSÃO</p><h2>{item.name}</h2><p className="cart-unit-price">{money(item.price)}</p><p className="cart-stock">{Array.isArray(item.metadata?.files) ? item.metadata.files.length : 0} arquivo(s) · serviço personalizado</p></div>
+                  <div className="cart-item-actions"><strong>1 serviço</strong><button type="button" className="remove-btn" onClick={() => remove(item.id)}><Trash2 size={15} /> Remover</button></div>
+                  <div className="cart-subtotal">{money(item.price)}</div>
+                </article>
+              ) : (
+                <article className="cart-item" key={item.id}>
+                  <div className="cart-product-image"><ProductImage src={item.image_url} alt={item.name} sizes="120px" /></div>
+                  <div className="cart-product-info"><p className="cart-product-label">PRODUTO</p><h2>{item.name}</h2><p className="cart-unit-price">{money(item.price)} <span>cada</span></p><p className="cart-stock">Disponível: {item.stock} unidade(s)</p></div>
+                  <div className="cart-item-actions"><div className="quantity-control"><button type="button" className="quantity-btn" onClick={() => setQty(item.id, item.quantity - 1)} aria-label="Diminuir" disabled={item.quantity <= 1}><Minus size={15} /></button><strong>{item.quantity}</strong><button type="button" className="quantity-btn" onClick={() => setQty(item.id, item.quantity + 1)} aria-label="Aumentar" disabled={item.quantity >= item.stock}><Plus size={15} /></button></div><button type="button" className="remove-btn" onClick={() => remove(item.id)}><Trash2 size={15} /> Remover</button></div>
                   <div className="cart-subtotal">{money(item.price * item.quantity)}</div>
                 </article>
               ))}
@@ -294,7 +279,7 @@ export default function CarrinhoPage() {
         .cart-list-head button:hover{color:#c62828}
         .cart-item{position:relative;display:grid;grid-template-columns:120px minmax(0,1fr) auto;grid-template-rows:auto auto;gap:16px;padding:18px;border:1px solid #e9e9e9;border-radius:18px;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.025);transition:box-shadow .2s,border-color .2s}
         .cart-item:hover{border-color:#d9c98d;box-shadow:0 8px 24px rgba(0,0,0,.06)}
-        .cart-product-image{grid-row:1/3;width:120px;height:120px;border-radius:12px;overflow:hidden;background:#f7f7f5}
+        .cart-print-icon{width:100%;height:100%;display:grid;place-items:center;background:#fff4bf;color:#111}.cart-product-image{grid-row:1/3;width:120px;height:120px;border-radius:12px;overflow:hidden;background:#f7f7f5}
         .cart-product-info{min-width:0}
         .cart-product-label{font-size:10px;letter-spacing:.12em;font-weight:800;color:#a07800;margin:2px 0 7px}
         .cart-product-info h2{font-family:'Barlow Condensed';font-size:26px;text-transform:uppercase;margin:0 0 7px;line-height:1}

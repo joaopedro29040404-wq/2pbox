@@ -236,10 +236,12 @@ function CheckoutForm() {
   }
 
   async function checkStock(client: NonNullable<typeof supabase>) {
+    const productIds = items.filter((item) => item.kind !== 'print').map((item) => item.id);
+    if (!productIds.length) return [];
     const { data, error } = await client
       .from('products')
       .select('id,name,stock,active')
-      .in('id', items.map((item) => item.id));
+      .in('id', productIds);
     if (error) return null;
 
     const current = new Map<string, any>((data || []).map((row: any) => [String(row.id), row]));
@@ -304,12 +306,13 @@ function CheckoutForm() {
         p_customer_phone: phone.trim(),
         p_customer_email: email.trim(),
         p_notes: notes.trim() || null,
-        p_items: items.map((item) => ({ id: item.id, quantity: item.quantity })),
+        p_items: items.map((item) => item.kind === 'print' ? ({ type: 'print', files: item.metadata?.files || [], metadata: item.metadata?.metadata || {} }) : ({ id: item.id, quantity: item.quantity })),
         p_delivery_address: address,
       };
 
-      let result = await client.rpc('create_order_with_stock_v3', { ...args, p_delivery_type: deliveryType });
-      if (result.error && /create_order_with_stock_v3|schema cache|not find/i.test(result.error.message)) {
+      const hasPrint = items.some((item) => item.kind === 'print');
+      let result = hasPrint ? await client.rpc('create_order_with_stock_v5', { ...args, p_delivery_type: deliveryType }) : await client.rpc('create_order_with_stock_v3', { ...args, p_delivery_type: deliveryType });
+      if (result.error && !hasPrint && /create_order_with_stock_v3|schema cache|not find/i.test(result.error.message)) {
         result = await client.rpc('create_order_with_stock_v2', { ...args, p_delivery_type: type });
       }
       if (result.error) {

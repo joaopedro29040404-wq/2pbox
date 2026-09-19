@@ -1,0 +1,4 @@
+import { NextResponse } from 'next/server';
+import { requireAdminUser } from '@/lib/server/auth';
+import { getAdminSupabase } from '@/lib/server/supabase-admin';
+export async function GET(request:Request){const admin=await requireAdminUser();if(!admin)return NextResponse.json({error:'Não autorizado.'},{status:401});const path=new URL(request.url).searchParams.get('path');if(!path)return NextResponse.json({error:'Arquivo não informado.'},{status:400});const client=getAdminSupabase();if(!client)return NextResponse.json({error:'Supabase backend não configurado.'},{status:503});const{data,error}=await client.storage.from('print-files').createSignedUrl(path,300);if(error||!data?.signedUrl)return NextResponse.json({error:error?.message||'Não foi possível gerar o acesso.'},{status:500});return NextResponse.redirect(data.signedUrl);}

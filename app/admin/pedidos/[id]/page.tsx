@@ -15,6 +15,7 @@ import {
   ReceiptText,
   RefreshCw,
   ShoppingBag,
+  FileText,
   XCircle,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -45,7 +46,7 @@ type Order = {
   total: number;
   created_at: string;
 };
-type Item = { product_id: string; product_name: string; quantity: number; unit_price: number };
+type Item = { product_id: string | null; product_name: string; quantity: number; unit_price: number; print_job_id?: string | null };
 
 const STATUS_OPTIONS = Object.entries(ORDER_STATUS_LABELS).map(([value, label]) => ({ value, label }));
 
@@ -53,6 +54,7 @@ export default function AdminOrderDetail() {
   const { id } = useParams<{ id: string }>();
   const [order, setOrder] = useState<Order | null>(null);
   const [items, setItems] = useState<Item[]>([]);
+  const [printJobs, setPrintJobs] = useState<any[]>([]);
   const [history, setHistory] = useState<OrderHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -91,6 +93,8 @@ export default function AdminOrderDetail() {
         }
 
         setOrder(current);
+        const { data: jobs } = await supabase.from('print_jobs').select('id,subtotal,status,print_files(id,original_name,storage_path,pages,copies,color_mode,duplex,sheets,print_total,print_paper_types(name,size),print_file_services(quantity,unit_price,total,selected_pages,print_services(name,charge_type))').eq('order_id', id);
+        setPrintJobs(jobs || []);
 
         if (!email) {
           const { data: itemRows } = await supabase
@@ -300,6 +304,8 @@ export default function AdminOrderDetail() {
               </dl>
             </section>
 
+            {printJobs.length>0&&<section className="card"><div className="card-title"><FileText size={19}/><h2>Arquivos de impressão</h2></div>{printJobs.map((job:any)=><div className="print-job" key={job.id}>{(job.print_files||[]).map((file:any)=><div className="print-file" key={file.id}><div><strong>{file.original_name}</strong><span>{file.pages} páginas · {file.sheets} folhas · {file.color_mode==='color'?'Colorido':'P&B'} · {file.print_paper_types?.name||'Papel'}</span></div><a href={'/api/admin/impressao/download?path='+encodeURIComponent(file.storage_path)} target="_blank" rel="noreferrer">Baixar arquivo</a></div>)}</div>)}</section>}
+
             {order.notes && (
               <section className="card">
                 <div className="card-title">
@@ -393,7 +399,7 @@ export default function AdminOrderDetail() {
         .card-title h2{margin:0;font-size:15px}
         .item{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid #f0f0ee}
         .item-icon{width:40px;height:40px;border-radius:8px;background:#f5f5f2;display:grid;place-items:center;flex:none}
-        .item-info{flex:1;display:grid;gap:4px;min-width:0}
+        .print-file{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid #eee}.print-file>div{display:grid;gap:4px}.print-file span{font-size:9px;color:#888}.print-file a{font-size:9px;font-weight:900;color:#111;background:#ffc400;border-radius:7px;padding:8px 10px;text-decoration:none}.item-info{flex:1;display:grid;gap:4px;min-width:0}
         .item-info strong{font-size:11px}
         .item-info span,.muted{font-size:10px;color:#888;line-height:1.5}
         .item>strong{font-size:11px;white-space:nowrap}

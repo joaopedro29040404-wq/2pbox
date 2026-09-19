@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BarChart3, Box, ChevronRight, LayoutDashboard, Package, Settings, ShoppingCart, Tags, TrendingUp, Megaphone, Share2 } from 'lucide-react';
+import { BarChart3, Box, ChevronRight, LayoutDashboard, Package, Settings, ShoppingCart, Tags, TrendingUp, Megaphone, Share2, Printer } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { SiteHeader } from '@/components/site-header';
 import { money } from '@/lib/order-format';
@@ -16,6 +16,7 @@ const MENU = [
   { href: '/admin/pedidos', title: 'Pedidos', text: 'Acompanhe vendas, pagamentos e status.', icon: ShoppingCart, tone: 'soft' },
   { href: '/admin/marketing', title: 'Marketing', text: 'Promoções, cupons e campanhas de venda.', icon: Megaphone, tone: 'yellow' },
   { href: '/admin/marketing/divulgar', title: 'Divulgação', text: 'Gere links rastreáveis para divulgar produtos.', icon: Share2, tone: 'soft' },
+  { href: '/admin/impressao', title: 'Impressão', text: 'Papéis, preços por folha e serviços de impressão.', icon: Printer, tone: 'yellow' },
   { href: '/admin/analytics', title: 'Analytics', text: 'Funil, tráfego, produtos, vendas e conversão.', icon: BarChart3, tone: 'yellow' },
   { href: '/admin/configuracoes', title: 'Configurações', text: 'Dados da loja, retirada, contato e atendimento.', icon: Settings, tone: 'soft' },
 ];

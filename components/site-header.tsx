@@ -11,6 +11,7 @@ type NavLink = { href: string; label: string };
 
 const STORE_LINKS: NavLink[] = [
   { href: '/loja', label: 'Produtos' },
+  { href: '/impressao', label: 'Impressão' },
   { href: '/favoritos', label: 'Favoritos' },
   { href: '/acompanhar-pedido', label: 'Acompanhar pedido' },
 ];

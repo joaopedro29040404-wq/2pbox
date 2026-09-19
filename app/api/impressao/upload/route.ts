@@ -1,0 +1,5 @@
+import { NextResponse } from 'next/server';
+import { getAdminSupabase } from '@/lib/server/supabase-admin';
+import { randomUUID } from 'crypto';
+export const runtime='nodejs';
+export async function POST(request:Request){const form=await request.formData();const file=form.get('file');if(!(file instanceof File))return NextResponse.json({error:'Arquivo não informado.'},{status:400});const allowed=new Set(['application/pdf','image/jpeg','image/png','image/webp']);if(!allowed.has(file.type))return NextResponse.json({error:'Formato não permitido.'},{status:400});if(file.size>20*1024*1024)return NextResponse.json({error:'Arquivo maior que 20 MB.'},{status:400});const client=getAdminSupabase();if(!client)return NextResponse.json({error:'Storage não configurado.'},{status:503});const ext=(file.name.split('.').pop()||'bin').replace(/[^a-z0-9]/gi,'').toLowerCase()||'bin';const path='pending/'+new Date().toISOString().slice(0,10)+'/'+randomUUID()+'.'+ext;const{error}=await client.storage.from('print-files').upload(path,file,{contentType:file.type,upsert:false});if(error)return NextResponse.json({error:error.message},{status:500});return NextResponse.json({path});}
