@@ -11,12 +11,12 @@ type OrderRow = { created_at: string; status: string; payment_status?: string | 
 type Stat = { label: string; value: string; hint: string; icon: typeof Package };
 
 const MENU = [
+  { href: '/admin/pedidos', title: 'Pedidos', text: 'Acompanhe vendas, pagamentos e status.', icon: ShoppingCart, tone: 'yellow' },
+  { href: '/admin/impressao', title: 'Central de Impressão', text: 'Receba, produza e acompanhe pedidos de impressão.', icon: Printer, tone: 'yellow' },
   { href: '/admin/produtos', title: 'Produtos', text: 'Catálogo, estoque, preços, fotos e conteúdo.', icon: Package, tone: 'yellow' },
   { href: '/admin/categorias', title: 'Categorias', text: 'Organize e mantenha seu catálogo limpo.', icon: Tags, tone: 'soft' },
-  { href: '/admin/pedidos', title: 'Pedidos', text: 'Acompanhe vendas, pagamentos e status.', icon: ShoppingCart, tone: 'soft' },
   { href: '/admin/marketing', title: 'Marketing', text: 'Promoções, cupons e campanhas de venda.', icon: Megaphone, tone: 'yellow' },
   { href: '/admin/marketing/divulgar', title: 'Divulgação', text: 'Gere links rastreáveis para divulgar produtos.', icon: Share2, tone: 'soft' },
-  { href: '/admin/impressao', title: 'Impressão', text: 'Papéis, preços por folha e serviços de impressão.', icon: Printer, tone: 'yellow' },
   { href: '/admin/analytics', title: 'Analytics', text: 'Funil, tráfego, produtos, vendas e conversão.', icon: BarChart3, tone: 'yellow' },
   { href: '/admin/configuracoes', title: 'Configurações', text: 'Dados da loja, retirada, contato e atendimento.', icon: Settings, tone: 'soft' },
 ];
