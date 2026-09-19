@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { getMercadoPagoWebhookSecret } from '@/lib/server/env';
 import {
   fetchMercadoPagoResource,
+  findOrderIdByPaymentId,
   isMercadoPagoConfigured,
   normalizeOrderResource,
   syncOrderPayment,
@@ -74,8 +75,9 @@ async function processInline(job: PaymentWebhookJob) {
 
   const resource = result.resource;
   const isOrder = job.resourceType === 'order' || resource?.type === 'online';
-  const orderId = String(resource?.external_reference || '').trim();
-  if (!orderId) return { handled: false, reason: 'no_external_reference' };
+  let orderId = String(resource?.external_reference || '').trim();
+  if (!orderId && job.resourceType === 'payment') orderId = (await findOrderIdByPaymentId(job.resourceId)) || '';
+  if (!orderId) return { handled: false, reason: 'no_order_reference' };
 
   const payment = isOrder ? normalizeOrderResource(resource, orderId) : resource;
   if (!payment) return { handled: false, reason: 'no_payment' };

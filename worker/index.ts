@@ -4,6 +4,7 @@ import { deliverEmailJob } from '../lib/server/email/deliver';
 import { isEmailEnabled } from '../lib/server/env';
 import {
   fetchMercadoPagoResource,
+  findOrderIdByPaymentId,
   isMercadoPagoConfigured,
   normalizeOrderResource,
   resolveMercadoPagoPayment,
@@ -60,10 +61,10 @@ async function handlePaymentWebhook(job: PaymentWebhookJob) {
 
   const resource = result.resource as any;
   const isOrder = job.resourceType === 'order' || resource?.type === 'online';
-  const orderId = String(resource?.external_reference || '').trim();
-
+  let orderId = String(resource?.external_reference || '').trim();
+  if (!orderId && job.resourceType === 'payment') orderId = (await findOrderIdByPaymentId(job.resourceId)) || '';
   if (!orderId) {
-    await markWebhookEvent(job.resourceId, 'ignored', 'Recurso sem external_reference.', null);
+    await markWebhookEvent(job.resourceId, 'ignored', 'Recurso sem referência do pedido.', null);
     return;
   }
 

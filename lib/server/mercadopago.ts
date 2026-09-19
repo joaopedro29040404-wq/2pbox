@@ -225,6 +225,15 @@ function sortByRelevance(list: any[]) {
   });
 }
 
+export async function findOrderIdByPaymentId(paymentId: string) {
+  const id = String(paymentId || '').trim();
+  if (!id) return null;
+
+  const query = new URLSearchParams({ select: 'id', payment_id: `eq.${id}`, limit: '1' });
+  const rows = await supabaseRest(`orders?${query.toString()}`).catch(() => null);
+  return Array.isArray(rows) && rows[0]?.id ? String(rows[0].id) : null;
+}
+
 export async function resolveMercadoPagoPayment(orderId: string, hints: { paymentId?: string; mpOrderId?: string } = {}) {
   if (!(await isMercadoPagoConfigured())) return null;
 
