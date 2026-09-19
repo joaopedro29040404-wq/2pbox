@@ -14,7 +14,8 @@ export async function GET() {
   // select expression in this endpoint, which made the entire admin screen fail.
   const { data: jobs, error } = await client
     .from('print_jobs')
-    .select('id,order_id,subtotal,status,metadata,created_at,orders(id,customer_name,customer_phone,customer_email,delivery_type,delivery_address,notes,total,payment_status,status),print_files(id,original_name,storage_path,mime_type,pages,copies,color_mode,duplex,sheets,print_total,paper_type_id)')
+    .select('id,order_id,subtotal,status,metadata,created_at,orders!inner(id,customer_name,customer_phone,customer_email,delivery_type,delivery_address,notes,total,payment_status,status),print_files(id,original_name,storage_path,mime_type,pages,copies,color_mode,duplex,sheets,print_total,paper_type_id)')
+    .eq('orders.payment_status', 'paid')
     .order('created_at', { ascending: false })
     .range(0, 1999);
 
