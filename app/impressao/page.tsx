@@ -131,7 +131,8 @@ export default function ImpressaoPage() {
     }));
     addPrint({
       name: 'Impressão (' + files.length + ' arquivo' + (files.length > 1 ? 's' : '') + ')',
-      price: total, quantity: 1, stock: 1, files: normalizedFiles, metadata: { created_at: new Date().toISOString() },
+      price: total, quantity: 1, stock: 1,
+      metadata: { files: normalizedFiles, metadata: { created_at: new Date().toISOString() } },
     });
     toast.success('Impressão adicionada ao carrinho', 'Confira o resumo e finalize seu pedido.');
   }
