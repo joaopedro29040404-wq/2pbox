@@ -247,7 +247,18 @@ export async function resolveMercadoPagoPayment(orderId: string, hints: { paymen
 
   if (hints.paymentId) {
     const result = await fetchMercadoPagoResource('payment', hints.paymentId);
-    if (result.ok && String((result.resource as any)?.external_reference || '').trim() === orderId) return result.resource;
+    if (result.ok) {
+      const payment = result.resource as any;
+      const externalReference = String(payment?.external_reference || '').trim();
+
+      // Quando o Mercado Pago não devolve external_reference no GET /v1/payments/:id,
+      // o próprio payment_id já é a chave vinculada ao pedido local. Nesse caminho,
+      // o caller chegou aqui usando o payment_id persistido para este orderId.
+      if (externalReference === orderId) return payment;
+      if (!externalReference && String(payment?.id || '').trim() === String(hints.paymentId).trim()) {
+        return { ...payment, external_reference: orderId };
+      }
+    }
   }
 
   const mpOrder = await searchMercadoPagoOrder(orderId).catch(() => null);
