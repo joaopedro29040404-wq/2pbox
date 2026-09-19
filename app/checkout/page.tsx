@@ -405,6 +405,10 @@ function CheckoutForm() {
   const awaitingContact = (type === 'pickup' || paysOnline) && !paymentsOnline && Boolean(orderId);
   const paymentReady = payableOnline && Boolean(orderId) && amountSettled;
   const chargeTotal = payableTotal ?? total;
+  // O Mercado Pago informa limites mínimos por meio de pagamento. Para cartões,
+  // a documentação oficial exemplifica R$ 0,50; abaixo disso o Card Brick pode falhar.
+  const cardAvailableForAmount = mpMethods.card && chargeTotal >= 0.5;
+  const effectivePaymentMethod = cardAvailableForAmount || !mpMethods.pix ? paymentMethod : 'pix';
   const selectedOption = options.find((option) => option.provider === provider && option.available) || null;
   const deliveryResolved = type === 'pickup' || Boolean(selectedOption && selectedOption.fee != null);
 
@@ -672,10 +676,10 @@ return (
               <RadioGroup
                 name="payment-method"
                 label="Forma de pagamento"
-                value={paymentMethod}
+                value={effectivePaymentMethod}
                 columns={2}
                 options={[
-                  ...(mpMethods.card
+                  ...(cardAvailableForAmount
                     ? [{
                         value: 'card',
                         label: mpMethods.debit ? 'Cartão de crédito ou débito' : 'Cartão de crédito',
@@ -688,13 +692,16 @@ return (
                 onValueChange={(value) => setPaymentMethod(value as 'card' | 'pix')}
                 fullWidth
               />
+              {!cardAvailableForAmount && mpMethods.card && mpMethods.pix && (
+                <p className="payment-minimum-note">Para este valor, o Mercado Pago não libera pagamento com cartão. O PIX continua disponível.</p>
+              )}
 
               <div className="payment-method-body">
                 {!mpLoaded ? (
                   <div className="payment-booting">
                     <InlineLoader label="Preparando o pagamento seguro..." />
                   </div>
-                ) : paymentMethod === 'card' ? (
+                ) : effectivePaymentMethod === 'card' && cardAvailableForAmount ? (
                   <PaymentBrick
                     amount={chargeTotal}
                     publicKey={mpPublicKey}
@@ -851,6 +858,7 @@ return (
         .delivery-options{margin-top:20px;padding-top:20px;border-top:1px solid #eee;display:grid;gap:12px}
         .delivery-unavailable{margin:0;padding:0 0 0 18px;color:#8a8a86;font-size:11.5px;line-height:1.6}
         .payment-method-body{margin-top:22px;padding-top:22px;border-top:1px solid #eee}
+        .payment-minimum-note{margin:14px 0 0;padding:11px 13px;border:1px solid #f0d65b;border-radius:9px;background:#fff9d9;color:#6b5d00;font-size:11px;line-height:1.5}
         .payment-booting{min-height:180px;display:grid;place-items:center}
         .checkout-success{display:grid;place-items:center;min-height:60vh}
         .checkout-success-card{max-width:620px;text-align:center;border:1px solid #e9e9e9;border-radius:20px;padding:42px 34px}
