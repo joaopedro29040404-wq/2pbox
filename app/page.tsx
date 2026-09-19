@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowRight, ChevronLeft, ChevronRight, Headphones, Laptop, PencilLine, Printer, ShoppingBag, Smartphone, Star, Truck } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, Headphones, Image as ImageIcon, Laptop, PencilLine, Printer, ShoppingBag, Smartphone, Star, Truck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getStoreSettings, StoreSettings } from '@/lib/store-settings';
 import { SiteHeader } from '@/components/site-header';
