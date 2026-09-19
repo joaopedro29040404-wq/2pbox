@@ -267,14 +267,18 @@ async function main() {
   const health = startHealthServer();
 
   if (isQueueConfigured()) {
-    const channel = await getRabbitChannel();
-    await channel.prefetch(PREFETCH);
-    await Promise.all([
-      consume(channel, QUEUES.paymentWebhook),
-      consume(channel, QUEUES.paymentReconcile),
-      consume(channel, QUEUES.email),
-    ]);
-    log('info', 'consumidores ativos', Object.values(QUEUES));
+    try {
+      const channel = await getRabbitChannel();
+      await channel.prefetch(PREFETCH);
+      await Promise.all([
+        consume(channel, QUEUES.paymentWebhook),
+        consume(channel, QUEUES.paymentReconcile),
+        consume(channel, QUEUES.email),
+      ]);
+      log('info', 'consumidores ativos', Object.values(QUEUES));
+    } catch (error) {
+      log('error', 'fila indisponivel: worker segue apenas com as rotinas agendadas', error);
+    }
   } else {
     log('warn', 'RABBITMQ_URL ausente: worker roda apenas as rotinas agendadas');
   }

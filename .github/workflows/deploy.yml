@@ -131,6 +131,10 @@ jobs:
             WORKER_CART_INTERVAL_MS=900000
             CART_REMINDER_AFTER_MS=10800000
             EOF
+
+            awk 'BEGIN{a=""} { if (a!="" && $0 !~ /^[A-Za-z_][A-Za-z0-9_]*=/) { a=a $0 } else { if (a!="") print a; a=$0 } } END{ if (a!="") print a }' /opt/2pbox/.env > /opt/2pbox/.env.saneado
+            mv /opt/2pbox/.env.saneado /opt/2pbox/.env
+
             chmod 600 /opt/2pbox/.env
 
             docker pull ${{ env.IMAGE_NAME }}:${{ github.sha }}
