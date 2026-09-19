@@ -189,13 +189,29 @@ export async function searchMercadoPagoOrder(externalReference: string) {
 }
 
 export async function searchMercadoPagoPayment(externalReference: string) {
+  const now = new Date();
+  const begin = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+  const params = new URLSearchParams({
+    external_reference: externalReference,
+    sort: 'date_created',
+    criteria: 'desc',
+    range: 'date_created',
+    begin_date: begin.toISOString(),
+    end_date: now.toISOString(),
+    limit: '50',
+  });
+
   const { ok, data } = await fetchJson(
-    `${API}/v1/payments/search?external_reference=${encodeURIComponent(externalReference)}&sort=date_created&criteria=desc&limit=20`,
+    `${API}/v1/payments/search?${params.toString()}`,
     { headers: await authHeaders() },
   );
   if (!ok) return null;
+
   const payments = Array.isArray(data?.results) ? data.results : [];
-  return sortByRelevance(payments)[0] || null;
+  const matching = payments.filter(
+    (item: any) => String(item?.external_reference || '').trim() === String(externalReference).trim(),
+  );
+  return sortByRelevance(matching)[0] || null;
 }
 
 function sortByRelevance(list: any[]) {
@@ -267,7 +283,7 @@ const BILLING_CACHE_SECONDS = 60 * 30;
 
 export async function fetchPaymentBilling(paymentId: string): Promise<PaymentBilling | null> {
   const id = String(paymentId || '').trim();
-  if (!id || !isMercadoPagoConfigured()) return null;
+  if (!id || !(await isMercadoPagoConfigured())) return null;
 
   const memo = billingMemo.get(id);
   if (memo && memo.expiresAt > Date.now()) return memo.value;
