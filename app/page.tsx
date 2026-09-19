@@ -129,7 +129,6 @@ export default function Home() {
                 <span>{String(slide + 1).padStart(2, '0')} / {String(banners.length).padStart(2, '0')}</span>
                 <div className="home-carousel-dots">{banners.map((banner,index)=><button type="button" key={banner.id} className={index===slide?'active':''} onClick={()=>setSlide(index)} aria-label={'Ir para banner '+(index+1)} />)}</div>
               </div> : null}
-              </div>
             </div> : <div className="home-hero-art-empty"><ImageIcon size={30}/><strong>CADASTRE SEU BANNER</strong><span>Marketing → Banners da Home</span></div>}
           </div>
         </div>
