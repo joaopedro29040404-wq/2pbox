@@ -68,7 +68,7 @@ export default function AnalyticsTracker() {
     }
 
     const currentPath = pathname || window.location.pathname;
-    sendNavigationEvent({ event_name: 'page_view', page_path: currentPath });
+    sendNavigationEvent({ event_name: 'page_view', page_path: currentPath, metadata: currentPath === '/impressao' ? { page_type: 'print_center' } : undefined });
     if (currentPath.startsWith('/produto/')) {
       const slug = decodeURIComponent(currentPath.split('/').filter(Boolean)[1] || '');
       if (slug) sendNavigationEvent({ event_name: 'product_view', page_path: currentPath, metadata: { slug } });

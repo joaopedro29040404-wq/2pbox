@@ -70,7 +70,7 @@ export default function AdminImpressao() {
     <main className="pa">
       <SiteHeader variant="admin" subtitle="IMPRESSÃO" />
       <section className="shell">
-        <Link href="/admin" className="back"><ArrowLeft size={15} /> Painel</Link>
+        <div className="admin-nav"><Link href="/admin" className="back"><ArrowLeft size={15} /> Painel</Link><Link href="/admin/impressao/pedidos" className="orders-link"><Printer size={14} /> Pedidos de impressão</Link></div>
 
         <header className="hero">
           <div className="hero-icon"><Printer size={25} /></div>
@@ -203,7 +203,7 @@ export default function AdminImpressao() {
       <style jsx global>{`
         .pa{min-height:100vh;background:#f5f5f2;color:#111;font-family:Inter,Arial,sans-serif}
         .shell{width:min(1120px,calc(100% - 30px));margin:auto;padding:28px 0 70px}
-        .back{display:inline-flex;gap:7px;align-items:center;color:#666;text-decoration:none;font:800 11px Inter;margin-bottom:22px}
+        .admin-nav{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:22px}.back{display:inline-flex;gap:7px;align-items:center;color:#666;text-decoration:none;font:800 11px Inter}.orders-link{display:inline-flex;align-items:center;gap:7px;background:#ffc400;color:#111;text-decoration:none;border-radius:9px;padding:10px 12px;font:900 10px Inter}
         .hero{display:flex;gap:15px;align-items:center;margin-bottom:18px}.hero-icon{width:52px;height:52px;border-radius:15px;background:#ffc400;display:grid;place-items:center}.hero p{margin:0 0 5px;color:#9b7600;font-size:10px;font-weight:900;letter-spacing:.2em}.pa h1{margin:0;font:italic 48px/1 'Barlow Condensed';text-transform:uppercase}.hero span{display:block;margin-top:8px;color:#777;font-size:12px}
         .card{background:#fff;border:1px solid #dddcd7;border-radius:17px;padding:20px;margin-top:15px}.section-heading h2,.title h2{margin:3px 0 0;font-size:18px}.step{display:block;color:#9b7600;font-size:9px;font-weight:900;letter-spacing:.16em}.title{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:17px}.title small{display:block;color:#888;font-size:10px;margin-top:6px}
         .primary,.small-primary{border:0;background:#ffc400;border-radius:9px;padding:10px 12px;font:900 10px Inter;display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap}.small-primary{padding:8px 10px;font-size:9px}
@@ -213,7 +213,7 @@ export default function AdminImpressao() {
         .service-help{background:#f8f8f6;border-radius:11px;padding:13px;margin-bottom:13px}.service-help>b{font-size:10px}.service-help-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:9px}.service-help-grid div{background:#fff;border:1px solid #e4e3df;border-radius:8px;padding:9px;display:grid;gap:4px}.service-help-grid strong{font-size:9px}.service-help-grid span{line-height:1.4}.services-list{display:grid;gap:9px}.service-card{border:1px solid #e4e3df;border-radius:12px;padding:13px}.service-fields{display:grid;grid-template-columns:1fr 1.3fr .8fr .55fr auto;gap:10px;align-items:end}.service-actions{display:flex;gap:10px;align-items:center;margin-top:11px}.save-wide{border:0;background:#ffc400;border-radius:8px;padding:9px 12px;font:900 9px Inter;display:flex;align-items:center;gap:5px;cursor:pointer}.delete-text{border:0;background:transparent;color:#a33;font:800 9px Inter;display:flex;gap:5px;align-items:center;cursor:pointer}
         .final-note{display:flex;gap:9px;background:#111;color:#fff;border-color:#111;font-size:10px}.final-note span{color:#bbb}.loading{padding:80px;text-align:center;color:#888}
         @media(max-width:900px){.paper-card{grid-template-columns:1fr 1fr}.service-fields{grid-template-columns:1fr 1fr}.service-actions{justify-content:space-between}.how-grid,.service-help-grid{grid-template-columns:1fr 1fr}}
-        @media(max-width:620px){.shell{width:min(100% - 20px,1120px);padding-top:18px}.pa h1{font-size:35px}.hero{align-items:flex-start}.title{flex-direction:column}.primary,.small-primary{width:100%;justify-content:center}.how-grid,.service-help-grid{grid-template-columns:1fr}.paper-card,.price-row,.service-fields{grid-template-columns:1fr}.mode-head{align-items:flex-start;flex-direction:column}.mode-head .small-primary{width:100%}.price-row .actions{justify-content:flex-end}.final-note{display:grid}}
+        @media(max-width:620px){.admin-nav{align-items:flex-start;flex-direction:column}.orders-link{width:100%;justify-content:center}.shell{width:min(100% - 20px,1120px);padding-top:18px}.pa h1{font-size:35px}.hero{align-items:flex-start}.title{flex-direction:column}.primary,.small-primary{width:100%;justify-content:center}.how-grid,.service-help-grid{grid-template-columns:1fr}.paper-card,.price-row,.service-fields{grid-template-columns:1fr}.mode-head{align-items:flex-start;flex-direction:column}.mode-head .small-primary{width:100%}.price-row .actions{justify-content:flex-end}.final-note{display:grid}}
       `}</style>
     </main>
   );

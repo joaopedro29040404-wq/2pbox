@@ -90,6 +90,8 @@ export async function GET(request: Request) {
   const revenue = paidOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const byName = (name: string) => allEvents.filter((event) => event.event_name === name);
   const pageViews = byName('page_view');
+  const printPageViews = pageViews.filter((event) => event.page_path === '/impressao' || event.metadata?.page_type === 'print_center');
+  const printPageVisitors = uniqueSessions(printPageViews);
   const productViews = byName('product_view');
   const cartAdds = byName('add_to_cart');
   const checkouts = byName('begin_checkout');
@@ -121,8 +123,11 @@ export async function GET(request: Request) {
   for (const order of paidOrders) { const row = ensureTraffic(orderSource(order)); row.orders += 1; row.revenue += Number(order.total || 0); }
   const traffic = Array.from(trafficMap.values()).map((row) => ({ source: row.source, visits: row.visits.size, carts: row.carts.size, checkouts: row.checkouts.size, orders: row.orders, revenue: round(row.revenue) })).sort((a, b) => b.revenue - a.revenue || b.visits - a.visits);
   const productIds = Array.from(new Set([...productViews, ...cartAdds].map((event) => event.product_id).filter(Boolean).concat(realOrders.length ? [] : [])));
-  const { data: itemRows } = paidOrders.length ? await client.from('order_items').select('order_id,product_id,product_name,quantity,total').in('order_id', paidOrders.map((order) => order.id)).range(0, 19999) : { data: [] as any[] };
+  const { data: itemRows } = paidOrders.length ? await client.from('order_items').select('order_id,product_id,product_name,quantity,total,print_job_id').in('order_id', paidOrders.map((order) => order.id)).range(0, 19999) : { data: [] as any[] };
   const items = (itemRows || []) as any[];
+  const printItems = items.filter((item) => item.print_job_id);
+  const printRevenue = printItems.reduce((sum, item) => sum + Number(item.total || 0), 0);
+  const printOrders = new Set(printItems.map((item) => item.order_id).filter(Boolean));
   const itemProductIds = items.map((item) => item.product_id).filter(Boolean);
   const lookupIds = Array.from(new Set([...productIds, ...itemProductIds]));
   const { data: productRows } = lookupIds.length ? await client.from('products').select('id,name,slug').in('id', lookupIds) : { data: [] as any[] };
@@ -155,5 +160,5 @@ export async function GET(request: Request) {
   const abandonedRate = cartCreatedSessions ? round((abandonedSessions.length / cartCreatedSessions) * 100) : 0;
   const conversionRate = visitors.size ? round((paidOrders.length / visitors.size) * 100) : 0;
   const testOrders = allOrders.filter((order) => order.is_test).slice(0, 50).map((order) => ({ id: order.id, total: Number(order.total || 0), status: order.status, payment_status: order.payment_status, created_at: order.created_at, is_test: true }));
-  return NextResponse.json({ period: { start: start.toISOString(), end: end.toISOString() }, locations, cards: { visitors: visitors.size, productViews: productViews.length, cartAdds: cartAdds.length, checkouts: checkoutSessions.size, payments: paymentSessions.size, approvedOrders: paidOrders.length, orders: realOrders.length, canceledOrders: canceledOrders.length, revenue: round(revenue), averageTicket: paidOrders.length ? round(revenue / paidOrders.length) : 0, conversionRate, productsSold: items.reduce((sum, item) => sum + Number(item.quantity || 0), 0) }, evolution, funnel: funnelStages, traffic, products, abandoned: { carts: cartCreatedSessions, abandoned: abandonedSessions.length, rate: abandonedRate, value: round(abandonedValue) }, devices, hours, sales: { orders: realOrders.length, approved: paidOrders.length, canceled: canceledOrders.length, revenue: round(revenue), averageTicket: paidOrders.length ? round(revenue / paidOrders.length) : 0, productsSold: items.reduce((sum, item) => sum + Number(item.quantity || 0), 0) }, testOrders });
+  return NextResponse.json({ period: { start: start.toISOString(), end: end.toISOString() }, locations, cards: { visitors: visitors.size, productViews: productViews.length, printPageViews: printPageViews.length, printPageVisitors: printPageVisitors.size, cartAdds: cartAdds.length, checkouts: checkoutSessions.size, payments: paymentSessions.size, approvedOrders: paidOrders.length, orders: realOrders.length, canceledOrders: canceledOrders.length, revenue: round(revenue), averageTicket: paidOrders.length ? round(revenue / paidOrders.length) : 0, conversionRate, productsSold: items.reduce((sum, item) => sum + Number(item.quantity || 0), 0) }, evolution, funnel: funnelStages, traffic, products, abandoned: { carts: cartCreatedSessions, abandoned: abandonedSessions.length, rate: abandonedRate, value: round(abandonedValue) }, devices, hours, sales: { orders: realOrders.length, approved: paidOrders.length, canceled: canceledOrders.length, revenue: round(revenue), averageTicket: paidOrders.length ? round(revenue / paidOrders.length) : 0, productsSold: items.reduce((sum, item) => sum + Number(item.quantity || 0), 0), printOrders: printOrders.size, printRevenue: round(printRevenue) }, testOrders });
 }
