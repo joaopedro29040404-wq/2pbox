@@ -54,7 +54,7 @@ export default function Home() {
         client.from('categories').select('id,name,description,parent_id').eq('active', true).is('parent_id', null),
         client.from('products').select('id,name,slug,price,image_url,images').eq('active', true).order('created_at', { ascending: false }).limit(8),
         getStoreSettings(),
-        client.from('store_settings').select('home_banners,home_print_enabled,home_print_title,home_print_description,home_print_image_url').order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+        client.from('store_settings').select('home_banners').order('updated_at', { ascending: false }).limit(1).maybeSingle(),
       ]);
       if (!mounted) return;
       if (categoryRows) {
@@ -70,10 +70,10 @@ export default function Home() {
       const config = homeConfig as any;
       const activeBanners = Array.isArray(config?.home_banners) ? config.home_banners.filter((b: Banner) => b?.active !== false && b?.image_url).sort((a: Banner, b: Banner) => Number(a.sort_order || 0) - Number(b.sort_order || 0)) : [];
       setBanners(activeBanners.slice(0, 4));
-      setPrintEnabled(config?.home_print_enabled !== false);
-      setPrintTitle(config?.home_print_title || 'PRECISA IMPRIMIR?');
-      setPrintDescription(config?.home_print_description || 'Envie seu arquivo, escolha as configurações e faça seu pedido de impressão.');
-      setPrintImage(config?.home_print_image_url || '');
+      setPrintEnabled(true);
+      setPrintTitle('PRECISA IMPRIMIR?');
+      setPrintDescription('Envie seu arquivo, escolha as configurações e faça seu pedido de impressão.');
+      setPrintImage('');
       setLoading(false);
     })();
     return () => {
