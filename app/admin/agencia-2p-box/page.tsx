@@ -12,7 +12,7 @@ const ROLES=[['Diretor-Geral','Coordena a campanha.'],['Diretor de Marketing','D
 const day=()=>new Date().toISOString().slice(0,10);
 
 export default function AgencyPage(){
- const [products,setProducts]=useState<Product[]>([]),[assets,setAssets]=useState<Asset[]>([],[selected,setSelected]=useState(''),[objective,setObjective]=useState('Gerar interesse e cliques no Instagram.'),[busy,setBusy]=useState(false),[gpu,setGpu]=useState(false),[status,setStatus]=useState('Pronto. O processamento acontece no navegador.');
+ const [products,setProducts]=useState<Product[]>([]),[assets,setAssets]=useState<Asset[]>([]),[selected,setSelected]=useState(''),[objective,setObjective]=useState('Gerar interesse e cliques no Instagram.'),[busy,setBusy]=useState(false),[gpu,setGpu]=useState(false),[status,setStatus]=useState('Pronto. O processamento acontece no navegador.');
  useEffect(()=>{try{localStorage.removeItem('2pbox-agency-assets-v1');localStorage.removeItem('2pbox-agency-assets-v2');const a=JSON.parse(localStorage.getItem(KEY)||'[]');setAssets(Array.isArray(a)?a:[])}catch{setAssets([])};(async()=>{if(supabase){const r=await supabase.from('products').select('id,name,price,stock,image_url').eq('active',true).order('created_at',{ascending:false}).limit(100);setProducts((r.data||[]) as Product[])}})();setGpu(typeof navigator!=='undefined'&&'gpu' in navigator)},[]);
  const today=useMemo(()=>assets.filter(a=>a.createdAt.slice(0,10)===day()),[assets]),approved=today.filter(a=>a.status==='approved'),stories=approved.filter(a=>a.type==='story').length,reels=approved.filter(a=>a.type==='reel').length;
  const product=products.find(p=>p.id===selected)||products[0];
