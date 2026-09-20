@@ -1,26 +1,7 @@
-# 2P Box Local Agency
+# Agência 2P Box — processamento no navegador
 
-Ponte local da Agência 2P Box. Não usa API paga de IA.
+O motor da agência é executado dentro do navegador, sem Ollama, ComfyUI, Python, Docker ou processo local separado.
 
-## Requisitos
-- Node.js 20+
-- Ollama com um modelo local
-- ComfyUI local
-- Um checkpoint avançado instalado no ComfyUI
+A aplicação usa as APIs locais do navegador para composição e renderização e detecta WebGPU quando disponível. O histórico fica no armazenamento local.
 
-## Executar
-Windows PowerShell:
-```powershell
-$env:OLLAMA_MODEL="llama3.2"
-$env:COMFYUI_CHECKPOINT="SEU_MODELO"
-node local-agency/agent.mjs
-```
-
-Linux/macOS:
-```bash
-OLLAMA_MODEL=llama3.2 COMFYUI_CHECKPOINT=SEU_MODELO node local-agency/agent.mjs
-```
-
-O serviço escuta somente em 127.0.0.1:4317. A Agência 2P Box detecta a conexão automaticamente.
-
-A geração visual é sempre avançada. O limite é 4 Stories e 2 Reels por dia. Os resultados ficam disponíveis na própria área da Agência no navegador.
+Modelos generativos de difusão completos são arquivos muito grandes para serem tratados como código comum do Git. Por isso esta implementação não instala software no PC nem inicia servidor local.
