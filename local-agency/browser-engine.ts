@@ -38,11 +38,11 @@ ctx.fillStyle='#F7F7F3';ctx.fillRect(0,0,w,h);
 ctx.fillStyle='#FFC400';roundRect(ctx,-90,55,360,70,35);roundRect(ctx,-45,140,250,46,23);roundRect(ctx,w-245,1660,340,70,35);
 if(logo)ctx.drawImage(logo,76,70,250,173);else{ctx.fillStyle='#111';ctx.font='900 58px Arial';ctx.fillText('2P BOX',78,170)}
 ctx.fillStyle='#111';ctx.font='900 22px Arial';ctx.fillText(type==='reel'?'REEL  •  2P BOX':'STORY  •  2P BOX',78,294);
-ctx.font='900 48px Arial';textBlock(ctx,plan.hook,78,365,w-156,42,56);
+ctx.font='900 48px Arial';textBlock(ctx,plan.hook,78,365,w-156,56);
 ctx.fillStyle='#FFC400';roundRect(ctx,78,505,w-156,210,34);
-ctx.fillStyle='#111';ctx.font='900 70px Arial';textBlock(ctx,plan.headline,108,590,w-216,70,78);
+ctx.fillStyle='#111';ctx.font='900 70px Arial';textBlock(ctx,plan.headline,108,590,w-216,78);
 drawProduct(ctx,img,78,755,w-156,610);
-ctx.fillStyle='#111';ctx.font='800 27px Arial';textBlock(ctx,plan.support,82,1430,w-164,27,38);
+ctx.fillStyle='#111';ctx.font='800 27px Arial';textBlock(ctx,plan.support,82,1430,w-164,38);
 ctx.fillStyle='#111';roundRect(ctx,78,1555,w-156,118,28);ctx.fillStyle='#FFC400';ctx.font='900 39px Arial';ctx.fillText(plan.cta,112,1628);ctx.font='800 25px Arial';ctx.fillText('→',w-155,1628);
 ctx.fillStyle='#111';ctx.font='900 43px Arial';ctx.fillText(money(p.price),78,1735);
 ctx.font='800 20px Arial';ctx.fillStyle='#555';ctx.fillText('2pbox.com.br',78,1775);
