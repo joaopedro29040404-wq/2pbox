@@ -45,7 +45,7 @@ type AuthUser = { id: string; email?: string | null; user_metadata?: { full_name
 type Errors = Record<string, string>;
 
 function CheckoutForm() {
-  const { items, total, clear } = useCart();
+  const { items, total, coupon, clear } = useCart();
   const searchParams = useSearchParams();
   const toast = useToast();
 
@@ -316,7 +316,12 @@ function CheckoutForm() {
       };
 
       const hasPrint = items.some((item) => item.kind === 'print');
-      let result = hasPrint ? await client.rpc('create_order_with_stock_v5', { ...args, p_delivery_type: deliveryType }) : await client.rpc('create_order_with_stock_v3', { ...args, p_delivery_type: deliveryType });
+      let result = hasPrint ? await client.rpc('create_order_with_stock_v5', { ...args, p_delivery_type: deliveryType }) : (() => {
+        const rpc = client.rpc('create_order_with_stock_v3', { ...args, p_delivery_type: deliveryType });
+        return coupon?.code && typeof (rpc as any)?.setHeader === 'function'
+          ? (rpc as any).setHeader('x-2pbox-coupon', coupon.code.trim().toUpperCase())
+          : rpc;
+      })();
       if (result.error && !hasPrint && /create_order_with_stock_v3|schema cache|not find/i.test(result.error.message)) {
         result = await client.rpc('create_order_with_stock_v2', { ...args, p_delivery_type: type });
       }
