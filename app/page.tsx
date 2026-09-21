@@ -170,8 +170,13 @@ export default function Home() {
           <div className="home-category-grid">
             {visibleCategories.map((category, index) => (
               <Link key={category.id || category.name} href={`/loja?categoria=${encodeURIComponent(category.id)}`} className={`home-category-card category-${index + 1}`}>
-                <div className={`home-category-image category-art-\${index + 1}`} aria-hidden="true" />
-                <div className="home-category-copy"><h3>{category.name}</h3><span className="home-category-cta">EXPLORAR <ArrowRight size={15} /></span></div>
+                <div className="home-category-image" aria-hidden="true"><img src={[
+                  'https://images.unsplash.com/photo-1661019977720-4b570f4e7876?auto=format&fit=crop&w=1200&q=85',
+                  'https://images.unsplash.com/photo-1599669454515-1b2e0173f302?auto=format&fit=crop&w=1200&q=85',
+                  'https://images.unsplash.com/photo-1706275399728-da031110dc43?auto=format&fit=crop&w=1200&q=85',
+                  'https://images.unsplash.com/photo-1666771410140-0573b232426e?auto=format&fit=crop&w=1200&q=85',
+                ][index]} alt="" loading="lazy" /></div>
+                <div className="home-category-copy"><h3>{category.name === 'Acessórios para celular' ? 'Acessórios' : category.name}</h3><span className="home-category-cta">EXPLORAR <ArrowRight size={15} /></span></div>
               </Link>
             ))}
           </div>
@@ -216,13 +221,10 @@ export default function Home() {
         .home-category-card:before{content:'';position:absolute;top:0;left:14px;width:34px;height:4px;border-radius:0 0 6px 6px;background:#ffc400;z-index:3}
         .home-category-card:hover{transform:translateY(-4px);border-color:#e4c743;box-shadow:0 18px 36px rgba(0,0,0,.08)}
         .home-category-card:active{transform:translateY(-1px) scale(.99)}
-        .home-category-image{position:relative;width:100%;height:154px;margin:0 0 12px;display:block;overflow:hidden;border-radius:15px;background-color:#fff;background-image:url('/category-sprite.webp');background-repeat:no-repeat;background-size:400% 100%;background-position-y:center}
-        .home-category-image.category-art-1{background-position-x:0%}
-        .home-category-image.category-art-2{background-position-x:33.333333%}
-        .home-category-image.category-art-3{background-position-x:66.666667%}
-        .home-category-image.category-art-4{background-position-x:100%}
+        .home-category-image{position:relative;width:100%;height:154px;margin:0 0 12px;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:15px;background:#fff}
+        .home-category-image img{width:100%;height:100%;display:block;object-fit:contain;object-position:center;padding:8px}
         .home-category-copy{position:relative;z-index:2;width:100%;padding:0 4px;display:flex;align-items:flex-end;justify-content:space-between;gap:8px;text-align:left}
-        .home-category-copy h3{margin:0;font-family:'Barlow Condensed',sans-serif;font-size:23px;line-height:.92;letter-spacing:-.01em;text-transform:uppercase}
+        .home-category-copy h3{margin:0;font-family:'Barlow Condensed',sans-serif;font-size:20px;line-height:1;letter-spacing:-.01em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .home-category-cta{display:inline-flex;align-items:center;gap:4px;flex:none;margin:0;padding-bottom:1px;color:#111;font-size:8px;font-weight:900;letter-spacing:.1em}
         .home-category-cta svg{width:14px;height:14px;transition:transform .2s ease}
         .home-category-card:hover .home-category-cta svg{transform:translateX(3px)}
@@ -251,7 +253,8 @@ export default function Home() {
           .home-category-grid::-webkit-scrollbar{display:none}
           .home-category-card{min-width:150px;flex:0 0 150px;min-height:165px;padding:9px;border-radius:15px;scroll-snap-align:start}
           .home-category-card:before{left:11px;width:28px;height:3px}
-          .home-category-image{height:96px;margin-bottom:8px;border-radius:12px;background-size:400% 100%}
+          .home-category-image{height:96px;margin-bottom:8px;border-radius:12px}
+          .home-category-image img{object-fit:contain;padding:4px}
           .home-category-copy{padding:0 2px;align-items:center}
           .home-category-copy h3{font-size:18px}
           .home-category-cta{font-size:7px}
@@ -260,7 +263,8 @@ export default function Home() {
         }
         @media(max-width:390px){
           .home-category-card{min-width:138px;flex-basis:138px}
-          .home-category-image{height:88px;background-size:400% 100%}
+          .home-category-image{height:88px}
+          .home-category-image img{object-fit:contain}
           .home-category-copy h3{font-size:17px}
         }
 
