@@ -99,7 +99,7 @@ export default function Home() {
   );
   const whatsapp = storeSettings?.whatsapp?.trim() || '(11) 9 9999-9999';
   const hours = storeSettings?.hours?.trim() || 'Seg–Sex • 9h às 18h';
-  const socialLinks = storeSettings?.socialLinks || {};
+  const socialLinks: StoreSettings['socialLinks'] = storeSettings?.socialLinks || { instagram: '', tiktok: '', facebook: '', youtube: '', whatsapp: '' };
   const socialItems = [
     { key: 'instagram', label: 'Instagram', href: socialLinks.instagram, icon: Instagram },
     { key: 'tiktok', label: 'TikTok', href: socialLinks.tiktok, icon: Music2 },
