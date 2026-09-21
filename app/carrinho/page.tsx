@@ -224,6 +224,16 @@ export default function CarrinhoPage() {
               </div>
 
               <div className="delivery-choice">
+                {freightCalculated && options.length > 0 ? (
+                  <div className="delivery-price-list">
+                    {options.map((option) => (
+                      <div className="delivery-price-item" key={option.provider}>
+                        <span>{option.label}</span>
+                        <strong>{option.available === false ? 'Indisponível' : option.fee === 0 ? 'Grátis' : option.fee != null ? money(option.fee) : 'Consultar'}</strong>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
                 <RadioGroup
                   name="delivery"
                   label="Como você quer receber?"
@@ -231,7 +241,7 @@ export default function CarrinhoPage() {
                   options={options.map((option) => ({
                     value: option.provider,
                     label: option.label,
-                    description: option.available === false ? option.description : option.fee != null && option.fee > 0 ? `${option.description} · ${money(option.fee)}` : option.fee === 0 ? option.description : option.description,
+                    description: option.available === false ? option.description : option.description,
                     icon: ICONS[option.provider] || <MessageCircle size={19} />,
                     disabled: option.available === false || (freightCalculated && option.provider !== 'pickup' && option.fee == null),
                   }))}
@@ -327,7 +337,7 @@ export default function CarrinhoPage() {
         .cep-feedback.success{color:#3d6b22}
         .spin{animation:cart-spin .8s linear infinite}
         @keyframes cart-spin{to{transform:rotate(360deg)}}
-        .delivery-choice{padding:18px 0 10px}
+        .delivery-choice{padding:18px 0 10px}.delivery-price-list{display:grid;gap:7px;margin:0 0 14px;padding:11px 12px;border:1px solid #e7e7e7;border-radius:10px;background:#fafafa}.delivery-price-item{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:3px 0;font-size:11px}.delivery-price-item span{color:#555}.delivery-price-item strong{font-size:12px;color:#111}.delivery-price-item:first-child strong{color:#2e7d4f}
         .summary-total{display:flex;justify-content:space-between;align-items:flex-end;gap:15px;padding:20px 0 18px;border-top:1px solid #111;margin-top:2px}
         .summary-total strong{font-size:28px}
         .checkout-btn{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:52px;border:0;border-radius:9px;background:#ffc400;color:#111;text-decoration:none;font:900 13px Inter,Arial,sans-serif}
