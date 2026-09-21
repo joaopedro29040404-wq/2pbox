@@ -277,29 +277,7 @@ function applyPromotionStyling(rows: PromotionRow[]) {
     }
   }
 
-  const match = window.location.pathname.match(/^\/produto\/([^/]+)$/);
-  if (match) {
-    const slug = decodeURIComponent(match[1]);
-    const row = rows.find((item) => item.product?.slug === slug);
-    const priceNode = document.querySelector<HTMLElement>('.product-price');
-    if (row && priceNode && priceNode.dataset.marketingPromotionApplied !== 'true') {
-      const product = row.product;
-      if (!product) return;
-      priceNode.dataset.marketingPromotionApplied = 'true';
-      priceNode.innerHTML = '';
-      priceNode.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:1px;margin-bottom:18px;line-height:1.05';
 
-      const old = document.createElement('s');
-      old.textContent = money(Number(product.price));
-      old.style.cssText = 'color:#999;font:700 14px Inter,Arial,sans-serif;white-space:nowrap';
-
-      const current = document.createElement('strong');
-      current.textContent = money(Number(row.promotional_price));
-      current.style.cssText = `color:${PROMO_YELLOW};font:900 36px Inter,Arial,sans-serif;letter-spacing:-.02em;white-space:nowrap`;
-
-      priceNode.append(old, current);
-    }
-  }
 }
 
 export function MarketingPromotions() {
