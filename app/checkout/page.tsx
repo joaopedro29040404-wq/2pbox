@@ -88,6 +88,11 @@ function CheckoutForm() {
 
   useEffect(() => {
     const chosen = String(searchParams.get('entrega') || 'pickup');
+    const incomingCep = onlyDigits(String(searchParams.get('cep') || '')).slice(0, 8);
+    if (incomingCep.length === 8) {
+      setCep(incomingCep);
+      void lookupCep(incomingCep);
+    }
     const known: Provider[] = ['pickup', 'own', 'express', 'app'];
     const selected = (known.includes(chosen as Provider) ? chosen : 'pickup') as Provider;
     setProvider(selected === 'pickup' ? 'own' : selected);

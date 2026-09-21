@@ -261,7 +261,7 @@ export default function CarrinhoPage() {
                 <strong>{money(orderTotal)}</strong>
               </div>
 
-              <Link className="primary checkout-btn" href={`/checkout?entrega=${delivery}`}>
+              <Link className="primary checkout-btn" href={`/checkout?entrega=${encodeURIComponent(delivery)}${freightCalculated && normalizeCep(cep).length === 8 ? `&cep=${encodeURIComponent(normalizeCep(cep))}` : ''}`}>
                 <span>Finalizar pedido</span>
                 <ArrowRight size={16} />
               </Link>
