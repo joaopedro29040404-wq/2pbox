@@ -88,6 +88,11 @@ export default function Home() {
   }, [banners, slide]);
 
   useEffect(() => {
+    const image = document.querySelector<HTMLImageElement>('.home-carousel-image');
+    if (image?.complete) setBannerImageLoaded(true);
+  }, [banners, slide]);
+
+  useEffect(() => {
     if (banners.length < 2) return;
     const timer = window.setInterval(() => setSlide(current => (current + 1) % banners.length), 5000);
     return () => window.clearInterval(timer);
@@ -120,7 +125,7 @@ export default function Home() {
             {loading ? <div className="home-carousel home-carousel-loading" aria-hidden="true"><div className="home-carousel-shell"><div className="home-carousel-skeleton"><span /></div></div></div> : banners.length ? <div className="home-carousel" onTouchStart={event => { touchStartX.current = event.touches[0]?.clientX ?? null; }} onTouchEnd={event => { const startX = touchStartX.current; const endX = event.changedTouches[0]?.clientX ?? null; touchStartX.current = null; if (startX === null || endX === null || banners.length < 2) return; const distance = endX - startX; if (Math.abs(distance) < 45) return; setSlide(current => distance < 0 ? (current + 1) % banners.length : (current - 1 + banners.length) % banners.length); }}>
               <div className="home-carousel-shell">
                 {!bannerImageLoaded ? <div className="home-carousel-skeleton" aria-hidden="true"><span /></div> : null}
-                <Link href={banners[slide]?.link_url || '/loja'} className="home-carousel-media" aria-label={'Abrir banner promocional ' + (slide + 1)} style={{ opacity: bannerImageLoaded ? 1 : 0 }}>
+                <Link href={banners[slide]?.link_url || '/loja'} className="home-carousel-media" aria-label={'Abrir banner promocional ' + (slide + 1)}>
                   <picture>
                     {banners[slide]?.mobile_image_url ? <source media="(max-width: 680px)" srcSet={banners[slide].mobile_image_url} /> : null}
                     <img key={banners[slide].id} src={banners[slide].image_url} alt="Banner promocional 2P Box" className="home-carousel-image" fetchPriority={slide === 0 ? 'high' : 'auto'} onLoad={() => setBannerImageLoaded(true)} />
