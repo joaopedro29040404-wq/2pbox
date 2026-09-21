@@ -20,6 +20,11 @@ import {
   Truck,
   Unlink,
   Zap,
+  Instagram,
+  Music2,
+  Facebook,
+  Youtube,
+  Share2,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { SiteHeader } from '@/components/site-header';
@@ -67,6 +72,7 @@ type Operations = {
   cycleHour: number;
   sameDayEnabled: boolean;
   sameDayCutoff: string;
+  socialLinks: { instagram: string; tiktok: string; facebook: string; youtube: string; whatsapp: string };
 };
 
 type MpStatus = {
@@ -88,6 +94,7 @@ const SECTIONS = [
   { key: 'delivery', label: 'Entregas', icon: Bike },
   { key: 'express', label: 'Envio imediato', icon: Zap },
   { key: 'integrations', label: 'Integrações', icon: CreditCard },
+  { key: 'social', label: 'Redes sociais', icon: Share2 },
 ] as const;
 
 type SectionKey = (typeof SECTIONS)[number]['key'];
@@ -293,7 +300,7 @@ export default function SettingsPage() {
     try {
       const shippingLabel = SHIPPING_MODES.find((mode) => mode.value === data.shippingMode)?.label || '';
       const pickupLabel = PICKUP_MODES.find((mode) => mode.value === data.pickupMode)?.label || '';
-      const body: Record<string, unknown> = { ...data, shippingLabel, pickupLabel };
+      const body: Record<string, unknown> = { ...data, shippingLabel, pickupLabel, socialLinks: data.socialLinks };
       if (section !== 'express') {
         delete body.expressPriceTable;
         delete body.expressMaxKm;
@@ -395,7 +402,18 @@ export default function SettingsPage() {
           })}
         </nav>
 
-        {section === 'integrations' ? (
+                    {section === 'social' && (
+              <div className="settings-grid social-settings">
+                <div className="settings-note">Cadastre os links completos dos seus perfis. Eles aparecerão nos ícones sociais da Home e abrirão o perfil em uma nova aba.</div>
+                <TextField label={<><Instagram size={15} /> Instagram</>} placeholder="https://instagram.com/seuperfil" value={data.socialLinks.instagram} onValueChange={(value) => patch({ socialLinks: { ...data.socialLinks, instagram: value } })} fullWidth />
+                <TextField label={<><Music2 size={15} /> TikTok</>} placeholder="https://tiktok.com/@seuperfil" value={data.socialLinks.tiktok} onValueChange={(value) => patch({ socialLinks: { ...data.socialLinks, tiktok: value } })} />
+                <TextField label={<><Facebook size={15} /> Facebook</>} placeholder="https://facebook.com/seuperfil" value={data.socialLinks.facebook} onValueChange={(value) => patch({ socialLinks: { ...data.socialLinks, facebook: value } })} />
+                <TextField label={<><Youtube size={15} /> YouTube</>} placeholder="https://youtube.com/@seuperfil" value={data.socialLinks.youtube} onValueChange={(value) => patch({ socialLinks: { ...data.socialLinks, youtube: value } })} />
+                <TextField label={<><MessageCircle size={15} /> WhatsApp</>} placeholder="https://wa.me/5511999999999" value={data.socialLinks.whatsapp} onValueChange={(value) => patch({ socialLinks: { ...data.socialLinks, whatsapp: value } })} fullWidth />
+              </div>
+            )}
+
+{section === 'integrations' ? (
           <section className="settings-card mp-card">
             <div className="settings-card-head">
               <div className="settings-card-icon">
@@ -871,6 +889,8 @@ function sectionTitle(section: SectionKey) {
       return 'Operação de entregas';
     case 'express':
       return 'Envio imediato';
+    case 'social':
+      return 'Redes sociais';
     default:
       return 'Integrações';
   }

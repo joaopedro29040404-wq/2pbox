@@ -4,6 +4,7 @@ import { isGoogleMapsConfigured } from '@/lib/server/env';
 import { supabaseRest } from '@/lib/server/supabase-admin';
 import { invalidateStoreOperations, readStoreOperations } from '@/lib/server/store-settings';
 import { describeHours, normalizeBusinessHours, normalizePriceTable, openDays } from '@/lib/store-operations';
+type StoreSocialLinks = { instagram: string; tiktok: string; facebook: string; youtube: string; whatsapp: string };
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -51,6 +52,7 @@ export async function PUT(request: Request) {
     delivery_cycle_hour: Math.round(bounded(body.cycleHour, 0, 23, current.cycleHour)),
     same_day_enabled: bool(body.sameDayEnabled, current.sameDayEnabled),
     same_day_cutoff: /^([01]\d|2[0-3]):[0-5]\d$/.test(String(body.sameDayCutoff || '')) ? String(body.sameDayCutoff) : current.sameDayCutoff,
+    social_links: normalizeSocialLinks(body.socialLinks, current.socialLinks),
   };
 
   try {
@@ -82,6 +84,7 @@ async function persist(id: string | null, payload: Record<string, unknown>) {
 async function hasOperationsSchema() {
   try { await supabaseRest('store_settings?select=delivery_cycle_hour&limit=1'); return true; } catch { return false; }
 }
+function normalizeSocialLinks(value: unknown, fallback: StoreSocialLinks) { const source = value && typeof value === 'object' ? value as Record<string, unknown> : {}; return { instagram: text(source.instagram, fallback.instagram), tiktok: text(source.tiktok, fallback.tiktok), facebook: text(source.facebook, fallback.facebook), youtube: text(source.youtube, fallback.youtube), whatsapp: text(source.whatsapp, fallback.whatsapp) }; }
 function text(value: unknown, fallback: string) { if (value == null) return fallback; return String(value).trim(); }
 function bounded(value: unknown, min: number, max: number, fallback: number) { const parsed = Number(value); if (!Number.isFinite(parsed)) return fallback; return Math.min(max, Math.max(min, parsed)); }
 function bool(value: unknown, fallback: boolean) { return typeof value === 'boolean' ? value : fallback; }

@@ -6,6 +6,7 @@ export type StoreSettings = {
   hours: string;
   pickup: string;
   shipping: string;
+  socialLinks: { instagram: string; tiktok: string; facebook: string; youtube: string; whatsapp: string };
 };
 
 export const DEFAULT_STORE_SETTINGS: StoreSettings = {
@@ -14,13 +15,14 @@ export const DEFAULT_STORE_SETTINGS: StoreSettings = {
   hours: 'Seg–Sex • 9h às 18h',
   pickup: 'Retirada na loja',
   shipping: 'Frete via WhatsApp',
+  socialLinks: { instagram: '', tiktok: '', facebook: '', youtube: '', whatsapp: '' },
 };
 
 export async function getStoreSettings(): Promise<StoreSettings> {
   try {
     const { data: rows, error } = await supabase
       .from('store_settings')
-      .select('name,whatsapp,hours,pickup,shipping,updated_at')
+      .select('name,whatsapp,hours,pickup,shipping,social_links,updated_at')
       .order('updated_at', { ascending: false, nullsFirst: false })
       .limit(1);
 
@@ -34,6 +36,7 @@ export async function getStoreSettings(): Promise<StoreSettings> {
       hours: data.hours || DEFAULT_STORE_SETTINGS.hours,
       pickup: data.pickup || DEFAULT_STORE_SETTINGS.pickup,
       shipping: data.shipping || DEFAULT_STORE_SETTINGS.shipping,
+      socialLinks: { instagram: String(data.social_links?.instagram || ''), tiktok: String(data.social_links?.tiktok || ''), facebook: String(data.social_links?.facebook || ''), youtube: String(data.social_links?.youtube || ''), whatsapp: String(data.social_links?.whatsapp || '') },
     };
   } catch {
     return DEFAULT_STORE_SETTINGS;

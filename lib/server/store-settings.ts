@@ -29,6 +29,7 @@ export type StoreOperations = {
   cycleHour: number;
   sameDayEnabled: boolean;
   sameDayCutoff: string;
+  socialLinks: { instagram: string; tiktok: string; facebook: string; youtube: string; whatsapp: string };
 };
 
 let cache: { value: StoreOperations; at: number } | null = null;
@@ -93,6 +94,7 @@ function mapRow(row: any): StoreOperations {
     cycleHour: Math.min(23, Math.max(0, Math.round(num(data.delivery_cycle_hour, 16)))),
     sameDayEnabled: Boolean(data.same_day_enabled),
     sameDayCutoff: validTime(data.same_day_cutoff, '16:00'),
+    socialLinks: { instagram: String(data.social_links?.instagram || ''), tiktok: String(data.social_links?.tiktok || ''), facebook: String(data.social_links?.facebook || ''), youtube: String(data.social_links?.youtube || ''), whatsapp: String(data.social_links?.whatsapp || '') },
   };
 }
 
