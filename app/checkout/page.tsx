@@ -416,6 +416,8 @@ function CheckoutForm() {
   const effectivePaymentMethod = cardAvailableForAmount || !mpMethods.pix ? paymentMethod : 'pix';
   const selectedOption = options.find((option) => option.provider === provider && option.available) || null;
   const deliveryResolved = type === 'pickup' || Boolean(selectedOption && selectedOption.fee != null);
+  const customerDataReady = Boolean(name.trim() && isValidPhone(phone) && isValidEmail(email) && (!cpf.trim() || isValidCpf(cpf)));
+  const checkoutStep = paymentReady ? 3 : orderId ? 3 : customerDataReady ? 2 : 1;
 
 return (
     <main className="checkout-shell">
@@ -429,6 +431,20 @@ return (
           <p className="eyebrow">ÚLTIMA ETAPA</p>
           <h1 className="checkout-title">Finalizar pedido</h1>
           <p>{user ? 'Seus dados já estão preenchidos. Confira antes de confirmar.' : 'Compre sem cadastro e sem criar senha. Informe apenas seus dados para concluir o pedido.'}</p>
+        </div>
+
+        <div className="checkout-progress" aria-label="Progresso da finalização">
+          <div className={`checkout-progress-step ${checkoutStep > 1 ? 'is-complete' : checkoutStep === 1 ? 'is-current' : ''}`}>
+            <span>1</span><strong>Dados</strong>
+          </div>
+          <div className={`checkout-progress-line ${checkoutStep > 1 ? 'is-complete' : ''}`} />
+          <div className={`checkout-progress-step ${checkoutStep === 2 ? 'is-current' : checkoutStep > 2 ? 'is-complete' : ''}`}>
+            <span>2</span><strong>Recebimento</strong>
+          </div>
+          <div className={`checkout-progress-line ${checkoutStep > 2 ? 'is-complete' : ''}`} />
+          <div className={`checkout-progress-step ${checkoutStep >= 3 ? 'is-current' : ''}`}>
+            <span>3</span><strong>Pagamento</strong>
+          </div>
         </div>
 
         <div className="checkout-form">
@@ -788,17 +804,8 @@ return (
           {!paymentReady && (
             <div className="checkout-footer">
               <div>
-                {selectedOption?.fee != null && selectedOption.fee > 0 && type !== 'pickup' ? (
-                  <>
-                    <span>Produtos {money(total)} + frete {money(selectedOption.fee)}</span>
-                    <strong>{money(total + selectedOption.fee)}</strong>
-                  </>
-                ) : (
-                  <>
-                    <span>Total dos produtos</span>
-                    <strong>{money(total)}</strong>
-                  </>
-                )}
+                <span>{selectedOption?.fee != null && selectedOption.fee > 0 && type !== 'pickup' ? 'Produtos + entrega' : 'Total dos produtos'}</span>
+                <strong>{selectedOption?.fee != null && selectedOption.fee > 0 && type !== 'pickup' ? money(total + selectedOption.fee) : money(total)}</strong>
               </div>
               <button type="button" onClick={submitCheckout} className="primary checkout-submit" disabled={!items.length || submitting || !deliveryResolved}>
                 {submitting ? 'Processando...' : !items.length ? 'Carrinho vazio' : !deliveryResolved ? 'Informe o endereço de entrega' : 'Continuar para pagamento'}
@@ -815,7 +822,14 @@ return (
         .checkout-intro{margin:26px 0 24px}
         .checkout-title{font-family:'Barlow Condensed';font-size:56px;text-transform:uppercase;font-style:italic;line-height:.95;margin:0 0 12px}
         .checkout-intro>p:last-child{color:#686868;margin:0;font-size:15px}
-        .checkout-form{border:1px solid #e9e9e9;border-radius:18px;overflow:hidden;background:#fff;box-shadow:0 8px 28px rgba(0,0,0,.04)}
+        .checkout-progress{display:grid;grid-template-columns:auto minmax(24px,1fr) auto minmax(24px,1fr) auto;align-items:center;gap:9px;margin:0 0 18px;padding:12px 15px;border:1px solid #e9e9e9;border-radius:12px;background:#fafafa}
+        .checkout-progress-step{display:flex;align-items:center;gap:7px;color:#999;white-space:nowrap}
+        .checkout-progress-step span{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;border:1px solid #d8d8d8;background:#fff;color:#888;font:900 10px Inter,Arial,sans-serif}
+        .checkout-progress-step strong{font:900 9px Inter,Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase}
+        .checkout-progress-step.is-current{color:#111}.checkout-progress-step.is-current span{background:#ffc400;border-color:#ffc400;color:#111}
+        .checkout-progress-step.is-complete{color:#2e7d4f}.checkout-progress-step.is-complete span{background:#eaf8ee;border-color:#9fd0ad;color:#2e7d4f}
+        .checkout-progress-line{height:1px;background:#ddd}.checkout-progress-line.is-complete{background:#7db88d}
+        .checkout-form{border:1px solid #e9e9e9;border-radius:18px;overflow:visible;background:#fff;box-shadow:0 8px 28px rgba(0,0,0,.04)}
         .checkout-section{padding:28px;border-bottom:1px solid #e9e9e9}
         .checkout-section:last-of-type{border-bottom:0}
         .checkout-section-heading{display:flex;gap:13px;align-items:flex-start;margin-bottom:22px}
@@ -835,9 +849,9 @@ return (
         .shipping-whatsapp-note{display:flex;align-items:flex-start;gap:9px;margin-top:16px;padding:13px 14px;border-radius:9px;background:#f4f4f4;color:#555;font-size:11px;line-height:1.5}
         .shipping-whatsapp-note svg{flex:none;color:#111}
         .checkout-status{padding:16px 28px;border-top:1px solid #e9e9e9;background:#fafafa}
-        .checkout-footer{padding:22px 28px;background:#fafafa;border-top:1px solid #e9e9e9;display:flex;align-items:center;justify-content:space-between;gap:20px}
+        .checkout-footer{position:sticky;bottom:0;z-index:15;padding:16px 28px calc(16px + env(safe-area-inset-bottom, 0px));background:rgba(250,250,250,.97);border-top:1px solid #e9e9e9;display:flex;align-items:center;justify-content:space-between;gap:20px;box-shadow:0 -8px 24px rgba(0,0,0,.06);backdrop-filter:blur(8px)}
         .checkout-footer>div{display:grid;gap:4px}
-        .checkout-footer span{font-size:12px;color:#686868}
+        .checkout-footer span{font-size:11px;color:#686868;text-transform:uppercase;letter-spacing:.08em}
         .checkout-footer strong{font-size:25px}
         .checkout-submit{border:0;cursor:pointer;min-height:52px;padding:0 26px;border-radius:9px;background:#ffc400;color:#111;font:900 14px Inter,Arial,sans-serif}
         .checkout-submit:hover:not(:disabled){background:#111;color:#fff}
@@ -879,12 +893,15 @@ return (
         @media(max-width:700px){
           .checkout-page{width:min(100% - 28px,900px)}
           .checkout-intro{margin:22px 0}
+          .checkout-progress{grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px;padding:10px 8px}
+          .checkout-progress-line{display:none}
+          .checkout-progress-step{justify-content:center;gap:5px}.checkout-progress-step strong{font-size:8px}.checkout-progress-step span{width:24px;height:24px;font-size:9px}
           .checkout-title{font-size:44px}
           .checkout-form{border-radius:16px}
           .checkout-section{padding:22px 18px}
           .checkout-section-heading h2{font-size:24px}
           .form-grid{grid-template-columns:1fr;gap:16px}
-          .checkout-footer{padding:18px;display:grid;gap:14px}
+          .checkout-footer{padding:14px 18px calc(14px + env(safe-area-inset-bottom, 0px));display:grid;gap:10px}
           .checkout-submit{width:100%}
           .checkout-status{padding:14px 18px}
           .checkout-success-card{padding:28px 20px}
