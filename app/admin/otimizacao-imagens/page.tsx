@@ -56,7 +56,7 @@ async function optimizeFile(file: ImageFile): Promise<ResultItem> {
 
   try {
     const bitmap = await createImageBitmap(data);
-    const maxDimension = file.bucket === 'home-banners' ? 1920 : 1600;
+    const maxDimension = file.bucket === 'home-banners' ? 1920 : 1400;
     const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
     const width = Math.max(1, Math.round(bitmap.width * scale));
     const height = Math.max(1, Math.round(bitmap.height * scale));
@@ -74,13 +74,13 @@ async function optimizeFile(file: ImageFile): Promise<ResultItem> {
     bitmap.close();
 
     const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, 'image/webp', file.bucket === 'home-banners' ? 0.84 : 0.82);
+      canvas.toBlob(resolve, 'image/webp', file.bucket === 'home-banners' ? 0.80 : 0.76);
     });
 
     if (!blob) return { ...base, status: 'error', message: 'Não foi possível gerar a versão otimizada.' };
 
     // Só substitui quando há ganho real. A URL/caminho do arquivo permanece exatamente igual.
-    if (blob.size >= file.size * 0.95) {
+    if (blob.size >= file.size * 0.90) {
       return { ...base, status: 'skipped', newSize: file.size, message: 'Já está suficientemente pequeno.' };
     }
 
@@ -155,8 +155,17 @@ export default function ImageOptimizationPage() {
     setError('');
     setResults([]);
     try {
-      const found = (await Promise.all(BUCKETS.map((bucket) => listImages(bucket)))).flat();
-      setFiles(found);
+      const found = [
+        ...(await listImages('products')),
+        ...(await listImages('home-banners', 'banners')),
+        ...(await listImages('home-banners')).filter(
+          (file) => file.path !== 'banners' && !file.path.startsWith('banners/'),
+        ),
+      ];
+      const unique = Array.from(
+        new Map(found.map((file) => [file.bucket + '/' + file.path, file])).values(),
+      );
+      setFiles(unique);
     } catch (scanError) {
       setError(scanError instanceof Error ? scanError.message : 'Não foi possível listar as imagens.');
     } finally {
@@ -180,7 +189,6 @@ export default function ImageOptimizationPage() {
 
     setCurrent('');
     setRunning(false);
-    await scan();
   }
 
   function stop() {
@@ -212,7 +220,7 @@ export default function ImageOptimizationPage() {
 
         <div className="optimization-warning">
           <ShieldAlert size={18} />
-          <div><strong>Operação segura:</strong> cada imagem é processada uma por vez e só é substituída se a nova versão ficar pelo menos 5% menor. O caminho/URL permanece o mesmo.</div>
+          <div><strong>Operação segura:</strong> cada imagem é processada uma por vez e só é substituída se a nova versão ficar pelo menos 10% menor. O caminho/URL permanece o mesmo.</div>
         </div>
 
         <div className="optimization-actions">
@@ -231,6 +239,11 @@ export default function ImageOptimizationPage() {
 
         {files.length > 0 && (
           <div className="optimization-progress">
+            <div className="optimization-bucket-counts">
+              <span>Produtos: <strong>{files.filter((file) => file.bucket === 'products').length}</strong></span>
+              <span>Banners: <strong>{files.filter((file) => file.bucket === 'home-banners').length}</strong></span>
+              <span>Total: <strong>{files.length}</strong></span>
+            </div>
             <div><strong>{results.length}</strong> de <strong>{files.length}</strong> processadas {current ? <span>• {current}</span> : null}</div>
             <div className="optimization-bar"><span style={{ width: `${Math.min(100, (results.length / files.length) * 100)}%` }} /></div>
           </div>
@@ -242,6 +255,7 @@ export default function ImageOptimizationPage() {
             <div><strong>{results.filter((item) => item.status === 'skipped').length}</strong><span>mantidas</span></div>
             <div><strong>{results.filter((item) => item.status === 'error').length}</strong><span>erros</span></div>
             <div><strong>{formatBytes(totals.saved)}</strong><span>economizados</span></div>
+            <div><strong>{totals.oldSize ? ((totals.saved / totals.oldSize) * 100).toFixed(1) + '%' : '0%'}</strong><span>redução total</span></div>
           </div>
         )}
 
@@ -277,10 +291,12 @@ export default function ImageOptimizationPage() {
         .optimization-error{display:flex;gap:9px;align-items:center;padding:13px 15px;border:1px solid #edc3c3;background:#fff1f1;color:#9a2424;border-radius:10px;font:600 12px Inter,Arial,sans-serif}
         .optimization-progress{background:#fff;border:1px solid #e5e5df;border-radius:14px;padding:17px;margin:18px 0}
         .optimization-progress>div:first-child{font:700 12px Inter,Arial,sans-serif;color:#555}
+        .optimization-bucket-counts{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:10px;color:#777;font:700 11px Inter,Arial,sans-serif}
+        .optimization-bucket-counts strong{color:#111}
         .optimization-progress span{font-weight:500;color:#888;overflow-wrap:anywhere}
         .optimization-bar{height:7px;background:#ecece7;border-radius:999px;overflow:hidden;margin-top:12px}
         .optimization-bar span{display:block;height:100%;background:#e4bd00;border-radius:999px;transition:width .2s}
-        .optimization-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0}
+        .optimization-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:18px 0}
         .optimization-summary>div{background:#fff;border:1px solid #e5e5df;border-radius:12px;padding:15px}
         .optimization-summary strong{display:block;font:900 22px Inter,Arial,sans-serif}
         .optimization-summary span{display:block;color:#777;font:600 10px Inter,Arial,sans-serif;text-transform:uppercase;letter-spacing:.08em;margin-top:3px}
