@@ -12,7 +12,7 @@ import { SkeletonGrid } from '@/components/ui/loader';
 import { money } from '@/lib/order-format';
 
 type Category = { id: string; name: string; description?: string | null; parent_id?: string | null };
-type Product = { id: string; name: string; slug: string; price: number; image_url?: string | null; images?: string[] | null; promotionalPrice?: number | null };
+type Product = { id: string; name: string; slug: string; price: number; image_url?: string | null; promotionalPrice?: number | null };
 type Banner = { id: string; image_url: string; mobile_image_url?: string; title?: string; description?: string; button_label?: string; link_url?: string; active?: boolean; sort_order?: number };
 
 const MAIN_CATEGORY_ORDER = ['Papelaria', 'Eletrônicos', 'Acessórios para celular', 'Informática'];
@@ -51,7 +51,7 @@ export default function Home() {
     (async () => {
       const [{ data: categoryRows }, { data: productRows }, settings, { data: homeConfig }] = await Promise.all([
         client.from('categories').select('id,name,description,parent_id').eq('active', true).is('parent_id', null),
-        client.from('products').select('id,name,slug,price,image_url,images,promotions(promotional_price,starts_at,ends_at,active)').eq('active', true).order('created_at', { ascending: false }).limit(8),
+        client.from('products').select('id,name,slug,price,image_url,promotions(promotional_price,starts_at,ends_at,active)').eq('active', true).order('created_at', { ascending: false }).limit(8),
         getStoreSettings(),
         client.from('store_settings').select('home_banners').order('updated_at', { ascending: false }).limit(1).maybeSingle(),
       ]);

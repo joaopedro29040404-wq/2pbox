@@ -16,7 +16,7 @@ type Category = { id: string; name: string; parent_id: string | null };
 type ProductCategory = { id: string; name: string; parent_id: string | null };
 type Product = {
   id: string; name: string; slug: string; description: string | null; price: number; stock: number;
-  image_url: string | null; images?: string[] | null; category_id: string | null;
+  image_url: string | null; category_id: string | null;
   product_categories?: { category_id: string; categories?: ProductCategory | null }[] | null;
 };
 type AuthUser = { id: string; user_metadata?: { full_name?: string } };
@@ -51,7 +51,7 @@ export default function LojaPage() {
     }
     async function load() {
       const [{ data, error }, { data: categoryRows }, { data: auth }] = await Promise.all([
-        client.from('products').select('id,name,slug,description,price,stock,image_url,images,category_id,product_categories(category_id,categories(id,name,parent_id))').eq('active', true).order('created_at', { ascending: false }),
+        client.from('products').select('id,name,slug,description,price,stock,image_url,category_id,product_categories(category_id,categories(id,name,parent_id))').eq('active', true).order('created_at', { ascending: false }),
         client.from('categories').select('id,name,parent_id').eq('active', true).order('name'),
         client.auth.getUser(),
       ]);

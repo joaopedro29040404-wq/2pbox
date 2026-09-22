@@ -16,7 +16,6 @@ type Product = {
   active: boolean;
   stock: number;
   image_url: string | null;
-  images?: string[] | null;
 };
 type Channel = { id: string; label: string; source: string; medium: string };
 
@@ -34,7 +33,7 @@ const CHANNELS: Channel[] = [
 const money = (value: number) => `R$ ${Number(value).toFixed(2).replace('.', ',')}`;
 
 function productImage(product: Product) {
-  return product.image_url || product.images?.find(Boolean) || '';
+  return product.image_url || '';
 }
 
 export default function MarketingSharePage() {
@@ -52,7 +51,7 @@ export default function MarketingSharePage() {
       if (!supabase) return;
       const { data, error } = await supabase
         .from('products')
-        .select('id,name,slug,price,active,stock,image_url,images')
+        .select('id,name,slug,price,active,stock,image_url')
         .eq('active', true)
         .order('name')
         .range(0, 999);
