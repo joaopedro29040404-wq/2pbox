@@ -27,16 +27,20 @@ async function listImages(bucket: ImageFile['bucket'], prefix = ''): Promise<Ima
     limit: 1000,
     sortBy: { column: 'name', order: 'asc' },
   });
-  if (error) throw new Error(`${bucket}: ${error.message}`);
+  if (error) throw new Error(`${bucket}[${prefix || '/'}]: ${error.message}`);
 
   const files: ImageFile[] = [];
   for (const item of data || []) {
     const path = prefix ? `${prefix}/${item.name}` : item.name;
-    if (item.id === null) {
+    const type = String(item.metadata?.mimetype || '');
+
+    // No Storage, pastas podem aparecer com id nulo/ausente e sem mimetype.
+    // Arquivos reais são identificados pelo mimetype, inclusive os banners dentro de /banners.
+    if (!type) {
       files.push(...await listImages(bucket, path));
       continue;
     }
-    const type = String(item.metadata?.mimetype || '');
+
     if (!IMAGE_TYPES.test(type)) continue;
     files.push({
       bucket,
@@ -158,9 +162,6 @@ export default function ImageOptimizationPage() {
       const found = [
         ...(await listImages('products')),
         ...(await listImages('home-banners', 'banners')),
-        ...(await listImages('home-banners')).filter(
-          (file) => file.path !== 'banners' && !file.path.startsWith('banners/'),
-        ),
       ];
       const unique = Array.from(
         new Map(found.map((file) => [file.bucket + '/' + file.path, file])).values(),
