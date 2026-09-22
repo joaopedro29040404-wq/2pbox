@@ -129,7 +129,7 @@ export default function Home() {
                 <Link href={banners[slide]?.link_url || '/loja'} className="home-carousel-media" aria-label={'Abrir banner promocional ' + (slide + 1)}>
                   <picture>
                     {banners[slide]?.mobile_image_url ? <source media="(max-width: 680px)" srcSet={banners[slide].mobile_image_url} /> : null}
-                    <img key={banners[slide].id} src={banners[slide].image_url} alt="Banner promocional 2P Box" className="home-carousel-image" fetchPriority={slide === 0 ? 'high' : 'auto'} onLoad={() => setBannerImageLoaded(true)} />
+                    <Image key={banners[slide].id} src={banners[slide].image_url} alt="Banner promocional 2P Box" className="home-carousel-image" width={1920} height={700} sizes="(max-width:680px) 100vw, 580px" priority={slide === 0} fetchPriority={slide === 0 ? 'high' : 'auto'} onLoad={() => setBannerImageLoaded(true)} />
                   </picture>
                 </Link>
               </div>

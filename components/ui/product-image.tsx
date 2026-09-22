@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 
 export type ProductImageProps = {
@@ -34,7 +35,6 @@ export function ProductImage({ src, alt, sizes = '(max-width:700px) 50vw, 300px'
       return;
     }
     setState('loading');
-
     const node = imageRef.current;
     if (node?.complete) setState(node.naturalWidth > 0 ? 'ready' : 'failed');
   }, [source]);
@@ -42,7 +42,6 @@ export function ProductImage({ src, alt, sizes = '(max-width:700px) 50vw, 300px'
   useEffect(() => {
     const node = imageRef.current;
     if (!node) return;
-
     const container = node.closest('.home-product-image, .product-image, .fav-image');
     setCatalogFit(Boolean(container));
   }, [source]);
@@ -55,7 +54,6 @@ export function ProductImage({ src, alt, sizes = '(max-width:700px) 50vw, 300px'
     );
   }
 
-  // No catálogo, a foto sempre deve aparecer inteira. O espaço excedente fica como margem.
   const resolvedFit = catalogFit ? 'contain' : fit;
   const resolvedPadding = catalogFit ? true : padded;
 
@@ -72,15 +70,18 @@ export function ProductImage({ src, alt, sizes = '(max-width:700px) 50vw, 300px'
         }
       `}</style>
       <span className={`ui-product-image ${state === 'loading' ? 'is-loading' : ''} ${className}`}>
-        <img
+        <Image
           ref={imageRef}
           src={source}
           alt={alt}
+          width={1200}
+          height={1200}
           sizes={sizes}
+          priority={priority}
           loading={priority ? 'eager' : 'lazy'}
           decoding="async"
           fetchPriority={priority ? 'high' : 'auto'}
-          style={{ objectFit: resolvedFit, padding: resolvedPadding ? undefined : 0 }}
+          style={{ width: '100%', height: '100%', objectFit: resolvedFit, padding: resolvedPadding ? undefined : 0 }}
           onLoad={() => setState('ready')}
           onError={() => setState('failed')}
         />
