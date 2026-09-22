@@ -23,6 +23,7 @@ import { SelectField, TextAreaField, TextField } from '@/components/ui/field';
 import { Modal } from '@/components/ui/modal';
 import { Pagination, usePagination } from '@/components/ui/pagination';
 import { ProductImage, productCover } from '@/components/ui/product-image';
+import { optimizeImageForStorage } from '@/lib/image-optimization';
 import { InlineLoader, SkeletonGrid } from '@/components/ui/loader';
 import { useToast } from '@/components/ui/toast';
 
@@ -229,9 +230,13 @@ export default function ProductsAdminPage() {
         toast.warning('Imagem muito grande', `${file.name} passa de 5 MB.`);
         continue;
       }
-      const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-      const path = `products/${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
-      const { error } = await supabase.storage.from('products').upload(path, file, { contentType: file.type, upsert: false });
+      const optimizedFile = await optimizeImageForStorage(file);
+      const path = `products/${Date.now()}-${Math.random().toString(36).slice(2)}.webp`;
+      const { error } = await supabase.storage.from('products').upload(path, optimizedFile, {
+        contentType: optimizedFile.type,
+        cacheControl: '31536000',
+        upsert: false,
+      });
       if (error) {
         toast.error('Falha ao enviar imagem', error.message);
         continue;

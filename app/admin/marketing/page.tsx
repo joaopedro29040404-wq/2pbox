@@ -6,6 +6,7 @@ import { ArrowLeft, CalendarDays, Check, Image as ImageIcon, Percent, Pencil, Pl
 import { supabase } from '@/lib/supabase';
 import { SiteHeader } from '@/components/site-header';
 import { useToast } from '@/components/ui/toast';
+import { optimizeImageForStorage } from '@/lib/image-optimization';
 
 type Product = { id: string; name: string; price: number; cost: number; active: boolean; product_categories?: { category_id: string; categories?: { id: string; name: string; parent_id: string | null } | null }[] | null };
 type Category = { id: string; name: string; parent_id: string | null; active: boolean };
@@ -125,8 +126,13 @@ export default function MarketingPage() {
     if(!supabase||!file||uploadingBannerId)return;
     if(!['image/png','image/jpeg','image/webp'].includes(file.type))return toast.error('Arquivo inválido','Use PNG, JPG ou WEBP.');
     if(file.size>8*1024*1024)return toast.error('Imagem muito grande','Máximo de 8 MB.');
-    setUploadingBannerId(id); const ext=file.name.split('.').pop()?.toLowerCase()||'jpg';
-    const result=await supabase.storage.from('home-banners').upload(`banners/${crypto.randomUUID()}.${ext}`,file,{upsert:false,cacheControl:'31536000',contentType:file.type});
+    setUploadingBannerId(id);
+    const optimizedFile = await optimizeImageForStorage(file, { maxDimension: 1920, quality: 0.84 });
+    const result=await supabase.storage.from('home-banners').upload(
+      `banners/${crypto.randomUUID()}.webp`,
+      optimizedFile,
+      { upsert:false, cacheControl:'31536000', contentType:optimizedFile.type },
+    );
     if(result.error){setUploadingBannerId(null);return toast.error('Erro ao enviar banner',result.error.message)}
     const {data}=supabase.storage.from('home-banners').getPublicUrl(result.data.path);
     updateBanner(id,{image_url:data.publicUrl});setUploadingBannerId(null);toast.success('Banner enviado','A imagem foi anexada.');
