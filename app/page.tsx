@@ -78,10 +78,6 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    setBannerImageLoaded(false);
-  }, [banners, slide]);
-
-  useEffect(() => {
     const image = document.querySelector<HTMLImageElement>('.home-carousel-image');
     if (image?.complete) setBannerImageLoaded(true);
   }, [banners, slide]);
