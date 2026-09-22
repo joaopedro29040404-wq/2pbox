@@ -243,6 +243,54 @@ export default function Home() {
         @media(max-width:900px){.home-category-card{min-height:205px;padding:16px}.home-category-copy h3{font-size:28px}.home-category-grid{gap:10px}}
         @media(max-width:680px){.home-category-section{padding:42px 0 44px}.home-category-section .home-section-head{margin-bottom:20px}.home-category-section .home-section-head h2{font-size:39px;line-height:.88}.home-category-section .home-section-link{font-size:8px}.home-category-grid{display:flex;gap:9px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 1px 7px;scrollbar-width:none}.home-category-grid::-webkit-scrollbar{display:none}.home-category-card{min-width:118px;flex:0 0 118px;min-height:118px;padding:11px;border-radius:15px;background:#fff;border:1px solid #e5e5e2;box-shadow:0 5px 14px rgba(0,0,0,.05);scroll-snap-align:start}.home-category-card-top{align-items:center}.home-category-number{font-size:7px}.home-category-icon{width:38px;height:38px;border-radius:11px}.home-category-icon svg{width:19px;height:19px}.home-category-arrow{width:27px;height:27px}.home-category-arrow svg{width:14px;height:14px}.home-category-copy{padding-top:10px}.home-category-copy h3{font-size:18px}.home-category-hint{margin-top:11px;font-size:8px;text-align:center}}
         @media(max-width:390px){.home-category-grid{grid-template-columns:1fr 1fr}.home-category-card{min-height:205px;padding:15px;border-radius:15px}.home-category-icon{width:46px;height:46px;border-radius:13px}.home-category-arrow{width:34px;height:34px}.home-category-copy h3{font-size:24px}}
+        /* Category cards — compact, balanced and visually secondary to the section heading. */
+        .home-category-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+        .home-category-card,
+        .home-category-card.category-1,
+        .home-category-card.category-2,
+        .home-category-card.category-3,
+        .home-category-card.category-4{min-height:136px;height:136px;padding:14px 15px;border-radius:16px;background:#fff;border:1px solid #e4e4e1;box-shadow:0 5px 16px rgba(0,0,0,.035)}
+        .home-category-card:hover{transform:translateY(-2px);border-color:#d8c26b;box-shadow:0 10px 22px rgba(0,0,0,.06)}
+        .home-category-card-top{align-items:center}
+        .home-category-number{font-size:8px;letter-spacing:.16em;color:#a37b00}
+        .home-category-icon{width:44px;height:44px;border-radius:12px;background:#fff8d8;border:1px solid #efd98a;color:#111}
+        .home-category-icon svg{width:21px;height:21px}
+        .home-category-arrow{width:29px;height:29px;background:#111}
+        .home-category-arrow svg{width:15px;height:15px}
+        .home-category-copy{padding-top:12px}
+        .home-category-copy h3{font-size:21px;line-height:.95;letter-spacing:-.01em}
+        .home-category-hint{margin-top:13px}
+        @media(max-width:900px){
+          .home-category-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+          .home-category-card,
+          .home-category-card.category-1,
+          .home-category-card.category-2,
+          .home-category-card.category-3,
+          .home-category-card.category-4{min-height:132px;height:132px}
+        }
+        @media(max-width:680px){
+          .home-category-grid{display:flex;gap:9px;overflow-x:auto}
+          .home-category-card,
+          .home-category-card.category-1,
+          .home-category-card.category-2,
+          .home-category-card.category-3,
+          .home-category-card.category-4{min-width:142px;flex:0 0 142px;min-height:126px;height:126px;padding:11px 12px;border-radius:14px}
+          .home-category-number{font-size:7px}
+          .home-category-icon{width:36px;height:36px;border-radius:10px}
+          .home-category-icon svg{width:18px;height:18px}
+          .home-category-arrow{width:26px;height:26px}
+          .home-category-arrow svg{width:13px;height:13px}
+          .home-category-copy{padding-top:9px}
+          .home-category-copy h3{font-size:17px}
+        }
+        @media(max-width:390px){
+          .home-category-card,
+          .home-category-card.category-1,
+          .home-category-card.category-2,
+          .home-category-card.category-3,
+          .home-category-card.category-4{min-width:132px;flex-basis:132px;min-height:120px;height:120px}
+          .home-category-copy h3{font-size:16px}
+        }
        `}
 </style>
     </main>
