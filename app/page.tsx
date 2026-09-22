@@ -245,15 +245,19 @@ export default function Home() {
         .home-category-card.category-1,
         .home-category-card.category-2,
         .home-category-card.category-3,
-        .home-category-card.category-4{min-height:136px;height:136px;padding:14px 15px;border-radius:16px;background:#fff;border:1px solid #e4e4e1;box-shadow:0 5px 16px rgba(0,0,0,.035)}
+        .home-category-card.category-4{min-height:136px;height:136px;padding:14px 15px;border-radius:16px;background:#fff;border:1px solid #e4e4e1;box-shadow:0 5px 16px rgba(0,0,0,.035);isolation:isolate}
+        .home-category-card:before{content:'';position:absolute;z-index:0;right:-32px;bottom:-38px;width:125px;height:125px;border-radius:50%;background:radial-gradient(circle,#fff4bd 0%,#fff9df 48%,rgba(255,249,223,0) 72%);pointer-events:none;transition:transform .22s ease,opacity .22s ease}
         .home-category-card:hover{transform:translateY(-2px);border-color:#d8c26b;box-shadow:0 10px 22px rgba(0,0,0,.06)}
+        .home-category-card:hover:before{transform:scale(1.08);opacity:.9}
         .home-category-card-top{align-items:center}
         .home-category-number{font-size:8px;letter-spacing:.16em;color:#a37b00}
-        .home-category-icon{width:44px;height:44px;border-radius:12px;background:#fff8d8;border:1px solid #efd98a;color:#111}
+        .home-category-icon{width:44px;height:44px;border-radius:12px;background:#ffc400;border:1px solid #efb900;color:#111;box-shadow:0 5px 12px rgba(255,196,0,.16)}
         .home-category-icon svg{width:21px;height:21px}
-        .home-category-arrow{width:29px;height:29px;background:#111}
+        .home-category-arrow{width:29px;height:29px;background:#111;transition:transform .2s ease,background .2s ease}
+        .home-category-card:hover .home-category-arrow{transform:translateX(3px);background:#ffc400;color:#111}
         .home-category-arrow svg{width:15px;height:15px}
-        .home-category-copy{padding-top:12px}
+        .home-category-copy{padding-top:12px;position:relative;z-index:1}
+        .home-category-copy:before{content:'';display:block;width:22px;height:3px;margin-bottom:7px;border-radius:99px;background:#ffc400}
         .home-category-copy h3{font-size:21px;line-height:.95;letter-spacing:-.01em}
         .home-category-hint{margin-top:13px}
         @media(max-width:900px){
@@ -277,6 +281,7 @@ export default function Home() {
           .home-category-arrow{width:26px;height:26px}
           .home-category-arrow svg{width:13px;height:13px}
           .home-category-copy{padding-top:9px}
+          .home-category-copy:before{width:18px;height:2px;margin-bottom:5px}
           .home-category-copy h3{font-size:17px}
         }
         @media(max-width:390px){
