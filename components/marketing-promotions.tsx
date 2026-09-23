@@ -112,7 +112,7 @@ function constrainPromotionCard(card: HTMLElement) {
 }
 
 function renderCatalogPromotionSeal(card: HTMLElement, discount: number) {
-  const image = card.querySelector<HTMLElement>('.product-image');
+  const image = card.querySelector<HTMLElement>('.product-image, .home-product-image');
   if (!image || image.querySelector('[data-promotion-discount-seal]')) return;
 
   const seal = document.createElement('span');
@@ -272,6 +272,10 @@ function applyPromotionStyling(rows: PromotionRow[]) {
           renderCatalogPrice(info, original, promo);
         }
         continue;
+      }
+
+      if (card.classList.contains('home-product-card') && !card.classList.contains('home-promotion-product-card')) {
+        renderCatalogPromotionSeal(card, discount);
       }
 
       if (card.classList.contains('home-promotion-product-card')) continue;

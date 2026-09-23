@@ -215,6 +215,7 @@
 /* Storefront product card system */
 .ui-product-grid{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:18px!important;align-items:stretch!important}
 .ui-product-card{position:relative!important;display:flex!important;flex-direction:column!important;min-width:0!important;height:100%!important;overflow:hidden!important;background:#fff!important;color:#111!important;text-decoration:none!important;border:1px solid #e4e4df!important;border-radius:18px!important;box-shadow:0 5px 16px rgba(17,17,17,.045)!important;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease!important;isolation:isolate}
+.ui-product-card[hidden]{display:none!important}
 .ui-product-card:hover{transform:translateY(-3px)!important;border-color:#d7c36c!important;box-shadow:0 14px 30px rgba(17,17,17,.085)!important}
 .ui-product-card.is-offer,.ui-product-card.promotion-offer-card{border-color:#e7ad00!important}
 .ui-product-card-media{position:relative!important;display:block!important;width:100%!important;height:auto!important;min-height:0!important;aspect-ratio:1/1!important;overflow:hidden!important;background:#f7f7f4!important;text-decoration:none!important;border-radius:0!important}
