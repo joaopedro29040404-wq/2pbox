@@ -4,6 +4,7 @@ import { enqueueEmail } from '@/lib/server/notifications';
 import { readOrderWithItems } from '@/lib/server/orders';
 import { markProcessed } from '@/lib/server/redis';
 import { findAuthUserByEmail, getAdminSupabase } from '@/lib/server/supabase-admin';
+import { checkRateLimit, clientIp } from '@/lib/server/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -76,12 +77,23 @@ async function buildAccountSignupLink(email: string, password: string, name: str
 
 export async function POST(request: Request) {
   try {
+    const declaredLength = Number(request.headers.get('content-length') || 0);
+    if (Number.isFinite(declaredLength) && declaredLength > 24 * 1024) return NextResponse.json({ error: 'Requisição inválida.' }, { status: 413 });
+
+    const subject = clientIp(request) || 'unknown';
+    if (!(await checkRateLimit('account-notify-ip', subject, 80, 10 * 60))) {
+      return NextResponse.json({ error: 'Muitas solicitações em pouco tempo. Tente novamente mais tarde.' }, { status: 429 });
+    }
+
     const body = await request.json().catch(() => ({}));
     const action = String(body?.action || '').trim();
     const email = String(body?.email || '').trim().toLowerCase();
 
     if (!ACTIONS.has(action)) return NextResponse.json({ error: 'Ação inválida.' }, { status: 400 });
     if (!email.includes('@')) return NextResponse.json({ error: 'E-mail inválido.' }, { status: 400 });
+    if (!(await checkRateLimit(`account-notify-${action}`, subject, 40, 10 * 60))) {
+      return NextResponse.json({ error: 'Muitas solicitações em pouco tempo. Tente novamente mais tarde.' }, { status: 429 });
+    }
 
     if (action === 'account_signup') {
       const password = String(body?.password || '');

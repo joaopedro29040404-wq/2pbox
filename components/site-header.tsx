@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { ArrowUpRight, LogIn, LogOut, Menu, ShoppingBag, UserRound, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -22,7 +23,7 @@ const ADMIN_LINKS: NavLink[] = [
   { href: '/admin/pedidos', label: 'Pedidos' },
   { href: '/admin/entregas', label: 'Entregas' },
   { href: '/admin/configuracoes', label: 'Configurações' },
-  { href: '/admin/configuracoes/envio-imediato', label: 'Envio imediato' },
+  { href: '/admin/configuracoes?section=express', label: 'Envio imediato' },
 ];
 
 export type SiteHeaderProps = {
@@ -109,7 +110,7 @@ export function SiteHeader({
         <div className="sh-inner">
           <Link href={isAdmin ? '/admin' : '/'} className="sh-brand" aria-label={isAdmin ? '2P Box, painel' : '2P Box, início'}>
             <span className="sh-logo">
-              <img src="/logo.pnh.png" alt="2P Box" width={112} height={70} />
+              <Image src="/logo.pnh.png" alt="2P Box" width={112} height={70} sizes="96px" priority />
             </span>
             <span className="sh-brand-copy">
               <strong>2P BOX</strong>

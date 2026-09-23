@@ -189,6 +189,11 @@ export default function SettingsPage() {
     void loadMp();
 
     const params = new URLSearchParams(window.location.search);
+    const requestedSection = params.get('section');
+    if (requestedSection && SECTIONS.some((item) => item.key === requestedSection)) {
+      setSection(requestedSection as SectionKey);
+    }
+
     const result = params.get('mp');
     if (!result) return;
     if (result === 'conectado') toast.success('Mercado Pago conectado', 'A loja passa a operar com split de pagamento.');

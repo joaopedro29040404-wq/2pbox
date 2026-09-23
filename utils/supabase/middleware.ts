@@ -21,15 +21,23 @@ export async function updateSession(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   const path = request.nextUrl.pathname;
 
-  // Middleware is responsible only for establishing a valid Supabase session.
-  // Authorization is enforced by Supabase RLS and the admin pages themselves.
-  // Keeping the is_admin RPC out of middleware avoids redirect loops when the
-  // database function/migration is temporarily unavailable during deployment.
-  if (path.startsWith('/admin') && path !== '/admin/login' && !user) {
-    const login = request.nextUrl.clone();
-    login.pathname = '/admin/login';
-    login.search = '';
-    return NextResponse.redirect(login);
+  if (path.startsWith('/admin') && path !== '/admin/login') {
+    if (!user) {
+      const login = request.nextUrl.clone();
+      login.pathname = '/admin/login';
+      login.search = '';
+      return NextResponse.redirect(login);
+    }
+
+    // Defesa em profundidade: o banco continua sendo a autoridade via RLS.
+    // Em indisponibilidade temporária da RPC, páginas e APIs mantêm seus próprios guards.
+    const { data: isAdmin, error: adminError } = await supabase.rpc('is_admin');
+    if (!adminError && isAdmin !== true) {
+      const home = request.nextUrl.clone();
+      home.pathname = '/';
+      home.search = '';
+      return NextResponse.redirect(home);
+    }
   }
 
   return response;

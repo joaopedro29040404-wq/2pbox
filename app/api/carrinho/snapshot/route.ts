@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseRest } from '@/lib/server/supabase-admin';
+import { checkRateLimit, clientIp } from '@/lib/server/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -8,6 +9,10 @@ type CartItem = { id?: string; name?: string; price?: number; quantity?: number 
 
 export async function POST(request: Request) {
   try {
+    const declaredLength = Number(request.headers.get('content-length') || 0);
+    if (Number.isFinite(declaredLength) && declaredLength > 64 * 1024) return NextResponse.json({ ok: false, ignored: true }, { status: 200 });
+    const subject = clientIp(request) || 'unknown';
+    if (!(await checkRateLimit('cart-snapshot', subject, 120, 10 * 60))) return NextResponse.json({ ok: false, ignored: true }, { status: 200 });
     const body = await request.json().catch(() => ({}));
     const email = String(body?.email || '').trim().toLowerCase();
     if (!email.includes('@')) return NextResponse.json({ ok: false, ignored: true });

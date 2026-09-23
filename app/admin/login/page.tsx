@@ -34,18 +34,29 @@ export default function AdminLoginPage() {
 
     setLoading(true);
     const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    setLoading(false);
 
     if (error) {
+      setLoading(false);
       setErrors({ password: 'E-mail ou senha inválidos.' });
       toast.error('Não foi possível entrar', error.message);
       return;
     }
     if (!data.session) {
+      setLoading(false);
       toast.error('Sessão não criada', 'Tente novamente em instantes.');
       return;
     }
 
+    const { data: isAdmin, error: adminError } = await supabase.rpc('is_admin');
+    if (adminError || isAdmin !== true) {
+      await supabase.auth.signOut();
+      setLoading(false);
+      setErrors({ password: 'E-mail ou senha inválidos.' });
+      toast.error('Acesso restrito', 'Esta conta não possui permissão administrativa.');
+      return;
+    }
+
+    setLoading(false);
     toast.success('Acesso liberado', 'Redirecionando para o painel...');
     window.location.assign('/admin');
   }

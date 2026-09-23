@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { requireAdminUser } from '@/lib/server/auth';
+import { checkRateLimit } from '@/lib/server/rate-limit';
 
 export const runtime = 'nodejs';
 
@@ -16,6 +18,9 @@ function parseJson(raw: string) {
 }
 
 export async function GET() {
+  const admin = await requireAdminUser();
+  if (!admin) return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
+
   return NextResponse.json({
     configured: Boolean(process.env.OPENROUTER_API_KEY),
     model: MODEL,
@@ -24,6 +29,18 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const admin = await requireAdminUser();
+  if (!admin) return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
+
+  if (!(await checkRateLimit('admin-ai-copy', admin.id, 30, 60 * 60))) {
+    return NextResponse.json({ error: 'Limite temporário de análises atingido. Tente novamente em alguns minutos.' }, { status: 429 });
+  }
+
+  const declaredLength = Number(request.headers.get('content-length') || 0);
+  if (Number.isFinite(declaredLength) && declaredLength > 12 * 1024 * 1024) {
+    return NextResponse.json({ error: 'A foto deve ter no máximo 10 MB.' }, { status: 413 });
+  }
+
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) {
     return NextResponse.json(
