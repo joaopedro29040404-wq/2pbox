@@ -161,11 +161,13 @@ export default function Home() {
           <div className="home-path-grid">
             <Link href="/loja" className="home-path-card home-path-products">
               <div className="home-path-icon" aria-hidden="true"><ShoppingBag size={25} strokeWidth={1.8} /></div>
+              <Image className="home-path-art home-path-products-art" src="/images/home/quick-products.svg" alt="" width={300} height={190} sizes="(max-width:680px) 24vw, 250px" aria-hidden="true" />
               <div className="home-path-content"><h3>PRODUTOS</h3><span>Eletrônicos, acessórios, papelaria e muito mais.</span></div>
               <div className="home-path-action">COMPRAR AGORA <ArrowRight /></div>
             </Link>
             {printEnabled ? <Link href="/impressao" className="home-path-card print">
               <div className="home-path-icon" aria-hidden="true"><Printer size={25} strokeWidth={1.8} /></div>
+              <Image className="home-path-art home-path-print-art" src="/images/home/quick-print.svg" alt="" width={300} height={190} sizes="(max-width:680px) 24vw, 250px" aria-hidden="true" />
               <div className="home-path-content"><h3>CENTRAL DE IMPRESSÃO</h3><span>Imprima seus arquivos de forma rápida, fácil e com qualidade.</span></div>
               <div className="home-path-action">ACESSAR AGORA <ArrowRight /></div>
             </Link> : null}
@@ -360,6 +362,54 @@ export default function Home() {
           .home-category-visual{height:73px;flex-basis:73px}
           .home-category-copy{bottom:5px!important;height:35px!important;min-height:35px!important;padding:0 3px!important}
           .home-category-copy h3{font-size:8px;line-height:1.03;text-align:center!important}
+        }
+
+        /* Quick access cards — compact reference layout. */
+        .home-path-card.home-path-products,
+        .home-path-card.print{min-height:258px;padding:20px 22px 18px;justify-content:flex-start;border-radius:20px;isolation:isolate}
+        .home-path-card.home-path-products{background:#fff9df;border-color:#f0dfa2}
+        .home-path-card.print{background:#111;color:#fff;border-color:#111}
+        .home-path-card.home-path-products:after{right:-42px;top:-66px;width:205px;height:205px;background:#fff2b8}
+        .home-path-card.print:after{right:-42px;top:-66px;width:205px;height:205px;background:#242424}
+        .home-path-art{position:absolute!important;z-index:1!important;right:8px;top:17px;width:47%!important;height:132px!important;object-fit:contain!important;pointer-events:none}
+        .home-path-print-art{right:-2px!important;top:10px!important;width:52%!important;height:142px!important}
+        .home-path-card .home-path-icon{z-index:3;width:50px;height:50px;border-radius:15px}
+        .home-path-card .home-path-content{z-index:3;max-width:54%!important;margin-top:18px}
+        .home-path-card h3{font-size:31px;line-height:.9;margin-bottom:6px}
+        .home-path-card.print h3{font-size:27px;line-height:.9;color:#fff}
+        .home-path-card span{font-size:11px;line-height:1.42;padding-right:0}
+        .home-path-card.print span{color:#c5c5c5}
+        .home-path-card .home-path-action{z-index:3;margin-top:auto;min-height:38px;padding:0 16px;border-radius:999px;width:max-content;display:inline-flex;justify-content:center;font-size:8px;letter-spacing:.09em}
+        .home-path-card.home-path-products .home-path-action{background:#ffc400;color:#111;box-shadow:0 7px 16px rgba(255,196,0,.18)}
+        .home-path-card.print .home-path-action{background:#fff;color:#111}
+        @media(max-width:680px){
+          .home-path-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+          .home-path-card.home-path-products,
+          .home-path-card.print{position:relative;display:block;height:204px;min-height:204px;padding:12px 11px 11px;border-radius:15px}
+          .home-path-card.home-path-products:after,
+          .home-path-card.print:after{right:-42px;top:-56px;width:145px;height:145px}
+          .home-path-card .home-path-icon{position:absolute;left:12px;top:12px;width:40px;height:40px;border-radius:11px}
+          .home-path-art{top:7px!important;right:4px!important;width:49%!important;height:86px!important}
+          .home-path-print-art{top:5px!important;right:-3px!important;width:53%!important;height:91px!important}
+          .home-path-card .home-path-content{position:absolute;z-index:3;left:12px;top:68px;max-width:62%!important;margin:0!important}
+          .home-path-card h3{font-size:21px;line-height:.92;margin:0 0 4px}
+          .home-path-card.print h3{font-size:18px;line-height:.9;margin-bottom:4px}
+          .home-path-card span{font-size:8.5px;line-height:1.3}
+          .home-path-card .home-path-action{position:absolute;z-index:4;left:12px;right:12px;bottom:11px;width:auto;min-height:32px;margin:0;padding:0 8px;font-size:7px;letter-spacing:.075em}
+          .home-path-card .home-path-action svg{width:13px;height:13px}
+        }
+        @media(max-width:390px){
+          .home-path-grid{gap:8px}
+          .home-path-card.home-path-products,
+          .home-path-card.print{height:194px;min-height:194px;padding:10px 9px;border-radius:14px}
+          .home-path-card .home-path-icon{left:10px;top:10px;width:37px;height:37px;border-radius:10px}
+          .home-path-art{top:5px!important;right:2px!important;width:48%!important;height:80px!important}
+          .home-path-print-art{right:-4px!important;width:52%!important;height:84px!important}
+          .home-path-card .home-path-content{left:10px;top:62px;max-width:64%!important}
+          .home-path-card h3{font-size:19px}
+          .home-path-card.print h3{font-size:16px}
+          .home-path-card span{font-size:8px;line-height:1.27}
+          .home-path-card .home-path-action{left:10px;right:10px;bottom:10px;min-height:30px;font-size:6.6px}
         }
        `}
 </style>
