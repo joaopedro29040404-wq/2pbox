@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
+import { getSiteUrl } from '@/lib/server/env';
 import { checkByteQuota, checkRateLimit, clientIp } from '@/lib/server/rate-limit';
 import { getAdminSupabase } from '@/lib/server/supabase-admin';
 
@@ -10,14 +11,58 @@ const MAX_REQUEST_BYTES = 24 * 1024 * 1024;
 const MAX_DAILY_BYTES = 500 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']);
 
-function isSameOrigin(request: Request) {
+function normalizedHost(value: string | null | undefined) {
+  const raw = String(value || '').split(',')[0]?.trim().toLowerCase();
+  if (!raw) return '';
+  try {
+    return new URL(raw.includes('://') ? raw : `https://${raw}`).host.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function hostAliases(host: string) {
+  const aliases = new Set<string>();
+  if (!host) return aliases;
+  aliases.add(host);
+
+  const [hostname, port] = host.split(':');
+  if (!hostname || hostname === 'localhost' || /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) return aliases;
+
+  const paired = hostname.startsWith('www.') ? hostname.slice(4) : `www.${hostname}`;
+  aliases.add(port ? `${paired}:${port}` : paired);
+  return aliases;
+}
+
+function isAllowedOrigin(request: Request) {
   const origin = request.headers.get('origin');
   if (!origin) return true;
-  try { return new URL(origin).host === new URL(request.url).host; } catch { return false; }
+
+  let originHost = '';
+  try {
+    originHost = new URL(origin).host.toLowerCase();
+  } catch {
+    return false;
+  }
+
+  const allowed = new Set<string>();
+  const candidates = [
+    request.headers.get('x-forwarded-host'),
+    request.headers.get('host'),
+    new URL(request.url).host,
+    normalizedHost(getSiteUrl()),
+  ];
+
+  for (const candidate of candidates) {
+    const host = normalizedHost(candidate);
+    for (const alias of hostAliases(host)) allowed.add(alias);
+  }
+
+  return allowed.has(originHost);
 }
 
 export async function POST(request: Request) {
-  if (!isSameOrigin(request)) return NextResponse.json({ error: 'Origem não permitida.' }, { status: 403 });
+  if (!isAllowedOrigin(request)) return NextResponse.json({ error: 'Origem não permitida.' }, { status: 403 });
   const subject = clientIp(request) || 'unknown';
   if (!(await checkRateLimit('print-upload', subject, 40, 10 * 60))) return NextResponse.json({ error: 'Muitos envios em pouco tempo. Tente novamente em alguns minutos.' }, { status: 429 });
 

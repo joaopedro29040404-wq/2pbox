@@ -14,6 +14,7 @@ import { enqueueEmail } from '../lib/server/notifications';
 import { QUEUES, type EmailJob, type PaymentReconcileJob, type PaymentWebhookJob, type QueueJob } from '../lib/server/queues';
 import { closeRabbit, getRabbitChannel, isQueueConfigured, publishSafe } from '../lib/server/rabbitmq';
 import { acquireLock, closeRedis, releaseLock } from '../lib/server/redis';
+import { cleanupPendingPrintUploads } from '../lib/server/print-cleanup';
 import { supabaseRest } from '../lib/server/supabase-admin';
 
 const MAX_ATTEMPTS = 5;
@@ -22,6 +23,8 @@ const PREFETCH = Number(process.env.WORKER_PREFETCH || 8);
 const RECONCILE_INTERVAL_MS = Number(process.env.WORKER_RECONCILE_INTERVAL_MS || 60_000);
 const CART_INTERVAL_MS = Number(process.env.WORKER_CART_INTERVAL_MS || 15 * 60_000);
 const CART_REMINDER_AFTER_MS = Number(process.env.CART_REMINDER_AFTER_MS || 3 * 60 * 60_000);
+const PRINT_CLEANUP_INTERVAL_MS = Number(process.env.PRINT_CLEANUP_INTERVAL_MS || 6 * 60 * 60_000);
+const PRINT_UPLOAD_RETENTION_HOURS = Number(process.env.PRINT_UPLOAD_RETENTION_HOURS || 30 * 24);
 const HEALTH_PORT = Number(process.env.WORKER_HEALTH_PORT || 3001);
 const NOTIFY_MAX_AGE_MS = Number(process.env.RECONCILE_NOTIFY_MAX_AGE_MS || 48 * 60 * 60_000);
 
@@ -241,6 +244,18 @@ async function sendCartReminders() {
   }
 }
 
+async function cleanupPrintUploads() {
+  if (shuttingDown) return;
+  try {
+    const result = await cleanupPendingPrintUploads({ retentionHours: PRINT_UPLOAD_RETENTION_HOURS });
+    if (result.deleted > 0) {
+      log('info', 'uploads de impressão órfãos removidos', result);
+    }
+  } catch (error) {
+    log('error', 'limpeza de uploads de impressão falhou', error);
+  }
+}
+
 function startHealthServer() {
   const server = createServer((request, response) => {
     if (request.url === '/health' || request.url === '/') {
@@ -285,6 +300,7 @@ async function main() {
 
   schedule(reconcilePendingOrders, RECONCILE_INTERVAL_MS);
   schedule(sendCartReminders, CART_INTERVAL_MS);
+  schedule(cleanupPrintUploads, PRINT_CLEANUP_INTERVAL_MS);
 
   const shutdown = async (signal: string) => {
     if (shuttingDown) return;
