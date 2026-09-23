@@ -396,7 +396,6 @@ export default function Home() {
           .home-path-card.print h3{font-size:20px;line-height:.9;margin-bottom:4px}
           .home-path-card span{font-size:9.2px;line-height:1.3}
           .home-path-card .home-path-action{position:absolute;z-index:4;left:12px;right:12px;bottom:11px;width:auto;min-height:32px;margin:0;padding:0 8px;font-size:7.5px;letter-spacing:.075em}
-          .home-path-card.home-path-products .home-path-action{width:auto!important;max-width:none!important;align-self:auto!important;padding:0 8px!important}
           .home-path-card .home-path-action svg{width:13px;height:13px}
         }
         @media(max-width:390px){
