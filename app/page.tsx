@@ -500,7 +500,7 @@ export default function Home() {
           max-width:100%!important;
           margin:0!important;
           padding:0!important;
-          font-size:22px!important;
+          font-size:24px!important;
           line-height:.96!important;
           letter-spacing:0!important;
           font-weight:800!important;
@@ -546,7 +546,7 @@ export default function Home() {
           }
 
           .home-category-section .home-category-copy h3{
-            font-size:17px!important;
+            font-size:18px!important;
             line-height:1!important;
           }
         }
@@ -641,7 +641,7 @@ export default function Home() {
           }
 
           .home-category-section .home-category-copy h3{
-            font-size:10.5px!important;
+            font-size:11.5px!important;
             line-height:1.02!important;
             overflow:visible!important;
             word-break:normal!important;
@@ -695,7 +695,7 @@ export default function Home() {
           }
 
           .home-category-section .home-category-copy h3{
-            font-size:10px!important;
+            font-size:11px!important;
             line-height:1!important;
           }
         }
