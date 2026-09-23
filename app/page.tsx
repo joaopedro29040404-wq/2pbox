@@ -344,11 +344,11 @@ export default function Home() {
           .home-category-card.category-1,
           .home-category-card.category-2,
           .home-category-card.category-3,
-          .home-category-card.category-4{position:relative!important;min-width:0;width:auto;flex:none;height:126px;min-height:126px;padding:7px 5px 8px;border-radius:12px;background:#fff8d3;border-color:#f0df99;box-shadow:0 4px 12px rgba(0,0,0,.045);scroll-snap-align:none}
-          .home-category-visual{height:78px;flex-basis:78px}
-          .home-category-art{padding:1px}
-          .home-category-copy{position:absolute!important;left:0!important;right:0!important;bottom:6px!important;width:100%!important;height:36px!important;min-height:36px!important;margin:0!important;padding:0 4px!important;display:flex!important;align-items:center!important;justify-content:center!important;text-align:center!important}
-          .home-category-copy h3{display:block!important;width:100%!important;max-width:100%!important;margin:0 auto!important;padding:0!important;font-size:9px;line-height:1.03;letter-spacing:0;overflow:visible!important;overflow-wrap:normal;word-break:normal;white-space:normal;text-wrap:balance;text-align:center!important}
+          .home-category-card.category-4{position:relative!important;min-width:0;width:auto;flex:none;height:102px;min-height:102px;padding:5px 4px 6px;border-radius:10px;background:#fff8d3;border-color:#f0df99;box-shadow:0 3px 10px rgba(0,0,0,.04);scroll-snap-align:none}
+          .home-category-visual{height:60px;flex-basis:60px}
+          .home-category-art{padding:0}
+          .home-category-copy{position:absolute!important;left:0!important;right:0!important;bottom:4px!important;width:100%!important;height:29px!important;min-height:29px!important;margin:0!important;padding:0 3px!important;display:flex!important;align-items:center!important;justify-content:center!important;text-align:center!important}
+          .home-category-copy h3{display:block!important;width:100%!important;max-width:100%!important;margin:0 auto!important;padding:0!important;font-size:8.4px;line-height:1.02;letter-spacing:0;overflow:visible!important;overflow-wrap:normal;word-break:normal;white-space:normal;text-wrap:balance;text-align:center!important}
           .home-category-hint{display:none}
         }
         @media(max-width:390px){
@@ -358,10 +358,10 @@ export default function Home() {
           .home-category-card.category-1,
           .home-category-card.category-2,
           .home-category-card.category-3,
-          .home-category-card.category-4{height:120px;min-height:120px;padding:6px 4px 7px;border-radius:11px}
-          .home-category-visual{height:73px;flex-basis:73px}
-          .home-category-copy{bottom:5px!important;height:35px!important;min-height:35px!important;padding:0 3px!important}
-          .home-category-copy h3{font-size:8px;line-height:1.03;text-align:center!important}
+          .home-category-card.category-4{height:96px;min-height:96px;padding:5px 3px 5px;border-radius:9px}
+          .home-category-visual{height:55px;flex-basis:55px}
+          .home-category-copy{bottom:4px!important;height:27px!important;min-height:27px!important;padding:0 2px!important}
+          .home-category-copy h3{font-size:8px;line-height:1.02;text-align:center!important}
         }
 
         /* Quick access cards — compact reference layout. */
