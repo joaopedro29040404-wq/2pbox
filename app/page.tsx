@@ -342,11 +342,11 @@ export default function Home() {
           .home-category-card.category-1,
           .home-category-card.category-2,
           .home-category-card.category-3,
-          .home-category-card.category-4{min-width:0;width:auto;flex:none;height:126px;min-height:126px;padding:7px 5px 8px;border-radius:12px;background:#fff8d3;border-color:#f0df99;box-shadow:0 4px 12px rgba(0,0,0,.045);scroll-snap-align:none}
+          .home-category-card.category-4{position:relative!important;min-width:0;width:auto;flex:none;height:126px;min-height:126px;padding:7px 5px 8px;border-radius:12px;background:#fff8d3;border-color:#f0df99;box-shadow:0 4px 12px rgba(0,0,0,.045);scroll-snap-align:none}
           .home-category-visual{height:78px;flex-basis:78px}
           .home-category-art{padding:1px}
-          .home-category-copy{min-height:33px;padding:5px 1px 0;display:grid;place-items:center}
-          .home-category-copy h3{width:100%;max-width:none;margin:0 auto;font-size:9px;line-height:1.02;letter-spacing:0;overflow:visible;overflow-wrap:normal;word-break:normal;white-space:normal;text-wrap:balance;text-align:center}
+          .home-category-copy{position:absolute!important;left:0!important;right:0!important;bottom:6px!important;width:100%!important;height:36px!important;min-height:36px!important;margin:0!important;padding:0 4px!important;display:flex!important;align-items:center!important;justify-content:center!important;text-align:center!important}
+          .home-category-copy h3{display:block!important;width:100%!important;max-width:100%!important;margin:0 auto!important;padding:0!important;font-size:9px;line-height:1.03;letter-spacing:0;overflow:visible!important;overflow-wrap:normal;word-break:normal;white-space:normal;text-wrap:balance;text-align:center!important}
           .home-category-hint{display:none}
         }
         @media(max-width:390px){
@@ -358,8 +358,8 @@ export default function Home() {
           .home-category-card.category-3,
           .home-category-card.category-4{height:120px;min-height:120px;padding:6px 4px 7px;border-radius:11px}
           .home-category-visual{height:73px;flex-basis:73px}
-          .home-category-copy{min-height:32px;padding:4px 1px 0;display:grid;place-items:center}
-          .home-category-copy h3{font-size:8px;line-height:1;text-align:center}
+          .home-category-copy{bottom:5px!important;height:35px!important;min-height:35px!important;padding:0 3px!important}
+          .home-category-copy h3{font-size:8px;line-height:1.03;text-align:center!important}
         }
        `}
 </style>
