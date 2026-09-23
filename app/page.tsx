@@ -375,11 +375,11 @@ export default function Home() {
         .home-path-print-art{right:-2px!important;top:10px!important;width:52%!important;height:142px!important}
         .home-path-card .home-path-icon{z-index:3;width:50px;height:50px;border-radius:15px}
         .home-path-card .home-path-content{z-index:3;max-width:54%!important;margin-top:18px}
-        .home-path-card h3{font-size:31px;line-height:.9;margin-bottom:6px}
-        .home-path-card.print h3{font-size:27px;line-height:.9;color:#fff}
-        .home-path-card span{font-size:11px;line-height:1.42;padding-right:0}
+        .home-path-card h3{font-size:33px;line-height:.9;margin-bottom:6px}
+        .home-path-card.print h3{font-size:29px;line-height:.9;color:#fff}
+        .home-path-card span{font-size:12px;line-height:1.42;padding-right:0}
         .home-path-card.print span{color:#c5c5c5}
-        .home-path-card .home-path-action{z-index:3;margin-top:auto;min-height:38px;padding:0 16px;border-radius:999px;width:max-content;display:inline-flex;justify-content:center;font-size:8px;letter-spacing:.09em}
+        .home-path-card .home-path-action{z-index:3;margin-top:auto;min-height:38px;padding:0 16px;border-radius:999px;width:max-content;display:inline-flex;justify-content:center;font-size:8.5px;letter-spacing:.09em}
         .home-path-card.home-path-products .home-path-action{background:#ffc400;color:#111;box-shadow:0 7px 16px rgba(255,196,0,.18);width:max-content!important;max-width:max-content!important;align-self:flex-start!important;padding:9px 13px!important}
         .home-path-card.print .home-path-action{background:#fff;color:#111}
         @media(max-width:680px){
@@ -392,10 +392,10 @@ export default function Home() {
           .home-path-art{top:7px!important;right:4px!important;width:49%!important;height:86px!important}
           .home-path-print-art{top:5px!important;right:-3px!important;width:53%!important;height:91px!important}
           .home-path-card .home-path-content{position:absolute;z-index:3;left:12px;top:68px;max-width:62%!important;margin:0!important}
-          .home-path-card h3{font-size:21px;line-height:.92;margin:0 0 4px}
-          .home-path-card.print h3{font-size:18px;line-height:.9;margin-bottom:4px}
-          .home-path-card span{font-size:8.5px;line-height:1.3}
-          .home-path-card .home-path-action{position:absolute;z-index:4;left:12px;right:12px;bottom:11px;width:auto;min-height:32px;margin:0;padding:0 8px;font-size:7px;letter-spacing:.075em}
+          .home-path-card h3{font-size:23px;line-height:.92;margin:0 0 4px}
+          .home-path-card.print h3{font-size:20px;line-height:.9;margin-bottom:4px}
+          .home-path-card span{font-size:9.2px;line-height:1.3}
+          .home-path-card .home-path-action{position:absolute;z-index:4;left:12px;right:12px;bottom:11px;width:auto;min-height:32px;margin:0;padding:0 8px;font-size:7.5px;letter-spacing:.075em}
           .home-path-card.home-path-products .home-path-action{width:auto!important;max-width:none!important;align-self:auto!important;padding:0 8px!important}
           .home-path-card .home-path-action svg{width:13px;height:13px}
         }
@@ -407,10 +407,10 @@ export default function Home() {
           .home-path-art{top:5px!important;right:2px!important;width:48%!important;height:80px!important}
           .home-path-print-art{right:-4px!important;width:52%!important;height:84px!important}
           .home-path-card .home-path-content{left:10px;top:62px;max-width:64%!important}
-          .home-path-card h3{font-size:19px}
-          .home-path-card.print h3{font-size:16px}
-          .home-path-card span{font-size:8px;line-height:1.27}
-          .home-path-card .home-path-action{left:10px;right:10px;bottom:10px;min-height:30px;font-size:6.6px}
+          .home-path-card h3{font-size:21px}
+          .home-path-card.print h3{font-size:18px}
+          .home-path-card span{font-size:8.6px;line-height:1.27}
+          .home-path-card .home-path-action{left:10px;right:10px;bottom:10px;min-height:30px;font-size:7px}
         }
        `}
 </style>
