@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowRight, ChevronLeft, ChevronRight, Facebook, Heart, Instagram, Music2, PackageCheck, Headphones, Image as ImageIcon, Laptop, PencilLine, Printer, ShoppingBag, ShoppingCart, Smartphone, Star, Truck, Youtube } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, Facebook, Heart, Instagram, Music2, PackageCheck, Headphones, Image as ImageIcon, Printer, ShoppingBag, ShoppingCart, Star, Truck, Youtube } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getStoreSettings, StoreSettings } from '@/lib/store-settings';
 import { SiteHeader } from '@/components/site-header';
@@ -22,13 +22,6 @@ const FALLBACK_MAIN_CATEGORIES: Category[] = [
   { id: 'acessorios-para-celular', name: 'Acessórios para celular', description: 'Acessórios e itens para dispositivos móveis.' },
   { id: 'informatica', name: 'Informática', description: 'Monitores, periféricos, acessórios e tecnologia.' },
 ];
-
-function CategoryIcon({ index }: { index: number }) {
-  if (index === 1) return <Laptop size={25} strokeWidth={1.8} />;
-  if (index === 2) return <Smartphone size={25} strokeWidth={1.8} />;
-  if (index === 3) return <ShoppingBag size={25} strokeWidth={1.8} />;
-  return <PencilLine size={25} strokeWidth={1.8} />;
-}
 
 export default function Home() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -181,12 +174,13 @@ export default function Home() {
           <div className="home-category-grid">
             {visibleCategories.map((category, index) => (
               <Link key={category.id || category.name} href={`/loja?categoria=${encodeURIComponent(category.id)}`} className={`home-category-card category-${index + 1}`}>
-                <div className="home-category-card-top">
-                  <span className="home-category-number">{String(index + 1).padStart(2, '0')}</span>
-                  <div className="home-category-icon"><CategoryIcon index={index} /></div>
-                  <span className="home-category-arrow"><ArrowRight size={17} /></span>
+                <div className="home-category-visual" aria-hidden="true">
+                  <span className={`home-category-art category-art-${index + 1}`} />
                 </div>
-                <div className="home-category-copy"><h3>{category.name}</h3></div>
+                <div className="home-category-copy">
+                  <h3>{category.name}</h3>
+                  <ArrowRight className="home-category-chevron" size={18} strokeWidth={1.8} aria-hidden="true" />
+                </div>
               </Link>
             ))}
           </div>
@@ -291,6 +285,61 @@ export default function Home() {
           .home-category-card.category-3,
           .home-category-card.category-4{min-width:132px;flex-basis:132px;min-height:120px;height:120px}
           .home-category-copy h3{font-size:16px}
+        }
+
+        /* Category cards — approved image-first direction. */
+        .home-category-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+        .home-category-card,
+        .home-category-card.category-1,
+        .home-category-card.category-2,
+        .home-category-card.category-3,
+        .home-category-card.category-4{height:232px;min-height:232px;padding:0;display:flex;flex-direction:column;justify-content:flex-start;overflow:hidden;border-radius:18px;background:#fff;border:1px solid #e2e2df;box-shadow:0 7px 20px rgba(0,0,0,.04);isolation:isolate}
+        .home-category-card:before{content:none}
+        .home-category-card:hover{transform:translateY(-3px);border-color:#d9c66f;box-shadow:0 15px 30px rgba(0,0,0,.07)}
+        .home-category-card:hover:before{transform:none;opacity:1}
+        .home-category-visual{position:relative;width:100%;height:160px;flex:0 0 160px;overflow:hidden;background:#f5f5f2;border-bottom:1px solid #ecece8}
+        .home-category-art{position:absolute;inset:0;display:block;background-repeat:no-repeat;background-size:cover;background-position:center;transition:transform .22s ease}
+        .home-category-art.category-art-1{background-image:url('/categories/papelaria.svg')}
+        .home-category-art.category-art-2{background-image:url('/categories/eletronicos.svg')}
+        .home-category-art.category-art-3{background-image:url('/categories/celular.svg')}
+        .home-category-art.category-art-4{background-image:url('/categories/informatica.svg')}
+        .home-category-card:hover .home-category-art{transform:scale(1.018)}
+        .home-category-copy{position:relative;z-index:2;width:100%;flex:1;margin:0;padding:26px 15px 14px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:10px;text-align:left}
+        .home-category-copy:before{content:'';position:absolute;left:15px;top:13px;width:24px;height:3px;margin:0;border-radius:999px;background:#ffc400}
+        .home-category-copy h3{margin:0;max-width:210px;font-family:'Barlow Condensed',sans-serif;font-size:22px;line-height:.92;letter-spacing:-.01em;text-transform:uppercase}
+        .home-category-chevron{width:18px;height:18px;align-self:end;margin-bottom:1px;color:#111;transition:transform .2s ease,color .2s ease}
+        .home-category-card:hover .home-category-chevron{transform:translateX(3px);color:#b98900}
+        @media(max-width:900px){
+          .home-category-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+          .home-category-card,
+          .home-category-card.category-1,
+          .home-category-card.category-2,
+          .home-category-card.category-3,
+          .home-category-card.category-4{height:224px;min-height:224px}
+          .home-category-visual{height:152px;flex-basis:152px}
+        }
+        @media(max-width:680px){
+          .home-category-grid{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 1px 7px;scrollbar-width:none}
+          .home-category-grid::-webkit-scrollbar{display:none}
+          .home-category-card,
+          .home-category-card.category-1,
+          .home-category-card.category-2,
+          .home-category-card.category-3,
+          .home-category-card.category-4{min-width:168px;flex:0 0 168px;width:168px;height:194px;min-height:194px;border-radius:14px;scroll-snap-align:start}
+          .home-category-visual{height:112px;flex-basis:112px}
+          .home-category-copy{min-height:82px;padding:22px 11px 11px;gap:7px;align-items:center}
+          .home-category-copy:before{left:11px;top:10px;width:18px;height:2px}
+          .home-category-copy h3{max-width:132px;font-size:16px;line-height:1;overflow-wrap:anywhere}
+          .home-category-chevron{width:15px;height:15px;margin-bottom:0}
+        }
+        @media(max-width:390px){
+          .home-category-card,
+          .home-category-card.category-1,
+          .home-category-card.category-2,
+          .home-category-card.category-3,
+          .home-category-card.category-4{min-width:160px;flex-basis:160px;width:160px;height:190px;min-height:190px}
+          .home-category-visual{height:108px;flex-basis:108px}
+          .home-category-copy h3{max-width:124px;font-size:15px;line-height:1}
         }
        `}
 </style>
