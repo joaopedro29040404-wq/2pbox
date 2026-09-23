@@ -380,7 +380,7 @@ export default function Home() {
         .home-path-card span{font-size:11px;line-height:1.42;padding-right:0}
         .home-path-card.print span{color:#c5c5c5}
         .home-path-card .home-path-action{z-index:3;margin-top:auto;min-height:38px;padding:0 16px;border-radius:999px;width:max-content;display:inline-flex;justify-content:center;font-size:8px;letter-spacing:.09em}
-        .home-path-card.home-path-products .home-path-action{background:#ffc400;color:#111;box-shadow:0 7px 16px rgba(255,196,0,.18)}
+        .home-path-card.home-path-products .home-path-action{background:#ffc400;color:#111;box-shadow:0 7px 16px rgba(255,196,0,.18);width:max-content!important;max-width:max-content!important;align-self:flex-start!important;padding:9px 13px!important}
         .home-path-card.print .home-path-action{background:#fff;color:#111}
         @media(max-width:680px){
           .home-path-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
@@ -396,6 +396,7 @@ export default function Home() {
           .home-path-card.print h3{font-size:18px;line-height:.9;margin-bottom:4px}
           .home-path-card span{font-size:8.5px;line-height:1.3}
           .home-path-card .home-path-action{position:absolute;z-index:4;left:12px;right:12px;bottom:11px;width:auto;min-height:32px;margin:0;padding:0 8px;font-size:7px;letter-spacing:.075em}
+          .home-path-card.home-path-products .home-path-action{width:auto!important;max-width:none!important;align-self:auto!important;padding:0 8px!important}
           .home-path-card .home-path-action svg{width:13px;height:13px}
         }
         @media(max-width:390px){
