@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Heart, Trash2, UserRound } from 'lucide-react';
+import { ArrowLeft, Heart, UserRound } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useCart } from '@/components/cart-provider';
 import { SiteHeader } from '@/components/site-header';
@@ -132,24 +132,24 @@ export default function FavoritesPage() {
           </div>
         ) : (
           <>
-            <div className="favorite-grid">
+            <div className="favorite-grid ui-product-grid">
               {pageItems.map((product) => (
-                <article className="favorite-card" key={product.id}>
-                  <Link href={`/produto/${product.slug}`} className="fav-image">
-                    <ProductImage src={productCover(product)} alt={product.name} sizes="(max-width:650px) 50vw, 260px" />
+                <article className="favorite-card ui-product-card" key={product.id}>
+                  <Link href={`/produto/${product.slug}`} className="fav-image ui-product-card-media">
+                    <ProductImage src={productCover(product)} alt={product.name} sizes="(max-width:700px) 50vw, 280px" />
                   </Link>
-                  <div className="fav-body">
-                    <Link href={`/produto/${product.slug}`}>
-                      <small>PRODUTO 2P BOX</small>
-                      <h2>{product.name}</h2>
+                  <button type="button" className="remove-fav ui-product-card-favorite is-favorite" onClick={() => remove(product)} aria-label="Remover dos favoritos">
+                    <Heart size={16} fill="currentColor" />
+                  </button>
+                  <div className="fav-body ui-product-card-body">
+                    <Link href={`/produto/${product.slug}`} className="ui-product-card-info">
+                      <small className="ui-product-card-eyebrow">PRODUTO 2P BOX</small>
+                      <h2 className="ui-product-card-title">{product.name}</h2>
                     </Link>
-                    <strong>{money(product.price)}</strong>
-                    <div className="fav-actions">
-                      <button type="button" className="primary" disabled={product.stock <= 0} onClick={() => buy(product)}>
+                    <strong className="ui-product-card-price">{money(product.price)}</strong>
+                    <div className="fav-actions ui-product-card-footer">
+                      <button type="button" className="primary ui-product-card-action" disabled={product.stock <= 0} onClick={() => buy(product)}>
                         {product.stock > 0 ? 'Adicionar ao carrinho' : 'Indisponível'}
-                      </button>
-                      <button type="button" className="remove-fav" onClick={() => remove(product)} aria-label="Remover dos favoritos">
-                        <Trash2 size={16} />
                       </button>
                     </div>
                   </div>

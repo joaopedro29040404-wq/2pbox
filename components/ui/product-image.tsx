@@ -65,7 +65,7 @@ export function ProductImage({ src, alt, sizes = '(max-width:700px) 50vw, 300px'
           height: 100% !important;
           object-fit: contain !important;
           object-position: center center !important;
-          padding: 8px !important;
+          padding: 16px !important;
           box-sizing: border-box !important;
         }
       `}</style>
