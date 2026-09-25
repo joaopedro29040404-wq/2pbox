@@ -21,7 +21,7 @@ import { supabase } from '@/lib/supabase';
 import { SiteHeader } from '@/components/site-header';
 import { SelectField, TextAreaField, TextField } from '@/components/ui/field';
 import { Modal } from '@/components/ui/modal';
-import { Pagination, usePagination } from '@/components/ui/pagination';
+import { Pagination } from '@/components/ui/pagination';
 import { ProductImage, productCover } from '@/components/ui/product-image';
 import { optimizeImageForStorage } from '@/lib/image-optimization';
 import { InlineLoader, SkeletonGrid } from '@/components/ui/loader';
@@ -47,10 +47,11 @@ type Product = {
 type Category = { id: string; name: string; parent_id: string | null };
 type AiCopy = { title: string; description: string; features: string[] };
 type FormState = { name: string; description: string; price: string; cost: string; barcode: string; stock: string; category_ids: string[]; image_url: string; images: string[] };
+type CatalogStats = { total: number; active: number; inactive: number };
 
 const empty: FormState = { name: '', description: '', price: '', cost: '', barcode: '', stock: '0', category_ids: [], image_url: '', images: [] };
-const FETCH_SIZE = 1000;
 const PAGE_SIZE = 20;
+const SEARCH_DEBOUNCE_MS = 300;
 const ROOT_ORDER = ['Papelaria', 'Eletrônicos', 'Acessórios para celular', 'Variedades'];
 
 const STATUS_OPTIONS = [
@@ -72,6 +73,10 @@ export default function ProductsAdminPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const [catalogStats, setCatalogStats] = useState<CatalogStats>({ total: 0, active: 0, inactive: 0 });
+  const [reloadToken, setReloadToken] = useState(0);
   const [aiSource, setAiSource] = useState<File | null>(null);
   const [aiPreview, setAiPreview] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
@@ -89,38 +94,123 @@ export default function ProductsAdminPage() {
     return () => URL.revokeObjectURL(url);
   }, [aiSource]);
 
-  async function load() {
+  async function loadCatalogMeta() {
     if (!supabase) return;
-    setLoading(true);
     try {
-      const all: Product[] = [];
-      let from = 0;
-      for (;;) {
-        const { data, error } = await supabase
-          .from('products')
-          .select('id,name,description,price,cost,barcode,stock,active,category_id,image_url,images,slug,updated_at,created_at,product_categories(category_id)')
-          .order('updated_at', { ascending: false, nullsFirst: false })
-          .range(from, from + FETCH_SIZE - 1);
-        if (error) throw error;
-        const batch = (data ?? []) as Product[];
-        all.push(...batch);
-        if (batch.length < FETCH_SIZE) break;
-        from += FETCH_SIZE;
-      }
-      const { data: categoryRows, error: categoryError } = await supabase.from('categories').select('id,name,parent_id').eq('active', true).order('name');
+      const [
+        { data: categoryRows, error: categoryError },
+        { count: totalCount, error: totalError },
+        { count: activeProductCount, error: activeError },
+      ] = await Promise.all([
+        supabase.from('categories').select('id,name,parent_id').eq('active', true).order('name'),
+        supabase.from('products').select('id', { count: 'exact', head: true }),
+        supabase.from('products').select('id', { count: 'exact', head: true }).eq('active', true),
+      ]);
       if (categoryError) throw categoryError;
-      setProducts(all);
+      if (totalError) throw totalError;
+      if (activeError) throw activeError;
+      const total = totalCount ?? 0;
+      const active = activeProductCount ?? 0;
       setCategories((categoryRows ?? []) as Category[]);
+      setCatalogStats({ total, active, inactive: Math.max(0, total - active) });
     } catch (error) {
-      toast.error('Não foi possível carregar o catálogo', error instanceof Error ? error.message : undefined);
-    } finally {
-      setLoading(false);
+      toast.error('Não foi possível carregar os dados do catálogo', error instanceof Error ? error.message : undefined);
     }
   }
 
+  function refreshCatalog() {
+    setReloadToken((current) => current + 1);
+    void loadCatalogMeta();
+  }
+
   useEffect(() => {
-    load();
+    void loadCatalogMeta();
   }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, categoryFilter]);
+
+  useEffect(() => {
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const delay = search.trim() ? SEARCH_DEBOUNCE_MS : 0;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        setLoading(true);
+        try {
+          const relationSelect = categoryFilter === 'all' ? '' : ',product_categories!inner(category_id)';
+          let query = supabase
+            .from('products')
+            .select(
+              `id,name,description,price,cost,barcode,stock,active,category_id,image_url,images,slug,updated_at,created_at${relationSelect}`,
+              { count: 'exact' },
+            );
+
+          const term = search.trim().replace(/[%_,()]/g, ' ').replace(/\s+/g, ' ').trim();
+          if (term) query = query.or(`name.ilike.%${term}%,description.ilike.%${term}%,barcode.ilike.%${term}%`);
+          if (statusFilter === 'active') query = query.eq('active', true);
+          if (statusFilter === 'inactive') query = query.eq('active', false);
+          if (categoryFilter !== 'all') query = query.eq('product_categories.category_id', categoryFilter);
+
+          const start = (page - 1) * PAGE_SIZE;
+          const { data, error, count } = await query
+            .order('updated_at', { ascending: false, nullsFirst: false })
+            .range(start, start + PAGE_SIZE - 1);
+
+          if (error) throw error;
+          if (cancelled) return;
+
+          const total = count ?? 0;
+          const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+          if (page > lastPage) {
+            setPage(lastPage);
+            return;
+          }
+
+          const pageProducts = (data ?? []) as Product[];
+          if (pageProducts.length) {
+            const { data: relationRows, error: relationError } = await supabase
+              .from('product_categories')
+              .select('product_id,category_id')
+              .in('product_id', pageProducts.map((product) => product.id));
+            if (relationError) throw relationError;
+            const relationsByProduct = new Map<string, { category_id: string }[]>();
+            for (const relation of relationRows ?? []) {
+              const productId = String(relation.product_id);
+              const current = relationsByProduct.get(productId) ?? [];
+              current.push({ category_id: String(relation.category_id) });
+              relationsByProduct.set(productId, current);
+            }
+            for (const product of pageProducts) {
+              product.product_categories = relationsByProduct.get(product.id) ?? [];
+            }
+          }
+
+          if (cancelled) return;
+          setProducts(pageProducts);
+          setTotalProducts(total);
+        } catch (error) {
+          if (!cancelled) {
+            setProducts([]);
+            setTotalProducts(0);
+            toast.error('Não foi possível carregar o catálogo', error instanceof Error ? error.message : undefined);
+          }
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      })();
+    }, delay);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [page, search, statusFilter, categoryFilter, reloadToken]);
 
   function resetAi() {
     setAiSource(null);
@@ -330,7 +420,7 @@ export default function ProductsAdminPage() {
     setEditing(null);
     resetAi();
     setShowForm(false);
-    load();
+    refreshCatalog();
   }
 
   function removeImage(index: number) {
@@ -352,7 +442,7 @@ export default function ProductsAdminPage() {
     const { error } = await supabase.from('products').update({ active: !product.active, updated_at: new Date().toISOString() }).eq('id', product.id);
     if (error) return toast.error('Não foi possível alterar o produto', error.message);
     toast.success(product.active ? 'Produto desativado' : 'Produto ativado', product.name);
-    load();
+    refreshCatalog();
   }
 
   async function remove(product: Product) {
@@ -361,7 +451,7 @@ export default function ProductsAdminPage() {
     const { error } = await supabase.from('products').delete().eq('id', product.id);
     if (error) return toast.error('Não foi possível excluir', error.message);
     toast.success('Produto excluído', product.name);
-    load();
+    refreshCatalog();
   }
 
   function cancel() {
@@ -372,24 +462,11 @@ export default function ProductsAdminPage() {
     resetAi();
   }
 
-  const filtered = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return products.filter((product) => {
-      const matchesQuery = !query || product.name.toLowerCase().includes(query) || (product.description || '').toLowerCase().includes(query) || (product.barcode || '').toLowerCase().includes(query);
-      const matchesStatus = statusFilter === 'all' || (statusFilter === 'active' ? product.active : !product.active);
-      const relationIds = (product.product_categories ?? []).map((relation) => relation.category_id);
-      const matchesCategory = categoryFilter === 'all' || product.category_id === categoryFilter || relationIds.includes(categoryFilter);
-      return matchesQuery && matchesStatus && matchesCategory;
-    });
-  }, [products, search, statusFilter, categoryFilter]);
-
-  const { page, setPage, totalPages, pageItems, from, to, total } = usePagination(
-    filtered,
-    PAGE_SIZE,
-    `${search}|${statusFilter}|${categoryFilter}`,
-  );
-  const activeCount = products.filter((product) => product.active).length;
+  const totalPages = Math.max(1, Math.ceil(totalProducts / PAGE_SIZE));
+  const from = totalProducts === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const to = Math.min(page * PAGE_SIZE, totalProducts);
   const stockCount = products.reduce((sum, product) => sum + Number(product.stock || 0), 0);
+  const filtersActive = Boolean(search.trim()) || statusFilter !== 'all' || categoryFilter !== 'all';
 
   const roots = useMemo(() => {
     return categories
@@ -428,22 +505,22 @@ export default function ProductsAdminPage() {
         <div className="catalog-stats">
           <div>
             <span>Produtos</span>
-            <strong>{products.length.toLocaleString('pt-BR')}</strong>
+            <strong>{catalogStats.total.toLocaleString('pt-BR')}</strong>
             <small>Total do catálogo</small>
           </div>
           <div>
             <span>Ativos</span>
-            <strong>{activeCount.toLocaleString('pt-BR')}</strong>
+            <strong>{catalogStats.active.toLocaleString('pt-BR')}</strong>
             <small>Visíveis na loja</small>
           </div>
           <div>
             <span>Estoque</span>
             <strong>{stockCount.toLocaleString('pt-BR')}</strong>
-            <small>Unidades disponíveis</small>
+            <small>Unidades nesta página</small>
           </div>
           <div>
             <span>Inativos</span>
-            <strong>{(products.length - activeCount).toLocaleString('pt-BR')}</strong>
+            <strong>{catalogStats.inactive.toLocaleString('pt-BR')}</strong>
             <small>Fora da loja</small>
           </div>
         </div>
@@ -723,21 +800,21 @@ export default function ProductsAdminPage() {
               <LayoutGrid size={18} /> Todos os produtos
             </h2>
             <span>
-              {filtered.length === products.length
-                ? `${products.length.toLocaleString('pt-BR')} produto(s) no catálogo.`
-                : `${filtered.length.toLocaleString('pt-BR')} de ${products.length.toLocaleString('pt-BR')} produto(s) com os filtros atuais.`}
+              {filtersActive
+                ? `${totalProducts.toLocaleString('pt-BR')} de ${catalogStats.total.toLocaleString('pt-BR')} produto(s) com os filtros atuais.`
+                : `${catalogStats.total.toLocaleString('pt-BR')} produto(s) no catálogo.`}
             </span>
           </div>
         </div>
 
         {loading ? (
           <SkeletonGrid count={6} height={330} />
-        ) : pageItems.length === 0 ? (
+        ) : products.length === 0 ? (
           <div className="catalog-empty">
             <Package size={34} />
-            <h3>{products.length ? 'Nenhum produto encontrado' : 'Seu catálogo está vazio'}</h3>
-            <p>{products.length ? 'Tente outra busca ou filtro.' : 'Cadastre seu primeiro produto para começar.'}</p>
-            {!products.length && (
+            <h3>{catalogStats.total ? 'Nenhum produto encontrado' : 'Seu catálogo está vazio'}</h3>
+            <p>{catalogStats.total ? 'Tente outra busca ou filtro.' : 'Cadastre seu primeiro produto para começar.'}</p>
+            {!catalogStats.total && (
               <button type="button" className="primary" onClick={startNew}>
                 <Plus size={17} /> Cadastrar primeiro produto
               </button>
@@ -746,7 +823,7 @@ export default function ProductsAdminPage() {
         ) : (
           <>
             <div className="admin-product-grid">
-              {pageItems.map((product) => {
+              {products.map((product) => {
                 const productCategoryNames = (product.product_categories ?? [])
                   .map((relation) => categories.find((category) => category.id === relation.category_id)?.name)
                   .filter(Boolean) as string[];
@@ -788,7 +865,7 @@ export default function ProductsAdminPage() {
                 );
               })}
             </div>
-            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} from={from} to={to} total={total} label="produtos" scrollTargetId="lista-produtos" />
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} from={from} to={to} total={totalProducts} label="produtos" scrollTargetId="lista-produtos" />
           </>
         )}
       </section>
