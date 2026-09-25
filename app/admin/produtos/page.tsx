@@ -118,8 +118,12 @@ export default function ProductsAdminPage() {
     }
   }
 
-  function refreshCatalog() {
+  function refreshPage() {
     setReloadToken((current) => current + 1);
+  }
+
+  function refreshCatalog() {
+    refreshPage();
     void loadCatalogMeta();
   }
 
@@ -415,12 +419,14 @@ export default function ProductsAdminPage() {
       return;
     }
 
-    toast.success(editing ? 'Produto atualizado' : 'Produto cadastrado', payload.name);
+    const wasEditing = Boolean(editing);
+    toast.success(wasEditing ? 'Produto atualizado' : 'Produto cadastrado', payload.name);
     setForm(empty);
     setEditing(null);
     resetAi();
     setShowForm(false);
-    refreshCatalog();
+    if (wasEditing) refreshPage();
+    else refreshCatalog();
   }
 
   function removeImage(index: number) {
