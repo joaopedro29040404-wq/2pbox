@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Bike, FileText, Gift, LoaderCircle, MapPin, MessageCircle, Minus, Plus, ShoppingBag, Store, Trash2, Zap } from 'lucide-react';
 import { useCart } from '@/components/cart-provider';
@@ -8,8 +8,10 @@ import { SiteHeader } from '@/components/site-header';
 import { RadioGroup } from '@/components/ui/field';
 import { ProductImage } from '@/components/ui/product-image';
 import { money } from '@/lib/order-format';
+import { supabase } from '@/lib/supabase';
 
 type DeliveryOption = { provider: string; label: string; description: string; fee: number | null; needsAddress: boolean; available?: boolean; reason?: string };
+type CatalogState = { stock: number; price: number; promotionalPrice: number | null };
 
 const ICONS: Record<string, React.ReactNode> = {
   pickup: <Store size={19} />,
@@ -37,6 +39,8 @@ export default function CarrinhoPage() {
   const [freightCalculated, setFreightCalculated] = useState(false);
   const [freeShippingFrom, setFreeShippingFrom] = useState<number | null>(null);
   const [cepAddress, setCepAddress] = useState<{ street: string; neighborhood: string; city: string; state: string } | null>(null);
+  const [catalogState, setCatalogState] = useState<Record<string, CatalogState>>({});
+  const [catalogChecked, setCatalogChecked] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -56,6 +60,56 @@ export default function CarrinhoPage() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    const client = supabase;
+    const ids = items.filter((item) => item.kind !== 'print').map((item) => item.id);
+    if (!client || ids.length === 0) {
+      setCatalogState({});
+      setCatalogChecked(ids.length === 0);
+      return;
+    }
+
+    let active = true;
+    setCatalogChecked(false);
+    const now = new Date().toISOString();
+
+    void client
+      .from('products')
+      .select('id,price,stock,active,promotions(promotional_price,starts_at,ends_at,active)')
+      .in('id', ids)
+      .eq('active', true)
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          setCatalogChecked(false);
+          return;
+        }
+
+        const next: Record<string, CatalogState> = {};
+        for (const row of data || []) {
+          const price = Number(row.price);
+          const promotion = (Array.isArray(row.promotions) ? row.promotions : []).find((item: any) =>
+            item?.active &&
+            Number(item.promotional_price) > 0 &&
+            Number(item.promotional_price) < price &&
+            new Date(item.starts_at).getTime() <= new Date(now).getTime() &&
+            new Date(item.ends_at).getTime() >= new Date(now).getTime()
+          );
+          next[String(row.id)] = {
+            stock: Math.max(0, Number(row.stock) || 0),
+            price,
+            promotionalPrice: promotion ? Number(promotion.promotional_price) : null,
+          };
+        }
+        setCatalogState(next);
+        setCatalogChecked(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [items]);
 
   const calculateFreight = async () => {
     const normalized = normalizeCep(cep);
@@ -116,6 +170,26 @@ export default function CarrinhoPage() {
   const freeShippingRemaining = freeShippingFrom != null ? Math.max(0, freeShippingFrom - total) : 0;
   const freeShippingProgress = freeShippingFrom != null ? Math.min(100, Math.round((total / freeShippingFrom) * 100)) : 0;
 
+  const promotionSavings = useMemo(() => items.reduce((sum, item) => {
+    if (item.kind === 'print') return sum;
+    const current = catalogState[item.id];
+    if (!current?.promotionalPrice) return sum;
+    if (Math.abs(Number(item.price) - current.promotionalPrice) > 0.009) return sum;
+    return sum + Math.max(0, current.price - current.promotionalPrice) * item.quantity;
+  }, 0), [items, catalogState]);
+  const couponDiscount = coupon ? Math.min(coupon.discount, subtotal) : 0;
+  const totalSavings = promotionSavings + couponDiscount;
+  const regularSubtotal = subtotal + promotionSavings;
+  const stockIssues = useMemo(() => {
+    if (!catalogChecked) return [];
+    return items.filter((item) => {
+      if (item.kind === 'print') return false;
+      const current = catalogState[item.id];
+      return !current || current.stock < item.quantity;
+    });
+  }, [items, catalogState, catalogChecked]);
+  const hasStockIssues = stockIssues.length > 0;
+
   return (
     <main className="cart-page-shell">
       <SiteHeader subtitle="SEU CARRINHO" />
@@ -163,8 +237,8 @@ export default function CarrinhoPage() {
               ) : (
                 <article className="cart-item" key={item.id}>
                   <div className="cart-product-image"><ProductImage src={item.image_url} alt={item.name} sizes="120px" /></div>
-                  <div className="cart-product-info"><p className="cart-product-label">PRODUTO</p><h2>{item.name}</h2><p className="cart-unit-price">{money(item.price)} <span>cada</span></p><p className="cart-stock">Disponível: {item.stock} unidade(s)</p></div>
-                  <div className="cart-item-actions"><div className="quantity-control"><button type="button" className="quantity-btn" onClick={() => setQty(item.id, item.quantity - 1)} aria-label="Diminuir" disabled={item.quantity <= 1}><Minus size={15} /></button><strong>{item.quantity}</strong><button type="button" className="quantity-btn" onClick={() => setQty(item.id, item.quantity + 1)} aria-label="Aumentar" disabled={item.quantity >= item.stock}><Plus size={15} /></button></div><button type="button" className="remove-btn" onClick={() => remove(item.id)}><Trash2 size={15} /> Remover</button></div>
+                  <div className="cart-product-info"><p className="cart-product-label">PRODUTO</p><h2>{item.name}</h2><p className="cart-unit-price">{money(item.price)} <span>cada</span></p><p className="cart-stock">Disponível: {catalogChecked ? (catalogState[item.id]?.stock ?? 0) : item.stock} unidade(s)</p>{catalogChecked && (!catalogState[item.id] || (catalogState[item.id]?.stock ?? 0) < item.quantity) ? <p className="cart-item-warning">{!catalogState[item.id] ? 'Este produto não está disponível no catálogo no momento. Remova-o para continuar.' : `O estoque foi atualizado para ${catalogState[item.id].stock} unidade(s). Ajuste a quantidade para continuar.`}</p> : null}</div>
+                  <div className="cart-item-actions"><div className="quantity-control"><button type="button" className="quantity-btn" onClick={() => setQty(item.id, item.quantity - 1)} aria-label="Diminuir" disabled={item.quantity <= 1}><Minus size={15} /></button><strong>{item.quantity}</strong><button type="button" className="quantity-btn" onClick={() => setQty(item.id, item.quantity + 1)} aria-label="Aumentar" disabled={item.quantity >= (catalogChecked ? (catalogState[item.id]?.stock ?? 0) : item.stock)}><Plus size={15} /></button></div><button type="button" className="remove-btn" onClick={() => remove(item.id)}><Trash2 size={15} /> Remover</button></div>
                   <div className="cart-subtotal">{money(item.price * item.quantity)}</div>
                 </article>
               ))}
@@ -181,12 +255,18 @@ export default function CarrinhoPage() {
 
               <div className="summary-line">
                 <span>Produtos</span>
-                <strong>{money(subtotal)}</strong>
+                <strong>{money(regularSubtotal)}</strong>
               </div>
+              {promotionSavings > 0 && (
+                <div className="summary-line summary-discount">
+                  <span>Promoções</span>
+                  <strong>− {money(promotionSavings)}</strong>
+                </div>
+              )}
               {coupon && coupon.discount > 0 && (
                 <div className="summary-line summary-discount">
                   <span>Desconto ({coupon.code})</span>
-                  <strong>− {money(Math.min(coupon.discount, subtotal))}</strong>
+                  <strong>− {money(couponDiscount)}</strong>
                 </div>
               )}
 
@@ -292,10 +372,20 @@ export default function CarrinhoPage() {
                 <strong>{money(orderTotal)}</strong>
               </div>
 
-              <Link className="primary checkout-btn" href={`/checkout?entrega=${encodeURIComponent(delivery)}${freightCalculated && normalizeCep(cep).length === 8 ? `&cep=${encodeURIComponent(normalizeCep(cep))}` : ''}`}>
-                <span>Finalizar pedido</span>
-                <ArrowRight size={16} />
-              </Link>
+              {totalSavings > 0 ? <div className="summary-savings"><Gift size={16} /><span>Você economizou <strong>{money(totalSavings)}</strong> neste pedido.</span></div> : null}
+              {hasStockIssues ? <div className="cart-validation-alert"><strong>Revise o carrinho</strong><span>Há item com estoque insuficiente ou indisponível. Ajuste a quantidade ou remova o produto para continuar.</span></div> : null}
+
+              {hasStockIssues ? (
+                <button type="button" className="primary checkout-btn" disabled>
+                  <span>Revise o carrinho</span>
+                  <ArrowRight size={16} />
+                </button>
+              ) : (
+                <Link className="primary checkout-btn" href={`/checkout?entrega=${encodeURIComponent(delivery)}${freightCalculated && normalizeCep(cep).length === 8 ? `&cep=${encodeURIComponent(normalizeCep(cep))}` : ''}`}>
+                  <span>Finalizar pedido</span>
+                  <ArrowRight size={16} />
+                </Link>
+              )}
               <Link className="back-store" href="/loja">
                 Continuar comprando
               </Link>
@@ -327,6 +417,7 @@ export default function CarrinhoPage() {
         .cart-unit-price{font-weight:700;margin:0}
         .cart-unit-price span{font-weight:400;color:#686868;font-size:12px}
         .cart-stock{font-size:12px;color:#686868;margin:8px 0 0}
+        .cart-item-warning{margin:8px 0 0;color:#a13c28;font-size:10px;line-height:1.45;font-weight:700}
         .cart-item-actions{display:flex;align-items:center;gap:10px;align-self:center;flex-wrap:wrap}
         .quantity-control{display:flex;align-items:center;border:1px solid #e9e9e9;border-radius:9px;overflow:hidden;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.04)}
         .quantity-control strong{min-width:36px;text-align:center;font-size:14px}
@@ -342,6 +433,7 @@ export default function CarrinhoPage() {
         .summary-heading h2{font-family:'Barlow Condensed';font-size:28px;text-transform:uppercase;margin:0;font-style:italic}
         .summary-line{display:flex;justify-content:space-between;gap:15px;padding:12px 0;font-size:14px;border-bottom:1px solid #eee}
         .summary-muted{color:#686868;text-align:right;font-size:12px}
+        .summary-discount{color:#267443}.summary-discount strong{color:#267443}.summary-savings{display:flex;align-items:center;gap:8px;margin:12px 0;padding:10px 11px;border-radius:10px;background:#f0fbf3;color:#267443;font-size:10px;line-height:1.4}.summary-savings strong{color:#1d6339}.cart-validation-alert{display:grid;gap:4px;margin:12px 0;padding:11px 12px;border:1px solid #efc8bf;border-radius:10px;background:#fff7f4;color:#8f3322}.cart-validation-alert strong{font-size:11px}.cart-validation-alert span{font-size:10px;line-height:1.45}.checkout-btn:disabled{opacity:.5;cursor:not-allowed}
         .free-shipping-cart{margin:14px 0 4px;padding:13px 14px;border:1px solid #ead37a;border-radius:12px;background:linear-gradient(135deg,#fffaf0,#fff7d6)}
         .free-shipping-cart.is-active{border-color:#86c99b;background:#f0fbf3}
         .free-shipping-cart-top{display:flex;align-items:center;gap:10px}

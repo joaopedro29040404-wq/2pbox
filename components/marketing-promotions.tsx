@@ -302,7 +302,6 @@ export function MarketingPromotions() {
       frame = requestAnimationFrame(() => {
         frame = 0;
         if (!cancelled) {
-          setupHomeProductTabs(rows);
           applyPromotionStyling(rows);
         }
       });
