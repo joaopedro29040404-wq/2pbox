@@ -32,15 +32,6 @@ const CATEGORY_CARD_ART = [
 
 const bannerSource = (banner: Banner, mobile: boolean) => mobile && banner.mobile_image_url ? banner.mobile_image_url : banner.image_url;
 
-function promotionProduct(row: any): Product | null {
-  const product = Array.isArray(row?.products) ? row.products[0] : row?.products;
-  if (!product || product.active === false) return null;
-  const original = Number(product.price);
-  const promo = Number(row?.promotional_price);
-  if (!Number.isFinite(original) || !Number.isFinite(promo) || promo <= 0 || promo >= original) return null;
-  return { id: String(product.id), name: String(product.name || ''), slug: String(product.slug || ''), price: original, image_url: product.image_url || null, promotionalPrice: promo };
-}
-
 function storeProduct(row: any): Product {
   const price = Number(row?.price);
   const now = Date.now();
@@ -64,8 +55,6 @@ function storeProduct(row: any): Product {
 export default function Home() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [offerProducts, setOfferProducts] = useState<Product[]>([]);
-  const [productView, setProductView] = useState<'highlights' | 'offers'>('highlights');
   const [loading, setLoading] = useState(true);
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
   const [banners, setBanners] = useState<Banner[]>([]);
@@ -95,11 +84,9 @@ export default function Home() {
     }
     let mounted = true;
     (async () => {
-      const nowIso = new Date().toISOString();
-      const [{ data: categoryRows }, { data: productRows }, { data: promotionRows }, settings, { data: homeConfig }, { data: featuredConfig }] = await Promise.all([
+      const [{ data: categoryRows }, { data: productRows }, settings, { data: homeConfig }, { data: featuredConfig }] = await Promise.all([
         client.from('categories').select('id,name,description,parent_id').eq('active', true).is('parent_id', null),
         client.from('products').select('id,name,slug,price,image_url,promotions(promotional_price,starts_at,ends_at,active)').eq('active', true).order('created_at', { ascending: false }).limit(8),
-        client.from('promotions').select('product_id,promotional_price,starts_at,ends_at,active,products!inner(id,name,slug,price,image_url,active)').eq('active', true).lte('starts_at', nowIso).gte('ends_at', nowIso).eq('products.active', true).order('starts_at', { ascending: false }).limit(12),
         getStoreSettings(),
         client.from('store_settings').select('home_banners').order('updated_at', { ascending: false }).limit(1).maybeSingle(),
         client.from('store_settings').select('home_featured_product_ids').order('updated_at', { ascending: false }).limit(1).maybeSingle(),
@@ -137,12 +124,6 @@ export default function Home() {
       } else {
         setProducts(recentProducts);
       }
-
-      const offers = (Array.isArray(promotionRows) ? promotionRows : [])
-        .map(promotionProduct)
-        .filter(Boolean) as Product[];
-      const uniqueOffers = Array.from(new Map(offers.map((product) => [product.id, product])).values());
-      setOfferProducts(uniqueOffers);
 
       setStoreSettings(settings);
       const config = homeConfig as any;
@@ -182,7 +163,6 @@ export default function Home() {
     () => (categories.length === 4 ? categories : FALLBACK_MAIN_CATEGORIES),
     [categories],
   );
-  const homeProducts = productView === 'offers' ? offerProducts : products;
   const whatsapp = storeSettings?.whatsapp?.trim() || '(11) 9 9999-9999';
   const hours = storeSettings?.hours?.trim() || 'Seg–Sex • 9h às 18h';
   const socialLinks: StoreSettings['socialLinks'] = storeSettings?.socialLinks || { instagram: '', tiktok: '', facebook: '', youtube: '', whatsapp: '' };
@@ -293,8 +273,8 @@ export default function Home() {
 
       <section id="catalogo" className="home-section home-catalog">
         <div className="home-container">
-          <div className="home-section-head"><div><p className="home-eyebrow">2P BOX</p><h2>DESTAQUES</h2><div className="home-product-tabs" aria-label="Destaques e ofertas"><button type="button" className={productView === 'highlights' ? 'home-product-tab is-active' : 'home-product-tab'} onClick={() => setProductView('highlights')}>TODOS</button><button type="button" className={productView === 'offers' ? 'home-product-tab is-active' : 'home-product-tab'} data-product-view="offers" onClick={() => setProductView('offers')}>🔥 OFERTAS {offerProducts.length ? <span>{offerProducts.length}</span> : null}</button></div></div><Link href={productView === 'offers' ? '/loja?ofertas=1' : '/loja'} className="home-section-link">VER CATÁLOGO <ArrowRight size={15} /></Link></div>
-          {loading ? <SkeletonGrid count={4} height={300} /> : homeProducts.length ? <div className="home-product-grid ui-product-grid">{homeProducts.slice(0,4).map((product) => { const promo=product.promotionalPrice != null && product.promotionalPrice > 0 && product.promotionalPrice < product.price; return <Link href={`/produto/${product.slug}`} key={product.id} className={`home-product-card ui-product-card${promo ? ' is-offer' : ''}`}><div className="home-product-image ui-product-card-media">{promo ? <span className="home-product-badge ui-product-card-offer">OFERTA</span> : null}<span className="home-product-favorite ui-product-card-favorite" aria-hidden="true"><Heart size={16} /></span><ProductImage src={productCover(product)} alt={product.name} sizes="(max-width:700px) 50vw, 280px" /></div><div className="home-product-info ui-product-card-body"><small className="ui-product-card-eyebrow">2P BOX</small><h3 className="ui-product-card-title">{product.name}</h3>{promo ? <del className="home-product-price-original ui-product-card-old-price">{money(product.price)}</del> : null}<strong className={`ui-product-card-price${promo ? ' is-promo' : ''}`}>{money(promo ? product.promotionalPrice! : product.price)}</strong><span className="ui-product-card-action ui-product-card-link-action"><ShoppingCart size={15} /> VER PRODUTO</span></div></Link>; })}</div> : <div className="home-empty"><ShoppingBag size={28} /><h3>{productView === 'offers' ? 'Nenhuma oferta ativa' : 'Catálogo em atualização'}</h3><p>{productView === 'offers' ? 'As ofertas ativas aparecerão aqui automaticamente.' : 'Os produtos cadastrados aparecerão aqui.'}</p><Link href={productView === 'offers' ? '/loja?ofertas=1' : '/loja'} className="home-primary">ACESSAR A LOJA <ArrowRight size={16} /></Link></div>}
+          <div className="home-section-head"><div><p className="home-eyebrow">2P BOX</p><h2>DESTAQUES</h2></div><Link href="/loja" className="home-section-link">VER TODOS PRODUTOS <ArrowRight size={15} /></Link></div>
+          {loading ? <SkeletonGrid count={4} height={300} /> : products.length ? <div className="home-product-grid ui-product-grid">{products.slice(0,4).map((product) => { const promo=product.promotionalPrice != null && product.promotionalPrice > 0 && product.promotionalPrice < product.price; return <Link href={`/produto/${product.slug}`} key={product.id} className={`home-product-card ui-product-card${promo ? ' is-offer' : ''}`}><div className="home-product-image ui-product-card-media">{promo ? <span className="home-product-badge ui-product-card-offer">OFERTA</span> : null}<span className="home-product-favorite ui-product-card-favorite" aria-hidden="true"><Heart size={16} /></span><ProductImage src={productCover(product)} alt={product.name} sizes="(max-width:700px) 50vw, 280px" /></div><div className="home-product-info ui-product-card-body"><small className="ui-product-card-eyebrow">2P BOX</small><h3 className="ui-product-card-title">{product.name}</h3>{promo ? <del className="home-product-price-original ui-product-card-old-price">{money(product.price)}</del> : null}<strong className={`ui-product-card-price${promo ? ' is-promo' : ''}`}>{money(promo ? product.promotionalPrice! : product.price)}</strong><span className="ui-product-card-action ui-product-card-link-action"><ShoppingCart size={15} /> VER PRODUTO</span></div></Link>; })}</div> : <div className="home-empty"><ShoppingBag size={28} /><h3>Catálogo em atualização</h3><p>Os produtos cadastrados aparecerão aqui.</p><Link href="/loja" className="home-primary">ACESSAR A LOJA <ArrowRight size={16} /></Link></div>}
         </div>
       </section>
 
