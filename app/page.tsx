@@ -41,6 +41,26 @@ function promotionProduct(row: any): Product | null {
   return { id: String(product.id), name: String(product.name || ''), slug: String(product.slug || ''), price: original, image_url: product.image_url || null, promotionalPrice: promo };
 }
 
+function storeProduct(row: any): Product {
+  const price = Number(row?.price);
+  const now = Date.now();
+  const promotion = (Array.isArray(row?.promotions) ? row.promotions : []).find((item: any) =>
+    item?.active &&
+    Number(item.promotional_price) > 0 &&
+    Number(item.promotional_price) < price &&
+    new Date(item.starts_at).getTime() <= now &&
+    new Date(item.ends_at).getTime() >= now
+  );
+  return {
+    id: String(row?.id || ''),
+    name: String(row?.name || ''),
+    slug: String(row?.slug || ''),
+    price,
+    image_url: row?.image_url || null,
+    promotionalPrice: promotion ? Number(promotion.promotional_price) : null,
+  };
+}
+
 export default function Home() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -76,12 +96,13 @@ export default function Home() {
     let mounted = true;
     (async () => {
       const nowIso = new Date().toISOString();
-      const [{ data: categoryRows }, { data: productRows }, { data: promotionRows }, settings, { data: homeConfig }] = await Promise.all([
+      const [{ data: categoryRows }, { data: productRows }, { data: promotionRows }, settings, { data: homeConfig }, { data: featuredConfig }] = await Promise.all([
         client.from('categories').select('id,name,description,parent_id').eq('active', true).is('parent_id', null),
         client.from('products').select('id,name,slug,price,image_url,promotions(promotional_price,starts_at,ends_at,active)').eq('active', true).order('created_at', { ascending: false }).limit(8),
         client.from('promotions').select('product_id,promotional_price,starts_at,ends_at,active,products!inner(id,name,slug,price,image_url,active)').eq('active', true).lte('starts_at', nowIso).gte('ends_at', nowIso).eq('products.active', true).order('starts_at', { ascending: false }).limit(12),
         getStoreSettings(),
         client.from('store_settings').select('home_banners').order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+        client.from('store_settings').select('home_featured_product_ids').order('updated_at', { ascending: false }).limit(1).maybeSingle(),
       ]);
       if (!mounted) return;
 
@@ -94,19 +115,27 @@ export default function Home() {
         setCategories(ordered);
       }
 
-      if (productRows) {
-        setProducts((productRows as any[]).map((product) => {
-          const now = Date.now();
-          const active = (Array.isArray(product.promotions) ? product.promotions : []).find((promotion: any) =>
-            promotion?.active &&
-            Number(promotion.promotional_price) > 0 &&
-            Number(promotion.promotional_price) < Number(product.price) &&
-            new Date(promotion.starts_at).getTime() <= now &&
-            new Date(promotion.ends_at).getTime() >= now
-          );
-          const { promotions, ...clean } = product;
-          return { ...clean, promotionalPrice: active ? Number(active.promotional_price) : null };
-        }) as Product[]);
+      const recentProducts = Array.isArray(productRows) ? productRows.map(storeProduct) : [];
+      const featuredIds = Array.isArray((featuredConfig as any)?.home_featured_product_ids)
+        ? (featuredConfig as any).home_featured_product_ids.map(String).slice(0, 4)
+        : [];
+
+      if (featuredIds.length) {
+        const { data: featuredRows } = await client
+          .from('products')
+          .select('id,name,slug,price,image_url,promotions(promotional_price,starts_at,ends_at,active)')
+          .in('id', featuredIds)
+          .eq('active', true);
+
+        if (!mounted) return;
+        const byId = new Map((featuredRows || []).map((row: any) => {
+          const product = storeProduct(row);
+          return [product.id, product] as const;
+        }));
+        const orderedFeatured = featuredIds.map((id: string) => byId.get(id)).filter(Boolean) as Product[];
+        setProducts(orderedFeatured.length ? orderedFeatured : recentProducts);
+      } else {
+        setProducts(recentProducts);
       }
 
       const offers = (Array.isArray(promotionRows) ? promotionRows : [])
