@@ -178,6 +178,15 @@ jobs:
             for i in $(seq 1 24); do
               if probe "http://127.0.0.1:${{ env.WEB_PORT }}/api/mercadopago/webhook"; then
                 echo "2P Box online em 127.0.0.1:${{ env.WEB_PORT }}"
+
+                antes=$(df --output=avail -BM / | tail -1 | tr -dc '0-9')
+                for tag in $(docker images ${{ env.IMAGE_NAME }} --format '{{.Tag}}' | grep -v "^${{ github.sha }}$"); do
+                  docker rmi "${{ env.IMAGE_NAME }}:$tag" >/dev/null 2>&1 && echo "build antigo removido: $tag" || true
+                done
+                depois=$(df --output=avail -BM / | tail -1 | tr -dc '0-9')
+                echo "espaco liberado: $((depois - antes)) MB"
+                docker images ${{ env.IMAGE_NAME }} --format 'build mantido: {{.Tag}} {{.Size}}'
+
                 exit 0
               fi
               sleep 5
