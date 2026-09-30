@@ -64,7 +64,6 @@ export function Modal({ open, onClose, title, eyebrow, description, size = 'lg',
     const field = target instanceof HTMLElement ? target.closest('input, textarea, select') as HTMLElement | null : null;
     const scrollArea = body.current;
     if (!field || !scrollArea) return;
-    if (field instanceof HTMLInputElement && (field.type === 'checkbox' || field.type === 'radio')) return;
 
     const alignField = () => {
       const areaRect = scrollArea.getBoundingClientRect();
