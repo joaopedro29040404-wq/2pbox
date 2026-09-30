@@ -169,7 +169,10 @@ export function MobileEanScanner() {
         .mobile-ean-status{position:absolute;left:12px;right:12px;bottom:12px;background:rgba(0,0,0,.72);color:#fff;padding:9px 12px;border-radius:9px;text-align:center;font-size:12px}
         .mobile-ean-error{margin-top:10px;padding:10px 12px;border-radius:9px;background:#fff0f0;color:#a22;font-size:12px}
         .mobile-ean-cancel{width:100%;margin-top:10px;height:44px;border:1px solid #ddd;border-radius:10px;background:#fff;font-weight:800;cursor:pointer}
-        @media(max-width:768px){.mobile-ean-trigger{position:fixed;left:12px;right:12px;bottom:max(12px,env(safe-area-inset-bottom));z-index:9998;display:flex;align-items:center;justify-content:center;gap:7px;width:auto;min-height:48px;border:1px solid #222;border-radius:12px;background:#111;color:#fff;font-weight:800;font-size:13px;cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.22)}}
+        @media(max-width:768px){
+          .mobile-ean-trigger{position:fixed;left:12px;right:12px;bottom:max(12px,env(safe-area-inset-bottom));z-index:9998;display:flex;align-items:center;justify-content:center;gap:7px;width:auto;min-height:48px;border:1px solid #222;border-radius:12px;background:#111;color:#fff;font-weight:800;font-size:13px;cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.22)}
+          body.ui-modal-open .mobile-ean-trigger{display:none!important}
+        }
       `}</style>
     </>
   );

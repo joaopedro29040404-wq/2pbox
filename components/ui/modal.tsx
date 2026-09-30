@@ -34,12 +34,14 @@ export function Modal({ open, onClose, title, eyebrow, description, size = 'lg',
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    document.body.classList.add('ui-modal-open');
 
     const viewport = window.visualViewport;
     const syncViewport = () => {
-      const height = viewport?.height ?? window.innerHeight;
-      const top = viewport?.offsetTop ?? 0;
-      const isKeyboardOpen = height < window.innerHeight - 80;
+      const visualHeight = viewport?.height ?? window.innerHeight;
+      const isKeyboardOpen = visualHeight < window.innerHeight - 80;
+      const height = isKeyboardOpen ? visualHeight : window.innerHeight;
+      const top = isKeyboardOpen ? (viewport?.offsetTop ?? 0) : 0;
 
       overlay.current?.style.setProperty('--modal-viewport-height', `${height}px`);
       overlay.current?.style.setProperty('--modal-viewport-top', `${top}px`);
@@ -57,6 +59,7 @@ export function Modal({ open, onClose, title, eyebrow, description, size = 'lg',
       viewport?.removeEventListener('scroll', syncViewport);
       window.removeEventListener('resize', syncViewport);
       document.body.style.overflow = previousOverflow;
+      document.body.classList.remove('ui-modal-open');
     };
   }, [open]);
 
@@ -64,6 +67,7 @@ export function Modal({ open, onClose, title, eyebrow, description, size = 'lg',
     const field = target instanceof HTMLElement ? target.closest('input, textarea, select') as HTMLElement | null : null;
     const scrollArea = body.current;
     if (!field || !scrollArea) return;
+    if (field instanceof HTMLInputElement && (field.type === 'checkbox' || field.type === 'radio')) return;
 
     const alignField = () => {
       const areaRect = scrollArea.getBoundingClientRect();
