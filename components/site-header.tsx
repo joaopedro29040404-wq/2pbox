@@ -22,6 +22,7 @@ const ADMIN_LINKS: NavLink[] = [
   { href: '/admin/categorias', label: 'Categorias' },
   { href: '/admin/pedidos', label: 'Pedidos' },
   { href: '/admin/entregas', label: 'Entregas' },
+  { href: '/admin/caixas', label: 'Caixas' },
   { href: '/admin/configuracoes', label: 'Configurações' },
   { href: '/admin/configuracoes?section=express', label: 'Envio imediato' },
 ];
