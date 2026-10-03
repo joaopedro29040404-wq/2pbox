@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Copy, KeyRound, Monitor, Power, RefreshCw, TriangleAlert, Wifi, WifiOff } from 'lucide-react';
+import { CircleCheck, Copy, KeyRound, Monitor, Power, RefreshCw, TriangleAlert, Wifi, WifiOff } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { SiteHeader } from '@/components/site-header';
 import { InlineLoader } from '@/components/ui/loader';
@@ -14,6 +14,8 @@ import { useToast } from '@/components/ui/toast';
 const STORE = '2pbox';
 const GATEWAY_URL = 'https://gateway.2pbox.com.br';
 const ONLINE_MS = 2 * 60 * 1000;
+const LIST_REFRESH_MS = 10000; // a lista se atualiza sozinha
+const CODE_POLL_MS = 2000; // com o código na tela, confere se o caixa já se ligou
 
 type Terminal = {
   id: string;
@@ -26,6 +28,8 @@ type Terminal = {
 type Alert = { at: string; kind: string; code: string | null; detail: string };
 
 type PairingCode = { code: string; expires_at: string };
+
+type PairingStatus = { used: boolean; expired: boolean; terminal_name: string | null };
 
 const ALERT_LABELS: Record<string, string> = {
   negative_stock: 'Estoque ficou negativo',
@@ -77,18 +81,21 @@ export default function CashRegistersPage() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
   const [code, setCode] = useState<PairingCode | null>(null);
+  const [connected, setConnected] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const toast = useToast();
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     if (!supabase) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     const [list, warnings] = await Promise.all([
       supabase.rpc('ponto_terminals', { p_store: STORE }),
       supabase.rpc('ponto_alerts', { p_store: STORE, p_limit: 30 }),
     ]);
-    if (list.error) toast.error('Não foi possível carregar os caixas', errorMessage(list.error));
+    if (list.error) {
+      if (!silent) toast.error('Não foi possível carregar os caixas', errorMessage(list.error));
+    }
     else setTerminals((list.data ?? []) as Terminal[]);
     if (!warnings.error) setAlerts((warnings.data ?? []) as Alert[]);
     setNow(Date.now());
@@ -97,9 +104,36 @@ export default function CashRegistersPage() {
 
   useEffect(() => {
     load();
-    const timer = setInterval(() => setNow(Date.now()), 30000);
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') load(true);
+    }, LIST_REFRESH_MS);
     return () => clearInterval(timer);
   }, [load]);
+
+  // Com o código na tela, confere a cada 2 s se o caixa já se ligou com ele.
+  useEffect(() => {
+    if (!supabase || !code) return;
+    let stopped = false;
+    const timer = setInterval(async () => {
+      if (stopped || document.visibilityState !== 'visible') return;
+      const { data, error } = await supabase.rpc('ponto_pairing_status', { p_code: code.code });
+      if (stopped || error) return;
+      const row = (Array.isArray(data) ? data[0] : data) as PairingStatus | undefined;
+      if (row?.used) {
+        stopped = true;
+        setCode(null);
+        setConnected(row.terminal_name || 'O caixa');
+        load(true);
+      } else if (row?.expired) {
+        stopped = true;
+        setNow(Date.now());
+      }
+    }, CODE_POLL_MS);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [code, load]);
 
   const active = useMemo(() => terminals.filter((t) => !t.revoked_at), [terminals]);
   const revoked = useMemo(() => terminals.filter((t) => t.revoked_at), [terminals]);
@@ -113,6 +147,7 @@ export default function CashRegistersPage() {
     if (error) return toast.error('Não foi possível gerar o código', errorMessage(error));
     const row = (Array.isArray(data) ? data[0] : data) as PairingCode | undefined;
     if (!row) return toast.error('Não foi possível gerar o código');
+    setConnected(null);
     setCode(row);
     setNow(Date.now());
   }
@@ -135,7 +170,7 @@ export default function CashRegistersPage() {
     setBusy(null);
     if (error) return toast.error('Não foi possível desligar o caixa', errorMessage(error));
     toast.success('Caixa desligado', terminal.name);
-    load();
+    load(true);
   }
 
   return (
@@ -154,7 +189,7 @@ export default function CashRegistersPage() {
             <h1>Caixas (PDV)</h1>
             <span>Os caixas ligados aqui usam o mesmo estoque do site: cada venda no caixa baixa o site, e cada pedido do site baixa o caixa.</span>
           </div>
-          <button type="button" className="pdv-secondary" onClick={load} disabled={loading}>
+          <button type="button" className="pdv-secondary" onClick={() => load()} disabled={loading}>
             <RefreshCw size={16} /> Atualizar
           </button>
         </div>
@@ -171,21 +206,37 @@ export default function CashRegistersPage() {
               <li>Digite o código e o nome do caixa. O endereço do servidor já vem preenchido ({GATEWAY_URL}).</li>
               <li>No <b>primeiro</b> caixa da loja, use também <b>Acertar estoque pela loja virtual</b>.</li>
             </ol>
-            {code && !codeExpired ? (
+            {connected ? (
+              <div className="pdv-success" role="status">
+                <CircleCheck size={44} />
+                <strong>Caixa conectado com sucesso!</strong>
+                <span>{connected} está ligado à loja e já troca o estoque com o site.</span>
+                <div className="pdv-success-actions">
+                  <button type="button" className="pdv-secondary" onClick={newCode} disabled={busy === 'code'}>
+                    <KeyRound size={16} /> Conectar outro caixa
+                  </button>
+                  <button type="button" className="pdv-primary" onClick={() => setConnected(null)}>
+                    Ok
+                  </button>
+                </div>
+              </div>
+            ) : code && !codeExpired ? (
               <div className="pdv-code">
                 <span>Código de ligação</span>
                 <strong>{code.code}</strong>
-                <small>Vale até {new Date(code.expires_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} e serve uma vez.</small>
+                <small>Vale até {new Date(code.expires_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} e serve uma vez. Esta tela avisa quando o caixa se conectar.</small>
                 <button type="button" className="pdv-secondary" onClick={copyCode}>
                   <Copy size={15} /> Copiar
                 </button>
               </div>
             ) : (
-              code && <p className="pdv-muted">O código anterior venceu. Gere outro.</p>
+              <>
+                {code && <p className="pdv-muted">O código anterior venceu. Gere outro.</p>}
+                <button type="button" className="pdv-primary" onClick={newCode} disabled={busy === 'code'}>
+                  <KeyRound size={16} /> {busy === 'code' ? 'Gerando...' : 'Gerar código de ligação'}
+                </button>
+              </>
             )}
-            <button type="button" className="pdv-primary" onClick={newCode} disabled={busy === 'code'}>
-              <KeyRound size={16} /> {busy === 'code' ? 'Gerando...' : 'Gerar código de ligação'}
-            </button>
           </article>
 
           <article className="pdv-card">
@@ -274,6 +325,10 @@ export default function CashRegistersPage() {
         .pdv-code span { font: 800 10px/1 Inter, Arial, sans-serif; letter-spacing: 0.18em; color: #ffc400; text-transform: uppercase; }
         .pdv-code strong { font: 900 34px/1.1 ui-monospace, Consolas, monospace; letter-spacing: 0.08em; }
         .pdv-code small { font: 500 12px/1.4 Inter, Arial, sans-serif; color: #cfcfcf; }
+        .pdv-success { display: grid; justify-items: center; text-align: center; gap: 10px; padding: 26px 18px; border-radius: 12px; background: #f1faf4; border: 1px solid #c9ead5; color: #15803d; }
+        .pdv-success strong { font: 900 20px/1.2 Inter, Arial, sans-serif; color: #111; }
+        .pdv-success span { max-width: 380px; font: 500 13px/1.5 Inter, Arial, sans-serif; color: #3d3d39; }
+        .pdv-success-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
         .pdv-primary, .pdv-secondary, .pdv-danger { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 42px; padding: 0 16px; border-radius: 9px; font: 800 12px/1 Inter, Arial, sans-serif; cursor: pointer; border: 1px solid transparent; }
         .pdv-primary { background: #ffc400; color: #111; }
         .pdv-secondary { background: #fff; color: #111; border-color: #dcdcd6; }
